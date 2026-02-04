@@ -1,95 +1,294 @@
-import os
-import json
+
+import time
+from typing import Any, List, Tuple
 from playwright.sync_api import sync_playwright
-from config import get_gemini_model
-import database as db
 
+from google import genai
+from google.genai import types
+from google.genai.types import Content, Part
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
+
+# Constants for screen dimensions
+SCREEN_WIDTH = 1440
+SCREEN_HEIGHT = 900
+
+# Setup Playwright
+print("Initializing browser...")
+playwright = sync_playwright().start()
+browser = playwright.chromium.launch(headless=False)
+context = browser.new_context(viewport={"width": SCREEN_WIDTH, "height": SCREEN_HEIGHT})
+page = context.new_page()
 class ChinaActiveAgent:
-    BASE_URL = "http://english.mofcom.gov.cn/"
-    
-    def run_search_mission(self, keywords=["Unreliable Entity", "Sanctions"]):
-        model = get_gemini_model()
-        if not model:
-            return "Error: Gemini API Key missing."
+    def __init__(self):
+        self.client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
 
-        db.log_agent_action("MISSION_START", f"Starting active search for: {keywords}")
-        findings_count = 0
-        
+# Define helper functions.
+def denormalize_x(x: int, screen_width: int) -> int:
+    """Convert normalized x coordinate (0-1000) to actual pixel coordinate."""
+    return int(x / 1000 * screen_width)
+    def _denormalize_x(self, x: int) -> int:
+        return int(x / 1000 * SCREEN_WIDTH)
+
+def denormalize_y(y: int, screen_height: int) -> int:
+    """Convert normalized y coordinate (0-1000) to actual pixel coordinate."""
+    return int(y / 1000 * screen_height)
+    def _denormalize_y(self, y: int) -> int:
+        return int(y / 1000 * SCREEN_HEIGHT)
+
+def execute_function_calls(candidate, page, screen_width, screen_height):
+    results = []
+    function_calls = []
+    for part in candidate.content.parts:
+        if part.function_call:
+            function_calls.append(part.function_call)
+    def _execute_function_calls(self, candidate, page):
+        results = []
+        function_calls = []
+        for part in candidate.content.parts:
+            if part.function_call:
+                function_calls.append(part.function_call)
+
+    for function_call in function_calls:
+        action_result = {}
+        fname = function_call.name
+        args = function_call.args
+        print(f"  -> Executing: {fname}")
+        for function_call in function_calls:
+            action_result = {}
+            fname = function_call.name
+            args = function_call.args
+            print(f"  -> Executing: {fname}")
+
         try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                page = browser.new_page()
-                
-                # 1. NAVIGATE
-                db.log_agent_action("NAVIGATE", f"Going to {self.BASE_URL}")
-                page.goto(self.BASE_URL, timeout=60000)
-                
-                # 2. SEARCH
-                try:
-                    db.log_agent_action("INTERACT", "Locating search bar...")
-                    # Generic selector for search input
-                    search_input = page.locator("input[type='text'], input[name='q'], input[id='search']").first
-                    search_input.click()
-                    search_input.fill(keywords[0])
-                    page.press("body", "Enter")
-                    page.wait_for_timeout(3000)
-                except Exception as e:
-                    return f"Failed to interact with search bar: {str(e)}"
+            if fname == "open_web_browser":
+                pass # Already open
+            elif fname == "click_at":
+                actual_x = denormalize_x(args["x"], screen_width)
+                actual_y = denormalize_y(args["y"], screen_height)
+                page.mouse.click(actual_x, actual_y)
+            elif fname == "type_text_at":
+                actual_x = denormalize_x(args["x"], screen_width)
+                actual_y = denormalize_y(args["y"], screen_height)
+                text = args["text"]
+                press_enter = args.get("press_enter", False)
+            try:
+                if fname == "open_web_browser":
+                    pass # Already open
+                elif fname == "click_at":
+                    actual_x = self._denormalize_x(args["x"])
+                    actual_y = self._denormalize_y(args["y"])
+                    page.mouse.click(actual_x, actual_y)
+                elif fname == "type_text_at":
+                    actual_x = self._denormalize_x(args["x"])
+                    actual_y = self._denormalize_y(args["y"])
+                    text = args["text"]
+                    press_enter = args.get("press_enter", False)
 
-                # 3. PAGINATION LOOP
-                max_pages = 3
-                current_page = 1
-                
-                while current_page <= max_pages:
-                    db.log_agent_action("SCANNING", f"Processing Page {current_page}...")
-                    
-                    page_results = page.evaluate("""() => {
-                        const items = Array.from(document.querySelectorAll('a'));
-                        return items.map(a => ({
-                            text: a.innerText.trim(),
-                            href: a.href
-                        })).filter(i => i.text.length > 20);
-                    }""")
-                    
-                    # 4. GEMINI ANALYSIS
-                    for item in page_results[:10]:
-                        analysis = self._analyze_with_gemini(model, item['text'])
-                        
-                        if analysis and analysis.get('is_relevant_announcement'):
-                            entities = analysis.get('entities', [])
-                            for entity in entities:
-                                db.save_china_finding(entity, item['text'], item['href'])
-                            findings_count += 1
-                    
-                    # 5. NEXT PAGE
-                    try:
-                        next_btn = page.get_by_text("Next", exact=False).or_(page.get_by_text(">", exact=True)).first
-                        if next_btn.is_visible():
-                            next_btn.click()
-                            page.wait_for_timeout(3000)
-                            current_page += 1
-                        else:
-                            break
-                    except:
-                        break
+                page.mouse.click(actual_x, actual_y)
+                # Simple clear (Command+A, Backspace for Mac)
+                page.keyboard.press("Meta+A")
+                page.keyboard.press("Backspace")
+                page.keyboard.type(text)
+                if press_enter:
+                    page.keyboard.press("Enter")
+            else:
+                print(f"Warning: Unimplemented or custom function {fname}")
+                    page.mouse.click(actual_x, actual_y)
+                    # Simple clear (Command+A, Backspace for Mac)
+                    page.keyboard.press("Meta+A")
+                    page.keyboard.press("Backspace")
+                    page.keyboard.type(text)
+                    if press_enter:
+                        page.keyboard.press("Enter")
+                else:
+                    print(f"Warning: Unimplemented or custom function {fname}")
 
-                browser.close()
-                db.log_agent_action("MISSION_COMPLETE", f"Found {findings_count} entities.")
-                return f"Mission Complete. Scanned {current_page} pages. Added {findings_count} new entities."
+            # Wait for potential navigations/renders
+            page.wait_for_load_state(timeout=5000)
+            time.sleep(1)
+                # Wait for potential navigations/renders
+                page.wait_for_load_state(timeout=5000)
+                time.sleep(1)
 
         except Exception as e:
-            db.log_agent_action("CRITICAL_FAILURE", str(e))
-            return f"Agent crashed: {str(e)}"
+            print(f"Error executing {fname}: {e}")
+            action_result = {"error": str(e)}
+            except Exception as e:
+                print(f"Error executing {fname}: {e}")
+                action_result = {"error": str(e)}
 
-    def _analyze_with_gemini(self, model, text):
-        prompt = f"""
-        Analyze this search result title from MOFCOM: "{text}"
-        Does it indicate a sanction, 'Unreliable Entity List' addition, or restriction?
-        Return JSON ONLY: {{ "is_relevant_announcement": true/false, "entities": ["Company A"] }}
-        """
+        results.append((fname, action_result))
+            results.append((fname, action_result))
+
+    return results
+        return results
+
+def get_function_responses(page, results):
+    screenshot_bytes = page.screenshot(type="png")
+    current_url = page.url
+    function_responses = []
+    for name, result in results:
+        response_data = {"url": current_url}
+        response_data.update(result)
+        function_responses.append(
+            types.FunctionResponse(
+                name=name,
+                response=response_data,
+                parts=[types.FunctionResponsePart(
+                        inline_data=types.FunctionResponseBlob(
+                            mime_type="image/png",
+                            data=screenshot_bytes))
+                ]
+    def _get_function_responses(self, page, results):
+        screenshot_bytes = page.screenshot(type="png")
+        current_url = page.url
+        function_responses = []
+        for name, result in results:
+            response_data = {"url": current_url}
+            response_data.update(result)
+            function_responses.append(
+                types.FunctionResponse(
+                    name=name,
+                    response=response_data,
+                    parts=[types.FunctionResponsePart(
+                            inline_data=types.FunctionResponseBlob(
+                                mime_type="image/png",
+                                data=screenshot_bytes))
+                    ]
+                )
+            )
+        )
+    return function_responses
+        return function_responses
+
+try:
+    # Go to initial page
+    page.goto("https://www.fmprc.gov.cn/eng/xw/fyrbt/")
+    def run_search_mission(self, keywords: List[str]) -> str:
+        print("Initializing browser...")
+        playwright = sync_playwright().start()
+        browser = playwright.chromium.launch(headless=False)
+        context = browser.new_context(viewport={"width": SCREEN_WIDTH, "height": SCREEN_HEIGHT})
+        page = context.new_page()
+
+    targets = [
+            "https://english.mofcom.gov.cn/",
+            "https://www.fmprc.gov.cn/eng/xw/fyrbt/"
+        ]
         try:
-            response = model.generate_content(prompt)
-            clean_json = response.text.replace('```json', '').replace('```', '').strip()
-            return json.loads(clean_json)
-        except:
-            return None
+            # Go to initial page
+            page.goto("https://www.fmprc.gov.cn/eng/xw/fyrbt/")
+
+    # Configure the model 
+    config = types.GenerateContentConfig(
+        tools=[types.Tool(computer_use=types.ComputerUse(
+            environment=types.Environment.ENVIRONMENT_BROWSER
+        ))],
+        thinking_config=types.ThinkingConfig(include_thoughts=True),
+    )
+            # Configure the model 
+            config = types.GenerateContentConfig(
+                tools=[types.Tool(computer_use=types.ComputerUse(
+                    environment=types.Environment.ENVIRONMENT_BROWSER
+                ))],
+                thinking_config=types.ThinkingConfig(include_thoughts=True),
+            )
+
+    # Initialize history
+    initial_screenshot = page.screenshot(type="png")
+    USER_PROMPT = "Search the Ministry of Commerce and Ministry of Foreign Affairs websites for any mentions of sanctions, unreliable entities, countermeasures, or restricted entities. Provide a summary of your findings."
+    print(f"Goal: {USER_PROMPT}")
+            # Initialize history
+            initial_screenshot = page.screenshot(type="png")
+            
+            keywords_str = ", ".join(keywords)
+            USER_PROMPT = f"Search the Ministry of Commerce and Ministry of Foreign Affairs websites for: {keywords_str}. Provide a summary of your findings."
+            print(f"Goal: {USER_PROMPT}")
+
+    contents = [
+        Content(role="user", parts=[
+            Part(text=USER_PROMPT),
+            Part.from_bytes(data=initial_screenshot, mime_type='image/png')
+        ])
+    ]
+            contents = [
+                Content(role="user", parts=[
+                    Part(text=USER_PROMPT),
+                    Part.from_bytes(data=initial_screenshot, mime_type='image/png')
+                ])
+            ]
+
+    # Agent Loop
+    turn_limit = 5
+    for i in range(turn_limit):
+        print(f"\n--- Turn {i+1} ---")
+        print("Thinking...")
+        response = client.models.generate_content(
+            model='gemini-2.5-computer-use-preview-10-2025',
+            contents=contents,
+            config=config,
+        )
+            # Agent Loop
+            turn_limit = 5
+            final_summary = "No summary generated."
+            
+            for i in range(turn_limit):
+                print(f"\n--- Turn {i+1} ---")
+                print("Thinking...")
+                response = self.client.models.generate_content(
+                    model='gemini-2.5-computer-use-preview-10-2025',
+                    contents=contents,
+                    config=config,
+                )
+
+        candidate = response.candidates[0]
+        contents.append(candidate.content)
+                candidate = response.candidates[0]
+                contents.append(candidate.content)
+
+        has_function_calls = any(part.function_call for part in candidate.content.parts)
+        if not has_function_calls:
+            text_response = " ".join([part.text for part in candidate.content.parts if part.text])
+            print("Agent finished:", text_response)
+            break
+                has_function_calls = any(part.function_call for part in candidate.content.parts)
+                if not has_function_calls:
+                    text_response = " ".join([part.text for part in candidate.content.parts if part.text])
+                    print("Agent finished:", text_response)
+                    final_summary = text_response
+                    break
+
+        print("Executing actions...")
+        results = execute_function_calls(candidate, page, SCREEN_WIDTH, SCREEN_HEIGHT)
+                print("Executing actions...")
+                results = self._execute_function_calls(candidate, page)
+
+        print("Capturing state...")
+        function_responses = get_function_responses(page, results)
+                print("Capturing state...")
+                function_responses = self._get_function_responses(page, results)
+
+        contents.append(
+            Content(role="user", parts=[Part(function_response=fr) for fr in function_responses])
+        )
+                contents.append(
+                    Content(role="user", parts=[Part(function_response=fr) for fr in function_responses])
+                )
+            
+            return final_summary
+
+finally:
+    # Cleanup
+    print("\nClosing browser...")
+    browser.close()
+    playwright.stop()
+        finally:
+            # Cleanup
+            print("\nClosing browser...")
+            browser.close()
+            playwright.stop()

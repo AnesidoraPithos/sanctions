@@ -6,7 +6,7 @@ class USASanctionsAgent:
     API_URL = "https://data.trade.gov/consolidated_screening_list/v1/search"
     
     def __init__(self):
-        self.API_KEY = os.getenv('USA_TRADE_GOV_API_KEY') or os.getenv('api_key')
+        self.API_KEY = os.getenv('USA_TRADE_GOV_API_KEY')
 
     def search(self, search_params):
         """
