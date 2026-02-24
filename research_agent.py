@@ -134,17 +134,93 @@ class SanctionsResearchAgent:
                         "title": title,
                         "url": url,
                         "relevance": relevance_reason,
-                        "snippet": snippet
+                        "snippet": snippet,
+                        "source_type": "official"  # Tag as official government source
                     })
-                
-                # Stop after finding 3 verified good links to save time
-                if len(verified_hits) >= 3:
+
+                # Stop after finding 10 verified links (increased from 3)
+                if len(verified_hits) >= 10:
                     break
             
             return verified_hits
                 
         except Exception as e:
             print(f"Sanction news search failed: {e}")
+            return []
+
+    def get_general_media(self, entity_name):
+        """
+        Search for general media coverage from broader sources including
+        news outlets, law firms, consultancies, and analysis providers.
+        Returns up to 10 verified results tagged as 'general' sources.
+        """
+        # Query broader media sources (not limited to .gov sites)
+        query = f'"{entity_name}" (sanctions OR "trade restrictions" OR "export controls")'
+
+        try:
+            # Fetch more candidates for filtering
+            results = self.ddgs.text(query, max_results=25)
+
+            if not results:
+                return []
+
+            # Filter out known generic/garbage pages
+            ignored_substrings = [
+                "wikipedia.org", "linkedin.com/in/",
+                "facebook.com", "twitter.com", "instagram.com",
+                "page not found", "index of", "/search?", "/tag/"
+            ]
+
+            verified_hits = []
+            seen_titles = set()
+
+            for r in results:
+                url = r.get('href', '')
+                title = r.get('title', '')
+                snippet = r.get('body', '')
+
+                # Basic Deduplication
+                if title in seen_titles:
+                    continue
+                seen_titles.add(title)
+
+                # Filter short/garbage URLs
+                if len(url) < 30:
+                    continue
+
+                # Check against ignored patterns
+                is_generic = False
+                for ignored in ignored_substrings:
+                    if ignored in url.lower():
+                        is_generic = True
+                        break
+
+                if is_generic:
+                    continue
+
+                # Verify relevance using existing LLM verification
+                is_valid, relevance_reason = self._verify_relevance(entity_name, title, snippet)
+
+                if is_valid:
+                    # Classify as official (.gov) or general
+                    source_type = "official" if ".gov" in url else "general"
+
+                    verified_hits.append({
+                        "title": title,
+                        "url": url,
+                        "relevance": relevance_reason,
+                        "snippet": snippet,
+                        "source_type": source_type
+                    })
+
+                # Stop after finding 10 verified links
+                if len(verified_hits) >= 10:
+                    break
+
+            return verified_hits
+
+        except Exception as e:
+            print(f"General media search failed: {e}")
             return []
 
     def _search_web(self, queries, max_results=2):

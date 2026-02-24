@@ -48,21 +48,10 @@ Binary classification on presence of database matches:
 1. main company (conglomerates) not sanctioned but their subsidaries are, search the web, then search each entity on the database. find a way to list the results in a good manner. currently only optimised for one entity results not multiple. 
 2. each subsidary, top ceo, diagram, an option to search each one. in tactical summary.
 3. analysis reports from law firms, consultancies
-4. be descriptive regarding the threat level
-5. add disclaimer
+
 6. Vadim Makarov-> is threat level safe, not on database but is involved, should reclassify. signals intel should include non-govt sources. maybe two tabs. 
 7. [database update] tencent should be on the list, US department of war: DOD release list of chinese military companies in accordance wuth section 1260H (button to update) 
 8. copy text button, email button, word, drop the pdf button -> just tactical summary _ fed reg info
-9. rename signals intel to "news report"
-10. rename tactical summary to "info summary"
-rename federal reg to "entity list"
-rename sentinels to "Entity Background Check Bot"
-rename subject identifier to "entity name"
-rename target params to "search params"
-rename jursidictions to "country of origin"
-rename operations archive to "search history"
-rename process logs to "thinking process logs"
-rename intel doss to "search results"
 11. [database update] list of equipment and services covered by section 2 of the secure network act (federal communicatoons commission).
 12. postpone china's database. 
 13. report should be a longer (my own opinion)
@@ -71,4 +60,19 @@ rename intel doss to "search results"
 
 
 3 weeks time- last week of feb (MDDI-Diana)
-2.5 weeks time- just KL and Q
+5 March demo to just KL and Q
+
+24 feb done:
+- (+) rename signals intel to "news report"
+- (+) rename tactical summary to "info summary"
+- (+) rename federal reg to "entity list"
+- (+) rename sentinels to "Entity Background Check Bot"
+- (+) rename subject identifier to "entity name"
+- (+) rename target params to "search params"
+- (+) rename jursidictions to "country of origin"
+- (+) rename operations archive to "search history"
+- (+) rename process logs to "thinking process logs"
+- (+) rename intel doss to "search results"
+- (+) edited the score system to taken into account fuzzing matching algorithms (detailed score given below)
+- (+) added a text descriptor when you hover over the threat level to see why it was classified as such
+- (+) added a disclaimer on info summary and news report tab
