@@ -157,8 +157,13 @@ def combine_scores(api_score, local_score, api_weight=None, local_weight=None):
     """
     Combine API score and local score using weighted average.
 
+    NOTE: With local-only scoring (api_weight=0.0, local_weight=1.0),
+    this effectively returns local_score. API score is kept for reference
+    but not used in the final calculation.
+
     Args:
-        api_score (float): Score from USA Trade API (typically 80, 90, or 100)
+        api_score (float or None): Score from USA Trade API (typically 80, 90, or 100)
+                                   None for local database entities
         local_score (float): Local composite score (0-100)
         api_weight (float, optional): Weight for API score. If None, uses default from config.
         local_weight (float, optional): Weight for local score. If None, uses default from config.
@@ -170,10 +175,16 @@ def combine_scores(api_score, local_score, api_weight=None, local_weight=None):
     from config import FUZZY_MATCHING_CONFIG
 
     if api_weight is None:
-        api_weight = FUZZY_MATCHING_CONFIG['api_weight']
+        api_weight = FUZZY_MATCHING_CONFIG['api_weight']  # Default: 0.0
     if local_weight is None:
-        local_weight = FUZZY_MATCHING_CONFIG['local_weight']
+        local_weight = FUZZY_MATCHING_CONFIG['local_weight']  # Default: 1.0
 
+    # If API score is None (from local DB), return local score directly
+    if api_score is None:
+        return round(local_score, 2)
+
+    # Calculate weighted combination
+    # With api_weight=0.0 and local_weight=1.0, this returns local_score
     combined = (api_score * api_weight) + (local_score * local_weight)
     return round(combined, 2)
 

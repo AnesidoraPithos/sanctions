@@ -22,17 +22,19 @@ FUZZY_MATCHING_CONFIG = {
         "phonetic": 0.10        # Pronunciation similarity (transliteration help)
     },
 
-    # Match quality thresholds (balanced precision)
-    # These thresholds map combined scores to match quality classifications
+    # Match quality thresholds (recalibrated for local-only scoring)
+    # With local-only scoring, these thresholds are based purely on fuzzy match quality
+    # Increased from previous values to maintain high precision
     "thresholds": {
-        "exact": 92,      # High confidence exact match (API 100 + good local)
-        "high": 80,       # Strong fuzzy match (API 90 or API 80 + excellent local)
-        "medium": 65,     # Moderate fuzzy match (API 80 + decent local)
-        "low": 0          # Weak match (API 80 + poor local, likely false positive)
+        "exact": 95,      # Very high confidence (increased from 92)
+        "high": 82,       # Strong fuzzy match (lowered from 85 for legal suffix handling)
+        "medium": 70,     # Moderate fuzzy match (increased from 65)
+        "low": 0          # Weak match (below 70, likely false positive)
     },
 
-    # Score combination weights (API-favoring for authority)
+    # Score combination weights (LOCAL-ONLY SCORING)
     # combined_score = (api_score × api_weight) + (local_score × local_weight)
-    "api_weight": 0.60,     # 60% API score (authoritative 3-tier signal: 100/90/80)
-    "local_weight": 0.40    # 40% local score (granular refinement within API tiers)
+    # Changed to 100% local scoring for uniform scoring across all sources
+    "api_weight": 0.0,      # 0% API score (kept for reference only)
+    "local_weight": 1.0     # 100% local score (full control over match quality)
 }

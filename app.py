@@ -253,6 +253,84 @@ def main():
 
     st.markdown("---")
 
+    # --- DATABASE MANAGEMENT PANEL ---
+    with st.expander("🗄️ DATABASE MANAGEMENT"):
+        st.markdown("### External Sources Management")
+        st.markdown("Manage entities from DOD Section 1260H and FCC Covered List.")
+
+        # Show current database stats
+        col_stats1, col_stats2, col_stats3 = st.columns(3)
+
+        entity_counts = db.get_local_entity_count()
+
+        with col_stats1:
+            st.metric("DOD Section 1260H", entity_counts.get('DOD_1260H', 0))
+        with col_stats2:
+            st.metric("FCC Covered List", entity_counts.get('FCC_COVERED', 0))
+        with col_stats3:
+            st.metric("Total Local Entities", entity_counts.get('TOTAL', 0))
+
+        st.markdown("---")
+
+        # Refresh buttons
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
+
+        with col_btn1:
+            if st.button("🔄 Refresh DOD List", use_container_width=True):
+                with st.spinner("Loading DOD entities from PDF..."):
+                    import subprocess
+                    result = subprocess.run(
+                        ["python3", "load_external_sources.py", "--dod", "--refresh"],
+                        capture_output=True,
+                        text=True
+                    )
+                    if result.returncode == 0:
+                        st.success(f"✓ DOD list refreshed successfully")
+                        st.code(result.stdout, language="text")
+                        st.rerun()
+                    else:
+                        st.error(f"✗ Failed to refresh DOD list")
+                        st.code(result.stderr, language="text")
+
+        with col_btn2:
+            if st.button("🔄 Refresh FCC List", use_container_width=True):
+                with st.spinner("Loading FCC entities from web..."):
+                    import subprocess
+                    result = subprocess.run(
+                        ["python3", "load_external_sources.py", "--fcc", "--refresh"],
+                        capture_output=True,
+                        text=True
+                    )
+                    if result.returncode == 0:
+                        st.success(f"✓ FCC list refreshed successfully")
+                        st.code(result.stdout, language="text")
+                        st.rerun()
+                    else:
+                        st.error(f"✗ Failed to refresh FCC list")
+                        st.code(result.stderr, language="text")
+
+        with col_btn3:
+            if st.button("🔄 Refresh All", use_container_width=True):
+                with st.spinner("Loading all external sources..."):
+                    import subprocess
+                    result = subprocess.run(
+                        ["python3", "load_external_sources.py", "--all", "--refresh"],
+                        capture_output=True,
+                        text=True
+                    )
+                    if result.returncode == 0:
+                        st.success(f"✓ All lists refreshed successfully")
+                        st.code(result.stdout, language="text")
+                        st.rerun()
+                    else:
+                        st.error(f"✗ Failed to refresh lists")
+                        st.code(result.stderr, language="text")
+
+        st.markdown("---")
+        st.markdown("**Note:** Refresh operations will clear existing data and reload from source files/URLs.")
+
+    st.markdown("---")
+
     # --- CONTROL PANEL ---
     st.subheader("01 // SEARCH PARAMS")
     
@@ -510,10 +588,27 @@ def run_analysis(name_input, country_input, fuzzy):
                 breakdown = row.get('similarity_breakdown', {})
                 has_breakdown = bool(breakdown)
 
+                # Determine source display name
+                source_list = row.get('List', 'Unknown')
+                if source_list == 'DOD_1260H':
+                    source_display = "DOD Section 1260H (Chinese Military Companies)"
+                    source_badge = "🎖️ DOD"
+                elif source_list == 'FCC_COVERED':
+                    source_display = "FCC Covered List (Secure Networks Act)"
+                    source_badge = "📡 FCC"
+                else:
+                    source_display = "USA Consolidated Screening List"
+                    source_badge = "🇺🇸 USA API"
+
+                # Build optional API reference text
+                api_reference_html = ""
+                if api_score is not None:
+                    api_reference_html = f"&nbsp;|&nbsp; <span style='color: #94a3b8;'>API Reference: {api_score}</span>"
+
                 st.markdown(f"""
                 <div class="intel-card">
                     <div class="intel-card-header">
-                        <span>SOURCE: {row.get('List')}</span>
+                        <span>{source_badge} SOURCE: {source_display}</span>
                         <span style="background: {badge_color}; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;">
                             {badge_icon} {match_quality}
                         </span>
@@ -523,7 +618,7 @@ def run_analysis(name_input, country_input, fuzzy):
                         TYPE: {row.get('Type')} // LOC: {row.get('Address')}
                     </div>
                     <div style="margin-top: 8px; font-size: 0.9em; color: #e2e8f0;">
-                        <strong>COMBINED SCORE:</strong> {combined_score} &nbsp;|&nbsp; API: {api_score} &nbsp;|&nbsp; Local: {local_score}
+                        <strong>MATCH SCORE:</strong> {combined_score}{api_reference_html}
                     </div>
                     <div style="margin-top: 10px; background: rgba(0,0,0,0.2); padding: 8px; font-style: italic; color: #94a3b8;">
                         NOTES: {row.get('Remark')}
@@ -540,9 +635,9 @@ def run_analysis(name_input, country_input, fuzzy):
                         st.markdown(f"""
                         **How this match was scored:**
 
-                        The combined score is calculated using a hybrid approach:
-                        - **API Score** ({api_score}): From USA Trade API fuzzy matching
-                        - **Local Score** ({local_score}): Weighted average of 5 algorithms
+                        This system uses **local-only scoring** for uniform match quality across all sources.
+                        - **Match Score** ({combined_score}): Weighted average of 5 fuzzy matching algorithms
+                        {f"- **API Score** ({api_score}): Shown for reference only (not used in scoring)" if api_score else "- **Source**: Local database entity (no API score)"}
 
                         **Local Algorithm Breakdown:**
                         """)
@@ -562,22 +657,24 @@ def run_analysis(name_input, country_input, fuzzy):
                                      help="Pronunciation-based matching")
 
                         st.markdown(f"""
-                        **Formula:**
+                        **Scoring Formula:**
                         ```
-                        Local Score = (Token Set × 30%) + (Jaro-Winkler × 25%) +
+                        Match Score = (Token Set × 30%) + (Jaro-Winkler × 25%) +
                                      (Levenshtein × 20%) + (Token Sort × 15%) +
                                      (Phonetic × 10%)
 
-                        Combined Score = (API Score × 60%) + (Local Score × 40%)
-                                      = ({api_score} × 0.6) + ({local_score} × 0.4)
-                                      = {combined_score}
+                        = ({breakdown.get('token_set', 0):.1f} × 0.30) + ({breakdown.get('jaro_winkler', 0):.1f} × 0.25) +
+                          ({breakdown.get('levenshtein', 0):.1f} × 0.20) + ({breakdown.get('token_sort', 0):.1f} × 0.15) +
+                          ({breakdown.get('phonetic', 0):.1f} × 0.10)
+
+                        = {combined_score}
                         ```
 
-                        **Match Quality Classification:**
-                        - EXACT: ≥ 92 (High confidence match)
-                        - HIGH: 80-91 (Strong fuzzy match)
-                        - MEDIUM: 65-79 (Moderate match, investigate)
-                        - LOW: < 65 (Weak match, likely false positive)
+                        **Match Quality Thresholds (Local-Only Scoring):**
+                        - EXACT: ≥ 95 (Very high confidence)
+                        - HIGH: 85-94 (Strong fuzzy match)
+                        - MEDIUM: 70-84 (Moderate match, investigate)
+                        - LOW: < 70 (Weak match, likely false positive)
 
                         See `SCORING_SYSTEM.md` for full documentation.
                         """)
@@ -652,7 +749,8 @@ def run_analysis(name_input, country_input, fuzzy):
 
     # --- FOOTER ---
     st.markdown("---")
-    with st.expander("SEARCH HISTORY"):
+
+    with st.expander("📜 SEARCH HISTORY"):
         if st.button("REFRESH LOGS"):
             st.dataframe(db.get_analysis_history(20), use_container_width=True, hide_index=True)
         else:

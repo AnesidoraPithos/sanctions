@@ -50,9 +50,7 @@ Binary classification on presence of database matches:
 3. analysis reports from law firms, consultancies
 
 6. Vadim Makarov-> is threat level safe, not on database but is involved, should reclassify. signals intel should include non-govt sources. maybe two tabs. 
-7. [database update] tencent should be on the list, US department of war: DOD release list of chinese military companies in accordance wuth section 1260H (button to update) 
 8. copy text button, email button, word, drop the pdf button -> just tactical summary _ fed reg info
-11. [database update] list of equipment and services covered by section 2 of the secure network act (federal communicatoons commission).
 12. postpone china's database. 
 13. report should be a longer (my own opinion)
 14. status should say explicitly sanctioned or not sanctioned, only for exact matches. 
@@ -73,6 +71,10 @@ Binary classification on presence of database matches:
 - (+) rename operations archive to "search history"
 - (+) rename process logs to "thinking process logs"
 - (+) rename intel doss to "search results"
-- (+) edited the score system to taken into account fuzzing matching algorithms (detailed score given below)
+- (+) edited the score system to taken into account fuzzing matching algorithms (detailed score given below) API scores not very helpful
 - (+) added a text descriptor when you hover over the threat level to see why it was classified as such
 - (+) added a disclaimer on info summary and news report tab
+- (+) adding the pdf and url to the local database, refreshed by button manually
+- (+) made it easier to find an exact match, need not have Pte. Ltd. etc.
+- () looks like info summary no longer has a list of links/references, we need to fix this.
+- () the threat level classification should take into account the info summary threat level, for instance Vadim Makarov is not in the database but should be flagged.
