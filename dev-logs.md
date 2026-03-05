@@ -60,7 +60,7 @@ Binary classification on presence of database matches:
 3 weeks time- last week of feb (MDDI-Diana)
 5 March demo to just KL and Q
 
-24 feb done:
+24 feb, 5 mar done:
 - (+) rename signals intel to "news report"
 - (+) rename tactical summary to "info summary"
 - (+) rename federal reg to "entity list"
@@ -78,3 +78,53 @@ Binary classification on presence of database matches:
 - (+) made it easier to find an exact match, need not have Pte. Ltd. etc.
 - () looks like info summary no longer has a list of links/references, we need to fix this.
 - () the threat level classification should take into account the info summary threat level, for instance Vadim Makarov is not in the database but should be flagged.
+- () add a diagram for company break down, parent to child
+- (+) add an option to search for conglomerates, where it first searches for their subsidaries as individual entries
+- () copy text button, email button, word document
+
+5 march 2026
+## CONGLOMERATE SEARCH FEATURE IMPLEMENTATION
+Successfully implemented the conglomerate search feature that addresses the requirement to search parent companies and their subsidiaries.
+
+### Key Features Implemented:
+1. **Conglomerate Toggle**: Added "CONGLOMERATE SEARCH" toggle to the control panel that enables subsidiary search mode
+2. **Depth Selector**: Users can choose search depth (1-3 levels):
+   - Level 1: Direct subsidiaries only
+   - Level 2: Subsidiaries + their children
+   - Level 3: Three levels deep
+3. **Subsidiary Discovery**:
+   - Searches OpenCorporates via DuckDuckGo for company subsidiaries
+   - Uses Ollama LLM to extract structured subsidiary information (name, jurisdiction, status)
+   - Handles deduplication across hierarchy levels
+4. **Interactive Selection Interface**:
+   - Displays found subsidiaries in organized, expandable sections grouped by level
+   - Shows subsidiary details: name, jurisdiction, status with visual indicators
+   - Provides SELECT ALL / CLEAR ALL bulk actions
+   - Individual checkbox selection for each subsidiary
+   - Cancel option to return to search form
+5. **Multi-Entity Analysis**:
+   - Searches parent company + all selected subsidiaries in sequence
+   - Real-time progress bar during multi-entity search
+   - Caches individual entity results for performance
+   - Calculates total matches across all entities
+6. **Grouped Results Display**:
+   - Overall summary showing parent company, subsidiaries checked, total entities, and total matches
+   - Expandable sections for each entity (parent + subsidiaries)
+   - Auto-expands sections that have database matches
+   - Color-coded based on match status (red for matches, green for clean)
+   - Reuses existing entity display logic for consistency
+7. **Database Logging**: Logs conglomerate searches with "[CONGLOMERATE]" prefix for tracking
+
+### Technical Implementation:
+- **research_agent.py**: Added `find_subsidiaries()` and `_search_subsidiaries_level()` methods (~180 lines)
+- **app.py**: Added UI components, subsidiary selection interface, and conglomerate analysis function (~300 lines)
+- **Session State Management**: Tracks conglomerate mode, depth, found subsidiaries, and selected subsidiaries
+- **Code Reuse**: Extracted `display_entity_results()` function for displaying individual entity results
+
+### Use Case Example:
+User searches for "Huawei" with conglomerate mode enabled at depth 1. System finds 50+ subsidiaries (e.g., Huawei Technologies Canada, Huawei Device Co., etc.), displays them in an organized selection interface. User selects 5 key subsidiaries, proceeds with search. System searches Huawei + 5 subsidiaries (6 total entities) and displays grouped results showing that while Huawei parent company has matches, 2 of the subsidiaries also have matches in different jurisdictions.
+
+### References:
+- See CONGLOMERATE_SEARCH_IMPLEMENTATION.md for full technical documentation
+- Addresses requirement from line 48: "main company (conglomerates) not sanctioned but their subsidaries are"
+- Addresses requirement from line 82: "add an option to search for conglomerates"

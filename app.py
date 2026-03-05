@@ -344,6 +344,17 @@ def main():
         with c3:
             st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True) # Spacer alignment
             fuzzy = st.toggle("FUZZY LOGIC", value=True)
+            conglomerate = st.toggle("CONGLOMERATE SEARCH", value=False)
+
+            # Show depth selector and sister companies option when conglomerate search is enabled
+            if conglomerate:
+                depth = st.selectbox("SEARCH DEPTH", [1, 2, 3], index=0,
+                                   help="1 = Direct subsidiaries only, 2 = Subsidiaries + their children, 3 = Three levels deep")
+                include_sisters = st.checkbox("INCLUDE SISTER COMPANIES", value=True,
+                                            help="Also search for companies with the same parent (sister companies)")
+            else:
+                depth = 1  # Default when disabled
+                include_sisters = False
         with c4:
             st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
             col_btn1, col_btn2 = st.columns([3, 1])
@@ -366,15 +377,39 @@ def main():
         st.session_state.search_name = name_input
         st.session_state.search_country = country_input
         st.session_state.search_fuzzy = fuzzy
-        st.session_state.analysis_complete = True
+        st.session_state.search_conglomerate = conglomerate
+        st.session_state.search_depth = depth if conglomerate else 1
+        st.session_state.include_sisters = include_sisters if conglomerate else False
+
+        # If conglomerate search, show subsidiary selection interface first
+        if conglomerate:
+            st.session_state.show_subsidiary_selection = True
+            st.session_state.analysis_complete = False
+        else:
+            st.session_state.analysis_complete = True
+
+    # Display subsidiary selection interface if needed
+    if st.session_state.get('show_subsidiary_selection', False):
+        display_subsidiary_selection(
+            st.session_state.search_name,
+            st.session_state.search_depth
+        )
 
     # Display results if analysis has been run
     if st.session_state.analysis_complete:
-        run_analysis(
-            st.session_state.search_name,
-            st.session_state.search_country,
-            st.session_state.search_fuzzy
-        )
+        if st.session_state.get('search_conglomerate', False):
+            run_conglomerate_analysis(
+                st.session_state.search_name,
+                st.session_state.selected_subsidiaries,
+                st.session_state.search_country,
+                st.session_state.search_fuzzy
+            )
+        else:
+            run_analysis(
+                st.session_state.search_name,
+                st.session_state.search_country,
+                st.session_state.search_fuzzy
+            )
 
 @st.cache_data(show_spinner=False)
 def fetch_analysis_data(name_input, country_input, fuzzy):
@@ -412,6 +447,232 @@ def fetch_analysis_data(name_input, country_input, fuzzy):
         'report': report,
         'pdf_bytes': pdf_bytes
     }
+
+def display_subsidiary_selection(parent_company, depth):
+    """
+    Display interface for users to select which subsidiaries and sister companies to search.
+    """
+    st.markdown("---")
+    st.subheader("02 // SUBSIDIARY SELECTION")
+
+    # Initialize session state for related companies if not exists
+    if 'related_companies_found' not in st.session_state:
+        # Create progress log container
+        progress_container = st.container()
+        with progress_container:
+            st.markdown("### 🔍 Search Progress")
+            progress_log = st.empty()
+
+        # Initialize log messages list
+        log_messages = []
+
+        # Define callback function for progress updates
+        def progress_callback(message, level):
+            # Add emoji based on level
+            emoji_map = {
+                'SEARCH': '🔎',
+                'INFO': 'ℹ️',
+                'SUCCESS': '✅',
+                'WARN': '⚠️',
+                'ERROR': '❌'
+            }
+            emoji = emoji_map.get(level, '•')
+
+            # Add message to list
+            log_messages.append(f"{emoji} {message}")
+
+            # Display all messages in the log container
+            log_html = "<div style='background: #1e293b; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 0.85em; max-height: 300px; overflow-y: auto;'>"
+            for msg in log_messages:
+                log_html += f"<div style='margin: 5px 0; color: #e2e8f0;'>{msg}</div>"
+            log_html += "</div>"
+            progress_log.markdown(log_html, unsafe_allow_html=True)
+
+        # Perform search with progress callback
+        with st.spinner(f"Searching for related companies of {parent_company}..."):
+            research_agent = SanctionsResearchAgent()
+            include_sisters = st.session_state.get('include_sisters', False)
+            results = research_agent.find_subsidiaries(parent_company, depth, include_sisters, progress_callback)
+            st.session_state.related_companies_found = results
+
+        # Show final completion message
+        progress_callback("✨ Search complete!", "SUCCESS")
+
+    results = st.session_state.related_companies_found
+    subsidiaries = results.get('subsidiaries', [])
+    sisters = results.get('sisters', [])
+    method = results.get('method', 'unknown')
+
+    # Combine for display
+    all_companies = subsidiaries + sisters
+
+    if not all_companies:
+        st.warning(f"No subsidiaries or sister companies found for {parent_company}. Proceeding with parent company search only.")
+        st.session_state.selected_subsidiaries = []
+        st.session_state.show_subsidiary_selection = False
+        st.session_state.analysis_complete = True
+        st.rerun()
+        return
+
+    # Display count with method info
+    method_labels = {
+        'api': 'OpenCorporates API',
+        'sec_edgar': 'SEC EDGAR (10-K Filings)',
+        'sec_edgar+duckduckgo': 'SEC EDGAR + DuckDuckGo',
+        'duckduckgo': 'DuckDuckGo Search'
+    }
+    method_label = method_labels.get(method, 'Unknown')
+
+    # Get source URL and filing date if available
+    source_url = results.get('source_url')
+    filing_date = results.get('filing_date')
+
+    # Build the info box HTML
+    info_html = f"""
+    <div class='alert-box alert-info'>
+        Found {len(subsidiaries)} subsidiaries and {len(sisters)} sister companies for {parent_company}<br>
+        <span style='font-size: 0.85em;'>Search Method: {method_label}</span>
+    """
+
+    # Add source link if available (SEC EDGAR)
+    if source_url:
+        info_html += f"""<br>
+        <span style='font-size: 0.85em;'>
+            📋 <a href="{source_url}" target="_blank" style="color: #3b82f6; text-decoration: underline;">View Original SEC Exhibit 21</a>
+            {f' (Filed: {filing_date})' if filing_date else ''}
+        </span>
+        """
+
+    info_html += "</div>"
+
+    st.markdown(info_html, unsafe_allow_html=True)
+
+    # Select/Deselect All buttons
+    col1, col2, col3 = st.columns([1, 1, 8])
+    with col1:
+        if st.button("SELECT ALL", use_container_width=True):
+            st.session_state.selected_sub_indices = list(range(len(all_companies)))
+            st.rerun()
+    with col2:
+        if st.button("CLEAR ALL", use_container_width=True):
+            st.session_state.selected_sub_indices = []
+            st.rerun()
+
+    # Initialize selected indices
+    if 'selected_sub_indices' not in st.session_state:
+        st.session_state.selected_sub_indices = []
+
+    # Display related companies with checkboxes
+    st.markdown("### Select companies to search:")
+
+    # Display subsidiaries grouped by level
+    if subsidiaries:
+        for level in sorted(set(s['level'] for s in subsidiaries)):
+            level_subs = [s for s in subsidiaries if s['level'] == level]
+            with st.expander(f"🏢 Level {level} Subsidiaries ({len(level_subs)})", expanded=(level==1)):
+                for idx, sub in enumerate(level_subs):
+                    actual_idx = all_companies.index(sub)
+                    # Create unique key using level and position
+                    unique_key = f"sub_L{level}_{idx}_{actual_idx}"
+                    col_check, col_info = st.columns([1, 11])
+                    with col_check:
+                        is_selected = actual_idx in st.session_state.selected_sub_indices
+                        if st.checkbox(f"Select {sub['name']}", value=is_selected, key=unique_key, label_visibility="collapsed"):
+                            if actual_idx not in st.session_state.selected_sub_indices:
+                                st.session_state.selected_sub_indices.append(actual_idx)
+                        else:
+                            if actual_idx in st.session_state.selected_sub_indices:
+                                st.session_state.selected_sub_indices.remove(actual_idx)
+                    with col_info:
+                        status_color = "#10b981" if sub['status'].lower() == 'active' else "#64748b"
+
+                        # Get source and create badge
+                        source = sub.get('source', 'unknown')
+                        source_labels = {
+                            'sec_edgar': '📋 SEC EDGAR',
+                            'opencorporates_api': '🌐 OpenCorporates API',
+                            'duckduckgo': '🔍 DuckDuckGo'
+                        }
+                        source_colors = {
+                            'sec_edgar': '#10b981',
+                            'opencorporates_api': '#3b82f6',
+                            'duckduckgo': '#94a3b8'
+                        }
+                        source_label = source_labels.get(source, '❓ Unknown')
+                        source_color = source_colors.get(source, '#64748b')
+
+                        st.markdown(f"""
+                        <div style='padding: 8px; background: #172033; border-left: 3px solid {status_color}; margin-bottom: 5px;'>
+                            <strong style='color: #e2e8f0;'>{sub['name']}</strong>
+                            <span style='background: {source_color}; color: #ffffff; padding: 2px 6px; border-radius: 3px; font-size: 0.7em; margin-left: 8px;'>{source_label}</span><br>
+                            <span style='color: #94a3b8; font-size: 0.85em;'>
+                                📍 {sub['jurisdiction']} | Level: {sub.get('level', 1)} | Status: {sub['status']}
+                            </span>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+    # Display sister companies
+    if sisters:
+        with st.expander(f"🤝 Sister Companies ({len(sisters)})", expanded=True):
+            for idx, sister in enumerate(sisters):
+                actual_idx = all_companies.index(sister)
+                # Create unique key using sister prefix and both indices
+                unique_key = f"sister_{idx}_{actual_idx}"
+                col_check, col_info = st.columns([1, 11])
+                with col_check:
+                    is_selected = actual_idx in st.session_state.selected_sub_indices
+                    if st.checkbox(f"Select {sister['name']}", value=is_selected, key=unique_key, label_visibility="collapsed"):
+                        if actual_idx not in st.session_state.selected_sub_indices:
+                            st.session_state.selected_sub_indices.append(actual_idx)
+                    else:
+                        if actual_idx in st.session_state.selected_sub_indices:
+                            st.session_state.selected_sub_indices.remove(actual_idx)
+                with col_info:
+                    status_color = "#3b82f6"  # Blue for sister companies
+
+                    # Get source and create badge
+                    source = sister.get('source', 'unknown')
+                    source_labels = {
+                        'sec_edgar': '📋 SEC EDGAR',
+                        'opencorporates_api': '🌐 OpenCorporates API',
+                        'duckduckgo': '🔍 DuckDuckGo'
+                    }
+                    source_colors = {
+                        'sec_edgar': '#10b981',
+                        'opencorporates_api': '#3b82f6',
+                        'duckduckgo': '#94a3b8'
+                    }
+                    source_label = source_labels.get(source, '❓ Unknown')
+                    source_color = source_colors.get(source, '#64748b')
+
+                    st.markdown(f"""
+                    <div style='padding: 8px; background: #172033; border-left: 3px solid {status_color}; margin-bottom: 5px;'>
+                        <strong style='color: #e2e8f0;'>{sister['name']}</strong>
+                        <span style='background: {source_color}; color: #ffffff; padding: 2px 6px; border-radius: 3px; font-size: 0.7em; margin-left: 8px;'>{source_label}</span><br>
+                        <span style='color: #94a3b8; font-size: 0.85em;'>
+                            📍 {sister['jurisdiction']} | Relationship: Sister Company | Status: {sister['status']}
+                        </span>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+    # Proceed button
+    st.markdown("---")
+    col1, col2, col3 = st.columns([3, 3, 6])
+    with col1:
+        if st.button("PROCEED WITH SEARCH", use_container_width=True, type="primary"):
+            selected_companies = [all_companies[i] for i in st.session_state.selected_sub_indices]
+            st.session_state.selected_subsidiaries = selected_companies
+            st.session_state.show_subsidiary_selection = False
+            st.session_state.analysis_complete = True
+            st.rerun()
+    with col2:
+        if st.button("CANCEL", use_container_width=True):
+            # Reset and go back to search form
+            st.session_state.show_subsidiary_selection = False
+            st.session_state.analysis_complete = False
+            if 'related_companies_found' in st.session_state:
+                del st.session_state.related_companies_found
+            st.rerun()
 
 def run_analysis(name_input, country_input, fuzzy):
     """Display analysis results - fetches from cache if available"""
@@ -755,6 +1016,263 @@ def run_analysis(name_input, country_input, fuzzy):
             st.dataframe(db.get_analysis_history(20), use_container_width=True, hide_index=True)
         else:
             st.dataframe(db.get_analysis_history(5), use_container_width=True, hide_index=True)
+
+def display_entity_results(entity_name, data, country_input, fuzzy):
+    """
+    Display results for a single entity (reusable for both single and conglomerate searches).
+    This is extracted from run_analysis() for code reuse.
+    """
+    final_query_name = data['final_query_name']
+    us_results = data['us_results']
+    media_hits = data['media_hits']
+    report = data['report']
+    pdf_bytes = data['pdf_bytes']
+
+    # Threat calculation (same as run_analysis)
+    match_exists = us_results and 'error' not in us_results[0]
+    match_count = len(us_results) if match_exists else 0
+    media_count = len(media_hits)
+    official_count = len([hit for hit in media_hits if hit.get('source_type') == 'official'])
+
+    max_score = 0
+    if match_exists:
+        scores = [float(r.get('combined_score', r.get('Score', 0))) for r in us_results if r.get('combined_score') or r.get('Score')]
+        max_score = max(scores) if scores else 0
+
+    has_exact_match = match_exists and max_score >= 92
+    has_high_match = match_exists and 80 <= max_score < 92
+    has_medium_match = match_exists and 65 <= max_score < 80
+    has_low_match = match_exists and max_score < 65
+
+    # Risk level calculation
+    if not match_exists:
+        risk_level = "SAFE"
+        risk_class = "safe"
+    elif has_low_match:
+        risk_level = "LOW"
+        risk_class = "low"
+    elif has_medium_match:
+        risk_level = "LOW"
+        risk_class = "low"
+    elif has_high_match:
+        if media_count <= 1:
+            risk_level = "MID"
+            risk_class = "mid"
+        elif official_count > 3:
+            risk_level = "VERY HIGH"
+            risk_class = "very-high"
+        else:
+            risk_level = "HIGH"
+            risk_class = "high"
+    elif has_exact_match:
+        if media_count <= 1:
+            risk_level = "MID"
+            risk_class = "mid"
+        elif official_count > 3:
+            risk_level = "VERY HIGH"
+            risk_class = "very-high"
+        else:
+            risk_level = "HIGH"
+            risk_class = "high"
+    else:
+        risk_level = "LOW"
+        risk_class = "low"
+
+    # STATUS BAR
+    c_stat1, c_stat2, c_stat3 = st.columns([2, 4, 2])
+    with c_stat1:
+        st.markdown(f'<div class="threat-badge-wrapper {risk_class}"><div class="risk-badge {risk_class}">THREAT: {risk_level}</div></div>', unsafe_allow_html=True)
+    with c_stat2:
+        st.markdown(f"<div style='font-family: JetBrains Mono; font-size: 0.9em; color: #94a3b8; padding-top: 5px;'>SUBJECT: {final_query_name.upper()}</div>", unsafe_allow_html=True)
+    with c_stat3:
+        st.markdown(f"<div style='text-align: right; font-family: JetBrains Mono; font-size: 0.9em; color: #64748b; padding-top: 5px;'>MATCHES: {match_count}</div>", unsafe_allow_html=True)
+
+    # TABS (same as run_analysis but simplified)
+    tab1, tab2, tab3 = st.tabs(["[1] ENTITY LIST", "[2] INFO SUMMARY", "[3] NEWS REPORT"])
+
+    with tab1:
+        if match_exists:
+            for row in us_results:
+                match_quality = row.get('match_quality', 'MEDIUM')
+                if match_quality == 'EXACT':
+                    badge_color = '#10b981'
+                    badge_icon = '✓'
+                elif match_quality == 'HIGH':
+                    badge_color = '#3b82f6'
+                    badge_icon = '⚡'
+                elif match_quality == 'MEDIUM':
+                    badge_color = '#f59e0b'
+                    badge_icon = '⚠'
+                else:
+                    badge_color = '#64748b'
+                    badge_icon = '?'
+
+                source_list = row.get('List', 'Unknown')
+                if source_list == 'DOD_1260H':
+                    source_display = "DOD Section 1260H"
+                    source_badge = "🎖️ DOD"
+                elif source_list == 'FCC_COVERED':
+                    source_display = "FCC Covered List"
+                    source_badge = "📡 FCC"
+                else:
+                    source_display = "USA Consolidated Screening List"
+                    source_badge = "🇺🇸 USA API"
+
+                combined_score = row.get('combined_score', row.get('Score', 'N/A'))
+
+                st.markdown(f"""
+                <div class="intel-card">
+                    <div class="intel-card-header">
+                        <span>{source_badge} SOURCE: {source_display}</span>
+                        <span style="background: {badge_color}; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;">
+                            {badge_icon} {match_quality}
+                        </span>
+                    </div>
+                    <h4>{row.get('Name')}</h4>
+                    <div style="margin-top: 8px; font-size: 0.9em; color: #cbd5e1;">
+                        TYPE: {row.get('Type')} // LOC: {row.get('Address')}
+                    </div>
+                    <div style="margin-top: 8px; font-size: 0.9em; color: #e2e8f0;">
+                        <strong>MATCH SCORE:</strong> {combined_score}
+                    </div>
+                    <div style="margin-top: 10px; text-align: right;">
+                        <a href="{row.get('Link')}" target="_blank">>> VIEW SOURCE</a>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="alert-box alert-success">[SYSTEM] NO MATCHES FOUND</div>', unsafe_allow_html=True)
+
+    with tab2:
+        st.markdown(report)
+
+    with tab3:
+        if media_count > 0:
+            for hit in media_hits:
+                source_type = hit.get('source_type', 'general')
+                badge_color = '#10b981' if source_type == 'official' else '#60a5fa'
+                badge_text = 'OFFICIAL GOV SOURCE' if source_type == 'official' else 'GENERAL MEDIA'
+
+                st.markdown(f"""
+                <div class="intel-card">
+                    <div class="intel-card-header">
+                        <span style="color: {badge_color}; font-weight: 700;">[{badge_text}]</span>
+                    </div>
+                    <h4>{hit['title']}</h4>
+                    <div style="margin-top: 5px; color: #94a3b8;">LINK: <a href="{hit['url']}" target="_blank">{hit['url']}</a></div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="alert-box alert-info">[SYSTEM] NO MEDIA DETECTED</div>', unsafe_allow_html=True)
+
+def run_conglomerate_analysis(parent_company, selected_subsidiaries, country_input, fuzzy):
+    """
+    Run analysis for parent company and all selected subsidiaries.
+    Display results in grouped format.
+    """
+    import time
+
+    st.markdown("---")
+    st.subheader("02 // THINKING PROCESS LOGS")
+
+    # Log container
+    log_container = st.empty()
+
+    def log(message, status="INFO"):
+        colors = {"INFO": "#94a3b8", "WARN": "#fb923c", "CRIT": "#f87171", "OK": "#34d399"}
+        log_container.markdown(f"<div style='font-family: JetBrains Mono; font-size: 0.8em; color: {colors[status]};'>[{pd.Timestamp.now().strftime('%H:%M:%S')}] :: {message}</div>", unsafe_allow_html=True)
+
+    # Initialize
+    analysis_id = pd.Timestamp.now().strftime('%Y%m%d-%H%M%S')
+
+    # Prepare entity list (parent + subsidiaries + sisters)
+    entities_to_search = [{'name': parent_company, 'type': 'PARENT', 'level': 0}]
+    for sub in selected_subsidiaries:
+        entities_to_search.append({
+            'name': sub['name'],
+            'type': 'SUBSIDIARY',
+            'level': sub.get('level', 1),
+            'jurisdiction': sub.get('jurisdiction', 'Unknown'),
+            'relationship': sub.get('relationship', 'subsidiary')
+        })
+
+    log(f"CONGLOMERATE SEARCH MODE ACTIVATED. ENTITIES TO SEARCH: {len(entities_to_search)}", "INFO")
+
+    # Search each entity
+    all_entity_results = []
+
+    progress_bar = st.progress(0)
+    for idx, entity in enumerate(entities_to_search):
+        log(f"SEARCHING: {entity['name']} ({entity['type']})", "INFO")
+
+        # Fetch analysis data for this entity
+        data = fetch_analysis_data(entity['name'], country_input, fuzzy)
+
+        # Store results
+        all_entity_results.append({
+            'entity': entity,
+            'data': data
+        })
+
+        # Update progress
+        progress_bar.progress((idx + 1) / len(entities_to_search))
+        time.sleep(0.1)  # Brief pause for UI update
+
+    progress_bar.empty()
+    log(f"SEARCH COMPLETE. ANALYZED {len(entities_to_search)} ENTITIES.", "OK")
+
+    # Calculate overall threat
+    total_matches = sum(len(r['data']['us_results']) for r in all_entity_results if r['data']['us_results'] and 'error' not in r['data']['us_results'][0])
+
+    log(f"TOTAL DATABASE MATCHES ACROSS ALL ENTITIES: {total_matches}", "CRIT" if total_matches > 0 else "OK")
+
+    # Display results
+    st.markdown("---")
+    st.subheader(f"03 // CONGLOMERATE SEARCH RESULTS [{analysis_id}]")
+
+    # Overall summary
+    st.markdown(f"""
+    <div style='background: #172033; border: 1px solid #334155; padding: 15px; margin-bottom: 20px;'>
+        <h4 style='color: #e2e8f0; margin: 0;'>SEARCH SUMMARY</h4>
+        <div style='color: #94a3b8; margin-top: 10px;'>
+            Parent Company: <strong style='color: #3b82f6;'>{parent_company}</strong><br>
+            Subsidiaries Checked: <strong style='color: #3b82f6;'>{len(selected_subsidiaries)}</strong><br>
+            Total Entities Searched: <strong style='color: #3b82f6;'>{len(entities_to_search)}</strong><br>
+            Total Database Matches: <strong style='color: {"#f87171" if total_matches > 0 else "#34d399"};'>{total_matches}</strong>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Display each entity's results
+    for result in all_entity_results:
+        entity = result['entity']
+        data = result['data']
+
+        # Determine if this entity has matches
+        has_matches = len(data['us_results']) > 0 and 'error' not in data['us_results'][0]
+        match_count = len(data['us_results']) if has_matches else 0
+
+        # Color code based on entity type and matches
+        border_color = "#f87171" if has_matches else "#10b981"
+        if entity['type'] == 'PARENT':
+            entity_label = "🏢 PARENT"
+        elif entity.get('relationship') == 'sister':
+            entity_label = "🤝 SISTER COMPANY"
+        else:
+            entity_label = f"🔗 SUBSIDIARY (L{entity['level']})"
+
+        with st.expander(f"{entity_label}: {entity['name']} - {match_count} matches", expanded=(match_count > 0)):
+            # Display results using same format as run_analysis
+            display_entity_results(entity['name'], data, country_input, fuzzy)
+
+    # Log to database
+    db.log_analysis_run(
+        analysis_id,
+        f"[CONGLOMERATE] {parent_company}",
+        parent_company,
+        total_matches,
+        "CONGLOMERATE_SEARCH"
+    )
 
 if __name__ == "__main__":
     main()
