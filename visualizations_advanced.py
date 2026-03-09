@@ -363,6 +363,9 @@ def create_treemap_visualization(
     Returns:
         Plotly Figure with treemap
     """
+    # Debug logging
+    print(f"[TREEMAP DEBUG] Creating treemap for graph with {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+
     # Build country-first hierarchy
     labels = []
     parents = []
@@ -397,12 +400,16 @@ def create_treemap_visualization(
 
     # Find root node (parent company)
     root_nodes = [n for n in G.nodes() if G.in_degree(n) == 0]
+    print(f"[TREEMAP DEBUG] Root nodes (in_degree=0): {root_nodes}")
+
     if not root_nodes:
         parent_nodes = [n for n, attrs in G.nodes(data=True) if attrs.get('node_type') == 'parent']
+        print(f"[TREEMAP DEBUG] Parent nodes by type: {parent_nodes}")
         root_nodes = parent_nodes if parent_nodes else [list(G.nodes())[0]]
 
     root_node = root_nodes[0]
     root_attrs = G.nodes[root_node]
+    print(f"[TREEMAP DEBUG] Selected root node: {root_node}")
 
     # Add root node
     labels.append(root_node)
@@ -474,6 +481,12 @@ def create_treemap_visualization(
             if is_searched:
                 entity_hover += "<br>🔍 MAIN SEARCH ENTITY"
             hover_texts.append(entity_hover)
+
+    print(f"[TREEMAP DEBUG] Total items in treemap: {len(labels)}")
+    print(f"[TREEMAP DEBUG] Countries found: {len(subsidiaries_by_country)}")
+    print(f"[TREEMAP DEBUG] First 5 labels: {labels[:5]}")
+    print(f"[TREEMAP DEBUG] First 5 parents: {parents[:5]}")
+    print(f"[TREEMAP DEBUG] First 5 values: {values[:5]}")
 
     fig = go.Figure(go.Treemap(
         labels=labels,

@@ -154,13 +154,25 @@ def display_treemap(graph, parent_company, key_prefix):
         unsafe_allow_html=True
     )
 
+    # Debug info
+    print(f"[DISPLAY_TREEMAP DEBUG] Graph has {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges")
+    print(f"[DISPLAY_TREEMAP DEBUG] Parent company: {parent_company}")
+
     # Create treemap
-    fig = viz_adv.create_treemap_visualization(
-        graph,
-        title=f"Entity Treemap: {parent_company}",
-        height=750
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    try:
+        fig = viz_adv.create_treemap_visualization(
+            graph,
+            title=f"Entity Treemap: {parent_company}",
+            height=750
+        )
+        print(f"[DISPLAY_TREEMAP DEBUG] Treemap created successfully")
+        st.plotly_chart(fig, use_container_width=True)
+        print(f"[DISPLAY_TREEMAP DEBUG] Plotly chart displayed")
+    except Exception as e:
+        print(f"[DISPLAY_TREEMAP ERROR] {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        st.error(f"Error creating treemap: {str(e)}")
 
     with st.expander("💡 How to Read This Treemap"):
         st.markdown("""
