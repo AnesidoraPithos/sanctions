@@ -5,6 +5,8 @@ from usa_agent import USASanctionsAgent
 from research_agent import SanctionsResearchAgent
 import graph_builder as gb
 import visualizations as viz
+import visualizations_advanced as viz_adv
+import visualization_selector as viz_selector
 import streamlit.components.v1 as components
 import serialization_utils as serializer
 import export_utils as exporter 
@@ -1531,25 +1533,12 @@ def display_subsidiary_selection(parent_company, depth):
         viz_tab1, viz_tab2 = st.tabs(["🔗 Network View", "🌍 Geographic View"])
 
         with viz_tab1:
-            st.markdown("<div class='alert-box alert-info'>Interactive Neo4j-style network diagram - Drag nodes to rearrange, scroll to zoom, click to explore</div>", unsafe_allow_html=True)
-
-            # Filter controls
-            col1, col2 = st.columns(2)
-            with col1:
-                show_directors = st.checkbox("Show Directors", value=True, key="show_directors_sub")
-            with col2:
-                show_shareholders = st.checkbox("Show Shareholders", value=True, key="show_shareholders_sub")
-
-            # Filter graph
-            filtered_graph = gb.filter_graph(graph, show_directors, show_shareholders, True)
-
-            # Create and display interactive network diagram (Neo4j-style)
-            network_html = viz.create_interactive_network(
-                filtered_graph,
-                title=f"Entity Relationship Network: {parent_company}",
-                height="700px"
+            # Use the new visualization selector for multiple visualization options
+            viz_selector.display_visualization_selector(
+                graph=graph,
+                parent_company=parent_company,
+                key_prefix="subsidiary_preview"
             )
-            components.html(network_html, height=750, scrolling=True)
 
         with viz_tab2:
             st.markdown("<div class='alert-box alert-info'>Geographic distribution of entities showing jurisdictions and cross-border relationships</div>", unsafe_allow_html=True)
@@ -2217,25 +2206,12 @@ def run_analysis(name_input, country_input, fuzzy):
             viz_tab1_single, viz_tab2_single = st.tabs(["🔗 Network View", "🌍 Geographic View"])
 
             with viz_tab1_single:
-                st.markdown("<div class='alert-box alert-info'>Interactive Neo4j-style network - Drag nodes, scroll to zoom, click to explore relationships</div>", unsafe_allow_html=True)
-
-                # Filter controls
-                col1, col2 = st.columns(2)
-                with col1:
-                    show_directors_single = st.checkbox("Show Directors", value=True, key="show_directors_single")
-                with col2:
-                    show_shareholders_single = st.checkbox("Show Shareholders", value=True, key="show_shareholders_single")
-
-                # Filter graph
-                filtered_graph_single = gb.filter_graph(graph_single, show_directors_single, show_shareholders_single, True)
-
-                # Create and display interactive network diagram
-                network_html_single = viz.create_interactive_network(
-                    filtered_graph_single,
-                    title=f"Entity Relationship Network: {final_query_name}",
-                    height="700px"
+                # Use the new visualization selector for multiple visualization options
+                viz_selector.display_visualization_selector(
+                    graph=graph_single,
+                    parent_company=final_query_name,
+                    key_prefix="single_entity"
                 )
-                components.html(network_html_single, height=750, scrolling=True)
 
             with viz_tab2_single:
                 # Create and display geographic map
@@ -2923,35 +2899,12 @@ def run_conglomerate_analysis(parent_company, selected_subsidiaries, country_inp
     viz_tab1, viz_tab2 = st.tabs(["🔗 Network View", "🌍 Geographic View"])
 
     with viz_tab1:
-        st.markdown("<div class='alert-box alert-info'>Interactive Neo4j-style network - Drag nodes, scroll to zoom, physics-based layout automatically arranges entities</div>", unsafe_allow_html=True)
-
-        # Filter controls
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            show_directors_cong = st.checkbox("Show Directors", value=True, key="show_directors_cong")
-        with col2:
-            show_shareholders_cong = st.checkbox("Show Shareholders", value=True, key="show_shareholders_cong")
-        with col3:
-            # Country filter
-            all_countries = ['All'] + stats['countries']
-            country_filter = st.selectbox("Filter by Country", all_countries, key="country_filter_cong")
-
-        # Filter graph
-        filtered_graph_cong = gb.filter_graph(
-            graph,
-            show_directors_cong,
-            show_shareholders_cong,
-            True,
-            country_filter if country_filter != 'All' else None
+        # Use the new visualization selector for multiple visualization options
+        viz_selector.display_visualization_selector(
+            graph=graph,
+            parent_company=parent_company,
+            key_prefix="conglomerate_main"
         )
-
-        # Create and display interactive network diagram
-        network_html_cong = viz.create_interactive_network(
-            filtered_graph_cong,
-            title=f"Conglomerate Network: {parent_company}",
-            height="700px"
-        )
-        components.html(network_html_cong, height=750, scrolling=True)
 
     with viz_tab2:
         st.markdown("<div class='alert-box alert-info'>Geographic distribution showing entity locations and cross-border relationships</div>", unsafe_allow_html=True)
