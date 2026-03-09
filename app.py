@@ -263,6 +263,10 @@ def display_search_history():
     """Display enhanced search history with restore, delete, and export functionality"""
     st.markdown("### Search History & Restore")
 
+    # Initialize session state for bulk selection
+    if 'selected_searches_for_delete' not in st.session_state:
+        st.session_state.selected_searches_for_delete = set()
+
     # Filters
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -296,8 +300,56 @@ def display_search_history():
     elif sort_by == "Entity Name":
         searches_df = searches_df.sort_values('entity_name')
 
-    # Display searches
-    st.markdown(f"**Showing {len(searches_df)} saved search{'es' if len(searches_df) != 1 else ''}**")
+    # Bulk action buttons
+    st.markdown("---")
+    col_bulk1, col_bulk2, col_bulk3, col_bulk4, col_bulk5 = st.columns([2, 2, 2, 2, 4])
+
+    with col_bulk1:
+        if st.button("🗑️ Delete Selected", use_container_width=True, help="Delete all selected searches"):
+            if st.session_state.selected_searches_for_delete:
+                # Delete all selected searches efficiently
+                success_count, total_count = db.delete_multiple_searches(
+                    list(st.session_state.selected_searches_for_delete)
+                )
+
+                if success_count == total_count:
+                    st.success(f"✓ Deleted {success_count} search(es)")
+                else:
+                    st.warning(f"⚠️ Deleted {success_count} of {total_count} search(es)")
+
+                st.session_state.selected_searches_for_delete = set()
+                st.rerun()
+            else:
+                st.warning("No searches selected")
+
+    with col_bulk2:
+        if st.button("Select All", use_container_width=True, help="Select all visible searches"):
+            st.session_state.selected_searches_for_delete = set(searches_df['search_id'].tolist())
+            st.rerun()
+
+    with col_bulk3:
+        if st.button("Clear Selection", use_container_width=True, help="Clear all selections"):
+            st.session_state.selected_searches_for_delete = set()
+            st.rerun()
+
+    with col_bulk4:
+        if st.button("🗑️ Delete All", use_container_width=True, type="secondary", help="Delete ALL saved searches (cannot be undone!)"):
+            if 'confirm_delete_all' not in st.session_state:
+                st.session_state.confirm_delete_all = True
+                st.warning("⚠️ Click again to confirm deletion of ALL searches!")
+                st.rerun()
+            else:
+                # Confirmed - delete all
+                deleted_count = db.delete_all_searches()
+                st.success(f"✓ Deleted all {deleted_count} search(es)")
+                st.session_state.selected_searches_for_delete = set()
+                del st.session_state.confirm_delete_all
+                st.rerun()
+
+    # Display count and selection info
+    selected_count = len(st.session_state.selected_searches_for_delete)
+    st.markdown(f"**Showing {len(searches_df)} saved search{'es' if len(searches_df) != 1 else ''}** | Selected for deletion: **{selected_count}**")
+    st.markdown("---")
 
     for idx, search in searches_df.iterrows():
         # Format tags for display
@@ -342,6 +394,20 @@ def display_search_history():
             if search['notes']:
                 st.markdown(f"**Notes:** {search['notes']}")
 
+            # Selection checkbox
+            st.markdown("---")
+            is_selected = st.checkbox(
+                f"Select for deletion",
+                value=search['search_id'] in st.session_state.selected_searches_for_delete,
+                key=f"select_{search['search_id']}"
+            )
+
+            # Update selection state
+            if is_selected:
+                st.session_state.selected_searches_for_delete.add(search['search_id'])
+            else:
+                st.session_state.selected_searches_for_delete.discard(search['search_id'])
+
             # Action buttons
             col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
 
@@ -360,6 +426,8 @@ def display_search_history():
             with col_btn4:
                 if st.button("🗑️ Delete", key=f"delete_{search['search_id']}", use_container_width=True):
                     if db.delete_saved_search(search['search_id']):
+                        # Remove from selection state if selected
+                        st.session_state.selected_searches_for_delete.discard(search['search_id'])
                         st.success("Search deleted")
                         st.rerun()
                     else:
@@ -2704,27 +2772,63 @@ def run_conglomerate_analysis(parent_company, selected_subsidiaries, country_inp
         subsidiaries_list = []
         sisters_list = []
 
-        for entity in entities_to_search:
-            if entity['type'] == 'PARENT':
-                continue
-            elif entity.get('relationship') == 'sister':
-                sisters_list.append({
-                    'name': entity['name'],
-                    'jurisdiction': entity.get('jurisdiction', 'Unknown'),
-                    'status': 'Active',
-                    'level': entity.get('level', 1)
-                })
-            else:  # SUBSIDIARY
-                subsidiaries_list.append({
-                    'name': entity['name'],
-                    'jurisdiction': entity.get('jurisdiction', 'Unknown'),
-                    'status': 'Active',
-                    'level': entity.get('level', 1)
-                })
+        # Check if this is a reverse search
+        conglom_structure = st.session_state.get('conglomerate_structure', {})
+        is_reverse = conglom_structure.get('is_reverse', False)
+
+        # For reverse search, the real parent is stored in conglomerate_structure
+        if is_reverse:
+            # Get the actual parent company (e.g., Alibaba)
+            actual_parent = conglom_structure.get('parent', parent_company)
+
+            # The searched entity (e.g., Lazada) should be added as a sister
+            # All other entities are also sisters
+            for entity in entities_to_search:
+                if entity['type'] == 'PARENT':
+                    # This is actually the searched subsidiary (Lazada), add as sister
+                    sisters_list.append({
+                        'name': entity['name'],
+                        'jurisdiction': entity.get('jurisdiction', 'Unknown'),
+                        'status': 'Active',
+                        'level': entity.get('level', 1),
+                        'is_searched_entity': True
+                    })
+                else:
+                    # These are sister companies
+                    sisters_list.append({
+                        'name': entity['name'],
+                        'jurisdiction': entity.get('jurisdiction', 'Unknown'),
+                        'status': 'Active',
+                        'level': entity.get('level', 1)
+                    })
+
+            # Use the actual parent for the graph
+            graph_parent_name = actual_parent
+        else:
+            # Normal forward search: parent_company is the actual parent
+            for entity in entities_to_search:
+                if entity['type'] == 'PARENT':
+                    continue
+                elif entity.get('relationship') == 'sister':
+                    sisters_list.append({
+                        'name': entity['name'],
+                        'jurisdiction': entity.get('jurisdiction', 'Unknown'),
+                        'status': 'Active',
+                        'level': entity.get('level', 1)
+                    })
+                else:  # SUBSIDIARY
+                    subsidiaries_list.append({
+                        'name': entity['name'],
+                        'jurisdiction': entity.get('jurisdiction', 'Unknown'),
+                        'status': 'Active',
+                        'level': entity.get('level', 1)
+                    })
+
+            graph_parent_name = parent_company
 
         parent_info = {'jurisdiction': 'Unknown', 'status': 'Active'}
         graph = gb.build_entity_graph(
-            company_name=parent_company,
+            company_name=graph_parent_name,
             subsidiaries=subsidiaries_list,
             sisters=sisters_list,
             directors=directors,

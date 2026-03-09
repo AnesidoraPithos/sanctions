@@ -763,6 +763,59 @@ def delete_saved_search(search_id):
         conn.close()
 
 
+def delete_multiple_searches(search_ids):
+    """
+    Delete multiple saved searches from database.
+
+    Args:
+        search_ids (list): List of search IDs
+
+    Returns:
+        tuple: (success_count, total_count)
+    """
+    if not search_ids:
+        return (0, 0)
+
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    success_count = 0
+    try:
+        for search_id in search_ids:
+            c.execute("DELETE FROM saved_searches WHERE search_id = ?", (search_id,))
+            if c.rowcount > 0:
+                success_count += 1
+        conn.commit()
+        return (success_count, len(search_ids))
+    except Exception as e:
+        print(f"Error deleting multiple searches: {e}")
+        return (success_count, len(search_ids))
+    finally:
+        conn.close()
+
+
+def delete_all_searches():
+    """
+    Delete all saved searches from database.
+
+    Returns:
+        int: Number of searches deleted
+    """
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    try:
+        c.execute("DELETE FROM saved_searches")
+        deleted_count = c.rowcount
+        conn.commit()
+        return deleted_count
+    except Exception as e:
+        print(f"Error deleting all searches: {e}")
+        return 0
+    finally:
+        conn.close()
+
+
 def get_all_tags():
     """
     Get all unique tags from saved searches.
