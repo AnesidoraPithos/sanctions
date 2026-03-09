@@ -28,7 +28,7 @@ class SanctionsResearchAgent:
         # SEC EDGAR API setup
         self.sec_api_base = "https://www.sec.gov"
         self.sec_headers = {
-            'User-Agent': 'SanctionsScreeningTool/1.0 (Business Intelligence; contact@example.com)',  # SEC requires descriptive user agent
+            'User-Agent': 'Research Tool; faith_tan@imda.gov.sg)',
             'Accept-Encoding': 'gzip, deflate',
             'Host': 'www.sec.gov'
         }
@@ -274,31 +274,88 @@ class SanctionsResearchAgent:
         search_queries = [
             f"{entity_name} US sanctions investigation lawsuit",
             f"{entity_name} lobbying activity US congress",
-            f"{entity_name} official press release 2024 2025",
-            f"{entity_name} major business partners collaborations"
+            f"{entity_name} official press release in recent years",
+            f"{entity_name} major business partners collaborations",
+            f"{entity_name} analysis reports by law firms and consultancies"
         ]
         
         evidence_text = self._search_web(search_queries)
 
         prompt = f"""
-        You are a Senior Intelligence Analyst. Produce a formal "Due Diligence Intelligence Report" on the entity: "{entity_name}".
-        
-        Use the following retrieved information as your ONLY source of evidence:
-        {evidence_text}
-        
-        ---
-        REPORT REQUIREMENTS:
-        1. **Tone**: Professional, objective, and formal.
-        2. **Structure**:
-           - **Executive Summary**: High-level risk assessment.
-           - **Regulatory & Legal Status**: Details on investigations, lawsuits, or sanctions risks (US focus).
-           - **Political Activity**: Lobbying efforts or legislative scrutiny.
-           - **Recent Developments**: Key press releases or news from the last 2 years.
-           - **Collaborations**: Known partners (to assess 2nd order risk).
-        3. **Citations**: You MUST cite the source URL for every factual claim using brackets, e.g. [Source: example.com].
-        
-        Do not output preambles. Start directly with the report title.
-        """
+You are a Senior Intelligence Analyst. Produce a formal, COMPREHENSIVE "Due Diligence Intelligence Report" on the entity: "{entity_name}".
+
+Use the following retrieved information as your ONLY source of evidence:
+{evidence_text}
+
+---
+REPORT REQUIREMENTS:
+
+1. **Tone**: Professional, objective, formal, and analytical.
+
+2. **Length & Detail**: This must be a COMPREHENSIVE report, not a brief summary.
+   - Each section should contain MULTIPLE PARAGRAPHS with in-depth analysis
+   - Aim for 2-4 paragraphs per major section
+   - Provide context, implications, and nuanced analysis
+   - Total report should be 800-1200 words minimum
+
+3. **Structure** (with detailed requirements for each section):
+
+   **Executive Summary** (2-3 paragraphs)
+   - Provide a high-level risk assessment with overall threat level (High/Medium/Low)
+   - Summarize key findings across all categories (regulatory, political, business)
+   - Highlight the most critical risk factors and red flags
+   - Conclude with an overall recommendation or assessment
+
+   **Regulatory & Legal Status** (2-4 paragraphs)
+   - Detail any investigations, lawsuits, sanctions, or regulatory actions (US focus)
+   - Discuss the nature, severity, and current status of legal issues
+   - Analyze implications for business operations and compliance
+   - Include historical context if relevant
+
+   **Political Activity** (2-3 paragraphs)
+   - Describe lobbying efforts, political contributions, or legislative scrutiny
+   - Identify key political relationships and affiliations
+   - Analyze potential political risks or controversies
+   - Discuss government contracts or political influence
+
+   **Recent Developments** (2-3 paragraphs)
+   - Summarize major news, press releases, or announcements from the last 2 years
+   - Highlight strategic changes, leadership changes, or significant events
+   - Analyze how recent developments impact risk profile
+   - Include both positive and negative developments
+
+   **Collaborations & Business Relationships** (2-3 paragraphs)
+   - Identify known partners, suppliers, customers, or joint ventures
+   - Assess second-order risks from business relationships
+   - Evaluate supply chain exposure and dependency risks
+   - Discuss any controversial or high-risk partnerships
+
+4. **Citations**: You MUST cite the source URL for EVERY factual claim using inline citations in this format: [Source: example.com]
+   - Place citations immediately after each claim
+   - Be specific about which source supports which claim
+   - Every paragraph should have at least one citation
+
+5. **MANDATORY: References Section**
+   - At the very END of the report, you MUST include a "## References" section
+   - List ALL unique source URLs cited in the report
+   - Format as a numbered list: "1. https://example.com"
+   - Include the full URL for each source
+   - This section is REQUIRED even if you have inline citations
+
+6. **Writing Quality**:
+   - Use clear, professional language
+   - Provide analysis, not just facts - explain "so what?"
+   - Connect findings to risk implications
+   - Be thorough but avoid unnecessary repetition
+
+7. **Output Format**:
+   - Start directly with "# Due Diligence Intelligence Report: {entity_name}"
+   - Use Markdown formatting (##, ###, **, bullets)
+   - No preambles or meta-commentary
+   - End with the References section
+
+REMEMBER: This is a COMPREHENSIVE intelligence report, not a brief summary. Provide detailed analysis with multiple paragraphs per section and ALWAYS include a References section at the end.
+"""
 
         try:
             response = self.client.chat.completions.create(
@@ -307,7 +364,8 @@ class SanctionsResearchAgent:
                     {"role": "system", "content": "You are a professional intelligence analyst. Output in Markdown."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.2
+                temperature=0.2,
+                max_tokens=4000  # Allows for longer, more detailed reports
             )
             return response.choices[0].message.content
         except Exception as e:
@@ -385,6 +443,30 @@ class SanctionsResearchAgent:
     def search_sec_edgar_cik(self, company_name):
         """
         Search SEC EDGAR for a company's CIK (Central Index Key).
+        Uses two methods:
+        1. company_tickers.json (fast, but limited to ticker symbols)
+        2. SEC EDGAR full-text search (slower, but comprehensive)
+
+        Args:
+            company_name (str): Company name to search
+
+        Returns:
+            str or None: CIK number if found, None otherwise
+        """
+        # Method 1: Try company_tickers.json first (fast)
+        cik = self._search_cik_from_tickers(company_name)
+        if cik:
+            return cik
+
+        # Method 2: Fallback to SEC EDGAR full-text search (comprehensive)
+        self._log(f"Company not found in tickers file, trying SEC EDGAR search...", "INFO")
+        cik = self._search_cik_from_edgar(company_name)
+        return cik
+
+    def _search_cik_from_tickers(self, company_name):
+        """
+        Search for CIK using SEC's company_tickers.json file.
+        Fast but limited to companies with ticker symbols.
 
         Args:
             company_name (str): Company name to search
@@ -393,11 +475,8 @@ class SanctionsResearchAgent:
             str or None: CIK number if found, None otherwise
         """
         try:
-            # Use SEC's search API endpoint
-            # Note: SEC requires specific user agent and rate limiting
             time.sleep(0.1)  # Rate limit: max 10 requests/second
 
-            # Try the company tickers endpoint (correct URL)
             url = "https://www.sec.gov/files/company_tickers.json"
             response = requests.get(url, headers=self.sec_headers, timeout=10)
             response.raise_for_status()
@@ -409,7 +488,7 @@ class SanctionsResearchAgent:
             best_match = None
             best_match_score = 0
 
-            for key, company_data in companies.items():
+            for company_data in companies.values():
                 company_title = company_data.get('title', '').lower()
 
                 # Exact match
@@ -431,42 +510,121 @@ class SanctionsResearchAgent:
                 self._log(f"Found CIK: {cik} for {best_match.get('title')}", "SUCCESS")
                 return cik
 
-            self._log(f"No CIK found for {company_name}", "WARN")
             return None
 
         except Exception as e:
-            self._log(f"Error searching for CIK: {e}", "ERROR")
+            self._log(f"Error searching company_tickers.json: {e}", "ERROR")
             return None
 
-    def get_latest_10k_filing(self, cik):
+    def _search_cik_from_edgar(self, company_name):
         """
-        Get the latest 10-K filing for a company using SEC EDGAR search.
+        Search for CIK using SEC EDGAR's full-text search.
+        More comprehensive but slower than tickers file.
+        This method works for all companies registered with SEC, including foreign issuers.
 
         Args:
-            cik (str): Company's CIK number (10 digits with leading zeros)
+            company_name (str): Company name to search
 
         Returns:
-            dict or None: Filing data with accession number and filing URL
+            str or None: CIK number if found, None otherwise
         """
         try:
-            # Rate limit
-            time.sleep(0.1)
+            time.sleep(0.2)  # Rate limiting
 
-            # Remove leading zeros for CIK integer
-            cik_int = str(int(cik))
+            # Use SEC's EDGAR company search
+            # This searches across ALL SEC registrants, not just ticker symbols
+            import urllib.parse
+            encoded_name = urllib.parse.quote(company_name)
+            search_url = f"https://www.sec.gov/cgi-bin/browse-edgar?company={encoded_name}&owner=exclude&action=getcompany"
 
-            # Search for 10-K filings using SEC EDGAR full-text search
-            # This is more reliable than the submissions endpoint
-            search_url = f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik_int}&type=10-K&dateb=&owner=exclude&count=10&search_text="
-
-            self._log(f"Searching for 10-K filings...", "INFO")
-
+            self._log(f"Searching SEC EDGAR for '{company_name}'...", "INFO")
             response = requests.get(search_url, headers=self.sec_headers, timeout=15)
             response.raise_for_status()
 
             html_content = response.text
 
-            # Parse HTML to find 10-K filings
+            # Parse the HTML to find CIK
+            import re
+            from bs4 import BeautifulSoup
+
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Look for CIK in the page
+            # Format: "CIK: 0001577552" or in meta tags
+            cik_match = re.search(r'CIK=(\d{10})', html_content)
+            if not cik_match:
+                cik_match = re.search(r'CIK:\s*(\d{1,10})', html_content)
+
+            if cik_match:
+                cik = cik_match.group(1).zfill(10)  # Ensure 10 digits with leading zeros
+
+                # Try to extract company name from the page for confirmation
+                company_info = soup.find('span', {'class': 'companyName'})
+                if company_info:
+                    found_name = company_info.get_text().strip()
+                    # Remove CIK from the name if present
+                    found_name = re.sub(r'CIK#:\s*\d+', '', found_name).strip()
+                    self._log(f"Found CIK: {cik} for '{found_name}'", "SUCCESS")
+                else:
+                    self._log(f"Found CIK: {cik}", "SUCCESS")
+
+                return cik
+
+            self._log(f"No CIK found for '{company_name}' in SEC EDGAR", "WARN")
+            return None
+
+        except Exception as e:
+            self._log(f"Error searching SEC EDGAR: {e}", "ERROR")
+            return None
+
+    def _search_sec_filing_by_type(self, cik, filing_type):
+        """
+        Helper function to search for a specific SEC filing type.
+
+        Args:
+            cik (str): Company's CIK number (10 digits with leading zeros)
+            filing_type (str): Filing type to search for ('10-K' or '20-F')
+
+        Returns:
+            dict or None: Filing data with accession number and filing URL
+        """
+        try:
+            # Rate limit - SEC recommends max 10 requests/second
+            time.sleep(0.2)  # Increased from 0.1 to be more conservative
+
+            # Remove leading zeros for CIK integer
+            cik_int = str(int(cik))
+
+            # Search for filings using SEC EDGAR full-text search
+            search_url = f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik_int}&type={filing_type}&dateb=&owner=exclude&count=10&search_text="
+
+            self._log(f"Searching for {filing_type} filings...", "INFO")
+
+            # Retry logic for 503 errors (rate limiting / server overload)
+            max_retries = 3
+            retry_delay = 2  # Start with 2 seconds
+
+            for attempt in range(max_retries):
+                try:
+                    response = requests.get(search_url, headers=self.sec_headers, timeout=15)
+                    response.raise_for_status()
+                    html_content = response.text
+                    break  # Success - exit retry loop
+
+                except requests.exceptions.HTTPError as e:
+                    if response.status_code == 503 and attempt < max_retries - 1:
+                        # 503 Service Unavailable - retry with exponential backoff
+                        self._log(f"SEC server unavailable (503), retrying in {retry_delay}s... (attempt {attempt + 1}/{max_retries})", "WARN")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                    else:
+                        # Other error or max retries reached
+                        raise
+            else:
+                # This should not be reached, but just in case
+                raise Exception(f"Failed to fetch {filing_type} filing after {max_retries} attempts")
+
+            # Parse HTML to find filings
             import re
 
             # Look for document viewer links in the format:
@@ -475,10 +633,10 @@ class SanctionsResearchAgent:
             doc_matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
 
             if not doc_matches:
-                self._log(f"No 10-K filings found for CIK {cik}", "WARN")
+                self._log(f"No {filing_type} filings found for CIK {cik}", "WARN")
                 return None
 
-            # Get the first (most recent) 10-K filing
+            # Get the first (most recent) filing
             first_link = doc_matches[0]
 
             # Extract accession number from the link
@@ -498,30 +656,55 @@ class SanctionsResearchAgent:
             date_matches = re.findall(date_pattern, html_content)
             filing_date = date_matches[0] if date_matches else "Unknown"
 
-            self._log(f"Found 10-K filing from {filing_date}", "SUCCESS")
+            self._log(f"Found {filing_type} filing from {filing_date}", "SUCCESS")
 
             return {
                 'accession': accession_no_hyphens,
                 'accession_formatted': accession_with_hyphens,
                 'filing_date': filing_date,
-                'cik': cik
+                'cik': cik,
+                'filing_type': filing_type
             }
 
         except Exception as e:
-            self._log(f"Error getting 10-K filing: {e}", "ERROR")
+            self._log(f"Error getting {filing_type} filing: {e}", "ERROR")
             return None
 
-    def extract_subsidiaries_from_10k(self, filing_data):
+    def get_latest_sec_filing(self, cik):
         """
-        Extract subsidiaries from 10-K filing's Exhibit 21.
+        Get the latest SEC filing for a company (10-K for US companies, 20-F for foreign issuers).
 
         Args:
-            filing_data (dict): Filing data from get_latest_10k_filing()
+            cik (str): Company's CIK number (10 digits with leading zeros)
 
         Returns:
-            list: List of subsidiary dictionaries
+            dict or None: Filing data with accession number, filing URL, and filing_type
+        """
+        # Try 10-K first (US domestic companies)
+        filing = self._search_sec_filing_by_type(cik, '10-K')
+        if filing:
+            return filing
+
+        # Try 20-F (foreign private issuers)
+        self._log("No 10-K found, trying 20-F (foreign issuer)...", "INFO")
+        filing = self._search_sec_filing_by_type(cik, '20-F')
+        if filing:
+            return filing
+
+        return None
+
+    def extract_subsidiaries_from_sec_filing(self, filing_data):
+        """
+        Extract subsidiaries from SEC filing (Exhibit 21 for 10-K, Exhibit 8.1 for 20-F).
+
+        Args:
+            filing_data (dict): Filing data from get_latest_sec_filing()
+
+        Returns:
+            dict: Dictionary with subsidiaries list, exhibit URL, and filing date
         """
         subsidiaries = []
+        filing_type = filing_data.get('filing_type', '10-K')
 
         try:
             # Remove leading zeros from CIK for URL
@@ -530,8 +713,8 @@ class SanctionsResearchAgent:
             accession = filing_data['accession']
             accession_formatted = filing_data['accession_formatted']
 
-            # Rate limit
-            time.sleep(0.1)
+            # Rate limit - SEC recommends max 10 requests/second
+            time.sleep(0.2)
 
             # Access the filing index page directly from Archives
             # Format: https://www.sec.gov/Archives/edgar/data/CIK/ACCESSION_NO_HYPHENS/ACCESSION-WITH-HYPHENS-index.htm
@@ -548,48 +731,62 @@ class SanctionsResearchAgent:
 
                 if response.status_code != 200:
                     self._log(f"Could not access filing index", "ERROR")
-                    return []
+                    return {'subsidiaries': [], 'exhibit_url': None, 'filing_date': None}
 
-            # Look for Exhibit 21 document in the index
+            # Look for the appropriate exhibit based on filing type
             content = response.text
-            exhibit_21_doc = None
-
-            # Search for Exhibit 21 links using regex
+            exhibit_doc = None
             import re
 
-            # Pattern to find exhibit 21 references
-            ex21_patterns = [
-                r'href="([^"]*ex-?21[^"]*\.htm[l]?)"',
-                r'href="([^"]*ex-?21[^"]*)"',
-                r'href="([^"]*exhibit-?21[^"]*)"'
-            ]
+            # Determine which exhibit to search for based on filing type
+            if filing_type == '10-K':
+                # Search for Exhibit 21 (US domestic companies)
+                exhibit_patterns = [
+                    r'href="([^"]*ex-?21[^"]*\.htm[l]?)"',
+                    r'href="([^"]*ex-?21[^"]*)"',
+                    r'href="([^"]*exhibit-?21[^"]*)"'
+                ]
+                exhibit_name = "Exhibit 21"
+            elif filing_type == '20-F':
+                # Search for Exhibit 8.1 (foreign private issuers)
+                # Handles various naming conventions: ex-8.1, ex-8-1, ex8.1, ex8-1, ex8_1, etc.
+                exhibit_patterns = [
+                    r'href="([^"]*ex-?8[-._]1[^"]*\.htm[l]?)"',  # ex-8.1, ex-8_1, ex-8-1
+                    r'href="([^"]*ex-?8[-._]1[^"]*)"',
+                    r'href="([^"]*exhibit-?8[-._]1[^"]*)"',
+                    r'href="([^"]*ex8[-._]1[^"]*\.htm[l]?)"',  # ex8.1, ex8_1, ex8-1
+                    r'href="([^"]*ex8[-._]1[^"]*)"'
+                ]
+                exhibit_name = "Exhibit 8.1"
+            else:
+                self._log(f"Unknown filing type: {filing_type}", "ERROR")
+                return {'subsidiaries': [], 'exhibit_url': None, 'filing_date': None}
 
-            for pattern in ex21_patterns:
+            for pattern in exhibit_patterns:
                 match = re.search(pattern, content, re.IGNORECASE)
                 if match:
-                    exhibit_21_doc = match.group(1)
+                    exhibit_doc = match.group(1)
                     break
 
-            if not exhibit_21_doc:
-                self._log("Could not find Exhibit 21 in filing", "WARN")
-                return []
+            if not exhibit_doc:
+                self._log(f"Could not find {exhibit_name} in filing", "WARN")
+                return {'subsidiaries': [], 'exhibit_url': None, 'filing_date': None}
 
-            # Fetch Exhibit 21 document
-            if exhibit_21_doc.startswith('http'):
-                exhibit_url = exhibit_21_doc
+            # Fetch exhibit document
+            if exhibit_doc.startswith('http'):
+                exhibit_url = exhibit_doc
             else:
-                exhibit_url = f"https://www.sec.gov{exhibit_21_doc}" if exhibit_21_doc.startswith('/') else f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{exhibit_21_doc}"
+                exhibit_url = f"https://www.sec.gov{exhibit_doc}" if exhibit_doc.startswith('/') else f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{exhibit_doc}"
 
-            self._log(f"Found Exhibit 21, downloading document...", "SUCCESS")
+            self._log(f"Found {exhibit_name}, downloading document...", "SUCCESS")
 
-            time.sleep(0.1)  # Rate limit
+            time.sleep(0.2)  # Rate limit
             exhibit_response = requests.get(exhibit_url, headers=self.sec_headers, timeout=15)
             exhibit_response.raise_for_status()
 
             exhibit_text = exhibit_response.text
 
             # Strip HTML tags to get cleaner text for LLM
-            import re
             # Remove HTML tags but keep the text content
             text_only = re.sub(r'<[^>]+>', ' ', exhibit_text)
             # Remove extra whitespace
@@ -598,30 +795,34 @@ class SanctionsResearchAgent:
             text_only = text_only.replace('&nbsp;', ' ').replace('&amp;', '&')
 
             # For very long documents, we'll process in chunks
-            # Most Exhibit 21s are 50-500 subsidiaries
+            # Most exhibits have 50-500 subsidiaries
             max_chars = 50000  # Increased from 8000 to handle large companies
             text_chunk = text_only[:max_chars]
 
-            self._log(f"Parsing Exhibit 21 with LLM ({len(text_only)} chars)...", "INFO")
+            self._log(f"Parsing {exhibit_name} with LLM ({len(text_only)} chars)...", "INFO")
 
             prompt = f"""
-Extract ALL subsidiary companies from this SEC Exhibit 21 document.
+Extract ALL subsidiary companies from this SEC {exhibit_name} document.
 
-Exhibit 21 lists subsidiaries of a company. Extract each subsidiary with:
+{exhibit_name} lists subsidiaries of a company. Extract each subsidiary with:
 - Company name (full legal name)
 - Jurisdiction of incorporation (state/country)
+- Ownership percentage (if mentioned, otherwise use "Unknown")
 
 IMPORTANT: This may be a long list. Extract EVERY subsidiary mentioned, even if there are hundreds.
+
+{"Note: For 10-K filings, subsidiaries are in Exhibit 21. For 20-F filings (foreign issuers), they are in Exhibit 8.1. The format is similar." if filing_type == '20-F' else ""}
 
 Document content:
 {text_chunk}
 
 Output format (one per line):
-COMPANY_NAME | JURISDICTION
+COMPANY_NAME | JURISDICTION | OWNERSHIP_PERCENTAGE
 
-Example:
-Apple Retail Holdings, LLC | Nevada
-Apple Operations International | Ireland
+Example (format only - these are NOT real companies):
+XYZ Holdings, LLC | Delaware | 100
+ABC International | Ireland | Unknown
+Tech Japan Inc. | Japan | 51.5
 
 If no clear subsidiaries are listed, respond with "NO_SUBSIDIARIES_FOUND".
 Extract ALL entities listed as subsidiaries. Continue until you've extracted everything.
@@ -637,8 +838,8 @@ Extract ALL entities listed as subsidiaries. Continue until you've extracted eve
             content = response.choices[0].message.content.strip()
 
             if "NO_SUBSIDIARIES_FOUND" in content:
-                self._log("No subsidiaries found in Exhibit 21", "WARN")
-                return []
+                self._log(f"No subsidiaries found in {exhibit_name}", "WARN")
+                return {'subsidiaries': [], 'exhibit_url': None, 'filing_date': None}
 
             # Parse LLM response
             for line in content.split('\n'):
@@ -648,31 +849,46 @@ Extract ALL entities listed as subsidiaries. Continue until you've extracted eve
 
                 parts = [p.strip() for p in line.split('|')]
                 if len(parts) >= 2:
+                    # Parse ownership percentage if provided
+                    ownership_pct = None
+                    if len(parts) >= 3:
+                        ownership_str = parts[2].lower()
+                        if ownership_str != 'unknown' and ownership_str != '':
+                            try:
+                                # Remove % sign if present and convert to float
+                                ownership_pct = float(ownership_str.replace('%', '').strip())
+                            except ValueError:
+                                pass  # Keep as None if can't parse
+
                     subsidiaries.append({
                         'name': parts[0],
                         'jurisdiction': parts[1],
                         'status': 'Active',
                         'relationship': 'subsidiary',
                         'level': 1,
-                        'source': 'sec_edgar'
+                        'source': 'sec_edgar',
+                        'ownership_percentage': ownership_pct
                     })
 
-            self._log(f"Extracted {len(subsidiaries)} subsidiaries from Exhibit 21", "SUCCESS")
+            self._log(f"Extracted {len(subsidiaries)} subsidiaries from {exhibit_name}", "SUCCESS")
 
             # Return both subsidiaries and the source URL
             return {
                 'subsidiaries': subsidiaries,
-                'exhibit_21_url': exhibit_url,
-                'filing_date': filing_data.get('filing_date', 'Unknown')
+                'exhibit_url': exhibit_url,
+                'filing_date': filing_data.get('filing_date', 'Unknown'),
+                'filing_type': filing_type
             }
 
         except Exception as e:
             self._log(f"Error extracting subsidiaries: {e}", "ERROR")
-            return {'subsidiaries': [], 'exhibit_21_url': None, 'filing_date': None}
+            return {'subsidiaries': [], 'exhibit_url': None, 'filing_date': None, 'filing_type': filing_type}
 
     def find_subsidiaries_sec_edgar(self, company_name):
         """
-        Find subsidiaries using SEC EDGAR 10-K filings (US public companies only).
+        Find subsidiaries and financial intelligence using SEC EDGAR filings.
+        For US companies: extracts from 10-K + DEF 14A
+        For foreign issuers: extracts from 20-F
 
         Args:
             company_name (str): Company name to search
@@ -682,7 +898,10 @@ Extract ALL entities listed as subsidiaries. Continue until you've extracted eve
                 'subsidiaries': [list of subsidiary dicts],
                 'sisters': [],  # SEC doesn't provide sister companies
                 'parent': None,
-                'method': 'sec_edgar'
+                'method': 'sec_edgar_10k' or 'sec_edgar_20f',
+                'directors': [list of director dicts],
+                'shareholders': [list of shareholder dicts],
+                'transactions': [list of transaction dicts]
             }
         """
         print(f"[SEC EDGAR] Searching for {company_name}...")
@@ -690,31 +909,577 @@ Extract ALL entities listed as subsidiaries. Continue until you've extracted eve
         # Step 1: Find CIK
         cik = self.search_sec_edgar_cik(company_name)
         if not cik:
-            return {'subsidiaries': [], 'sisters': [], 'parent': None, 'method': 'none', 'source_url': None, 'filing_date': None}
+            return {
+                'subsidiaries': [], 'sisters': [], 'parent': None, 'method': 'none',
+                'source_url': None, 'filing_date': None,
+                'directors': [], 'shareholders': [], 'transactions': []
+            }
 
-        # Step 2: Get latest 10-K filing
-        filing_data = self.get_latest_10k_filing(cik)
+        # Step 2: Get latest SEC filing (tries 10-K first, then 20-F)
+        filing_data = self.get_latest_sec_filing(cik)
         if not filing_data:
-            return {'subsidiaries': [], 'sisters': [], 'parent': None, 'method': 'none', 'source_url': None, 'filing_date': None}
+            return {
+                'subsidiaries': [], 'sisters': [], 'parent': None, 'method': 'none',
+                'source_url': None, 'filing_date': None,
+                'directors': [], 'shareholders': [], 'transactions': []
+            }
 
-        # Step 3: Extract subsidiaries from Exhibit 21
-        extraction_result = self.extract_subsidiaries_from_10k(filing_data)
+        # Step 3: Extract subsidiaries from appropriate exhibit
+        extraction_result = self.extract_subsidiaries_from_sec_filing(filing_data)
 
         subsidiaries = extraction_result.get('subsidiaries', [])
-        exhibit_url = extraction_result.get('exhibit_21_url')
+        exhibit_url = extraction_result.get('exhibit_url')
         filing_date = extraction_result.get('filing_date')
+        filing_type = extraction_result.get('filing_type', '10-K')
+
+        # Step 4: Extract financial intelligence
+        directors = []
+        shareholders = []
+        transactions = []
+        fin_intel_url = None
+
+        if filing_type == '20-F':
+            # For foreign issuers, extract from 20-F Items 6 & 7
+            self._log("Extracting financial intelligence from 20-F (Items 6 & 7)...", "INFO")
+            fin_intel = self.extract_financial_intelligence_from_20f(filing_data)
+            directors = fin_intel.get('directors', [])
+            shareholders = fin_intel.get('shareholders', [])
+            transactions = fin_intel.get('transactions', [])
+            fin_intel_url = fin_intel.get('source_url')
+
+        elif filing_type == '10-K':
+            # For US companies, extract from proxy statement (DEF 14A)
+            self._log("Searching for proxy statement (DEF 14A) for financial intelligence...", "INFO")
+            proxy_data = self.get_latest_proxy_statement(cik)
+            if proxy_data:
+                self._log("Found proxy statement, extracting financial intelligence...", "INFO")
+                fin_intel = self.extract_financial_intelligence_from_proxy(proxy_data)
+                directors = fin_intel.get('directors', [])
+                shareholders = fin_intel.get('shareholders', [])
+                transactions = fin_intel.get('transactions', [])
+                fin_intel_url = fin_intel.get('source_url')
+            else:
+                self._log("No proxy statement found", "WARN")
 
         if not subsidiaries:
-            return {'subsidiaries': [], 'sisters': [], 'parent': None, 'method': 'none', 'source_url': None, 'filing_date': None}
+            return {
+                'subsidiaries': [], 'sisters': [], 'parent': None, 'method': 'none',
+                'source_url': None, 'filing_date': None,
+                'directors': directors, 'shareholders': shareholders, 'transactions': transactions
+            }
+
+        # Set method based on filing type
+        method = 'sec_edgar_10k' if filing_type == '10-K' else 'sec_edgar_20f'
 
         return {
             'subsidiaries': subsidiaries,
             'sisters': [],  # SEC EDGAR doesn't provide sister companies
             'parent': None,
-            'method': 'sec_edgar',
-            'source_url': exhibit_url,  # Link to Exhibit 21
-            'filing_date': filing_date
+            'method': method,
+            'source_url': exhibit_url,
+            'filing_date': filing_date,
+            'directors': directors,
+            'shareholders': shareholders,
+            'transactions': transactions,
+            'fin_intel_url': fin_intel_url,
+            'cik': cik,
+            'company_name': company_name
         }
+
+    def get_latest_proxy_statement(self, cik):
+        """
+        Get the latest DEF 14A (proxy statement) for a US company.
+
+        Args:
+            cik (str): Company's CIK number
+
+        Returns:
+            dict or None: Proxy filing data
+        """
+        filing = self._search_sec_filing_by_type(cik, 'DEF 14A')
+        return filing
+
+    def extract_financial_intelligence_from_20f(self, filing_data):
+        """
+        Extract directors, shareholders, and related party transactions from 20-F filing.
+
+        Args:
+            filing_data (dict): Filing data from get_latest_sec_filing()
+
+        Returns:
+            dict: {
+                'directors': [...],
+                'shareholders': [...],
+                'transactions': [...]
+            }
+        """
+        try:
+            cik = filing_data['cik']
+            cik_int = str(int(cik))
+            accession = filing_data['accession']
+            accession_formatted = filing_data['accession_formatted']
+
+            # Rate limit
+            time.sleep(0.1)
+
+            # Get the main 20-F document (not exhibits)
+            index_url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{accession_formatted}-index.htm"
+            self._log(f"Accessing 20-F filing for financial intelligence...", "INFO")
+
+            response = requests.get(index_url, headers=self.sec_headers, timeout=15)
+            if response.status_code != 200:
+                index_url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{accession_formatted}-index.html"
+                response = requests.get(index_url, headers=self.sec_headers, timeout=15)
+
+            content = response.text
+
+            # Find the main 20-F document (usually the first .htm file)
+            import re
+            # Look for the main document (20-F)
+            doc_pattern = r'href="([^"]*20f[^"]*\.htm[l]?)"'
+            match = re.search(doc_pattern, content, re.IGNORECASE)
+
+            if not match:
+                # Try alternative pattern - just first htm file
+                doc_pattern = r'href="([^"]*\.htm[l]?)"'
+                matches = re.findall(doc_pattern, content, re.IGNORECASE)
+                if matches:
+                    main_doc = matches[0]
+                else:
+                    self._log("Could not find main 20-F document", "WARN")
+                    return {'directors': [], 'shareholders': [], 'transactions': []}
+            else:
+                main_doc = match.group(1)
+
+            # Fetch main 20-F document
+            if main_doc.startswith('http'):
+                doc_url = main_doc
+            else:
+                doc_url = f"https://www.sec.gov{main_doc}" if main_doc.startswith('/') else f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{main_doc}"
+
+            self._log(f"Downloading 20-F document for Items 6 & 7...", "INFO")
+            time.sleep(0.1)
+            doc_response = requests.get(doc_url, headers=self.sec_headers, timeout=30)
+            doc_response.raise_for_status()
+
+            doc_text = doc_response.text
+
+            # Strip HTML
+            text_only = re.sub(r'<[^>]+>', ' ', doc_text)
+            text_only = re.sub(r'\s+', ' ', text_only)
+            text_only = text_only.replace('&nbsp;', ' ').replace('&amp;', '&')
+
+            # Extract sections (Items 6 and 7 are usually in specific sections)
+            # We'll use LLM to find and extract this information
+
+            self._log(f"Extracting Item 6 (Directors) and Item 7 (Shareholders/Transactions) with LLM...", "INFO")
+
+            # Limit text size for LLM
+            max_chars = 100000
+            text_chunk = text_only[:max_chars]
+
+            prompt = f"""
+Extract financial intelligence from this 20-F filing. Find and extract ONLY real, verifiable information from the document.
+
+CRITICAL RULES:
+1. Extract ONLY information that is explicitly stated in the document
+2. DO NOT generate placeholder names like "John Doe", "Jane Smith", or any example names
+3. DO NOT use "Unknown", "N/A", "None", or "blank" as values - just skip that entry
+4. If you cannot find real data for a section, respond with "NONE" for that section
+5. DO NOT make up or infer information that is not explicitly stated
+
+Extract the following:
+
+1. **Item 6: Directors, Senior Management and Employees**
+   - Names of directors and officers (REAL NAMES ONLY from the document)
+   - Their titles/positions
+   - Nationality (only if explicitly mentioned)
+   - Other board positions (only if explicitly mentioned)
+
+2. **Item 7A: Major Shareholders**
+   - Names of major shareholders with 5%+ ownership (REAL NAMES ONLY)
+   - Type (Individual/Corporate/Institutional/Government)
+   - Ownership percentage (must be a number)
+   - Jurisdiction/country (only if mentioned)
+
+3. **Item 7B: Related Party Transactions**
+   - Transaction type (Loan, Sale, Purchase, Guarantee, etc.)
+   - Counterparty name (REAL NAME ONLY)
+   - Relationship to company
+   - Amount and currency (must be actual numbers, not "unknown")
+   - Transaction date (if mentioned)
+   - Purpose (if mentioned)
+
+Document excerpt:
+{text_chunk}
+
+Output format (use three sections with headers):
+
+===DIRECTORS===
+NAME | TITLE | NATIONALITY | OTHER_POSITIONS
+(one per line, REAL NAMES ONLY - no "John Doe", "Jane Smith", etc.)
+
+===SHAREHOLDERS===
+NAME | TYPE | OWNERSHIP_PERCENTAGE | JURISDICTION
+(one per line, REAL NAMES ONLY - percentage must be a number)
+
+===TRANSACTIONS===
+TRANSACTION_TYPE | COUNTERPARTY | RELATIONSHIP | AMOUNT | CURRENCY | DATE | PURPOSE
+(one per line, REAL NAMES ONLY - amount must be a number)
+
+IMPORTANT:
+- If you cannot find any real directors, write "NONE" under ===DIRECTORS===
+- If you cannot find any real shareholders, write "NONE" under ===SHAREHOLDERS===
+- If you cannot find any real transactions, write "NONE" under ===TRANSACTIONS===
+- DO NOT generate example or placeholder data
+- BE CONSERVATIVE - only extract information explicitly stated in the document
+"""
+
+            response = self.client.chat.completions.create(
+                model=self.model_id,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=8000
+            )
+
+            content_response = response.choices[0].message.content.strip()
+
+            # Parse the structured response
+            directors = []
+            shareholders = []
+            transactions = []
+
+            current_section = None
+            for line in content_response.split('\n'):
+                line = line.strip()
+                if line.startswith('===DIRECTORS==='):
+                    current_section = 'directors'
+                    continue
+                elif line.startswith('===SHAREHOLDERS==='):
+                    current_section = 'shareholders'
+                    continue
+                elif line.startswith('===TRANSACTIONS==='):
+                    current_section = 'transactions'
+                    continue
+
+                if not line or line == 'NONE' or not '|' in line:
+                    continue
+
+                parts = [p.strip() for p in line.split('|')]
+
+                if current_section == 'directors' and len(parts) >= 2:
+                    # Validate director name
+                    if self._validate_person_name(parts[0]):
+                        directors.append({
+                            'name': parts[0],
+                            'title': parts[1] if len(parts) > 1 else 'Unknown',
+                            'nationality': parts[2] if len(parts) > 2 and parts[2].lower() not in ['unknown', 'n/a', 'none'] else 'Unknown',
+                            'other_positions': parts[3] if len(parts) > 3 else ''
+                        })
+                    else:
+                        self._log(f"Filtered out invalid director name: '{parts[0]}'", "INFO")
+
+                elif current_section == 'shareholders' and len(parts) >= 2:
+                    # Validate shareholder name
+                    if not self._validate_person_name(parts[0]) and not self._validate_company_name(parts[0]):
+                        self._log(f"Filtered out invalid shareholder name: '{parts[0]}'", "INFO")
+                        continue
+
+                    ownership = None
+                    if len(parts) > 2 and parts[2].lower() not in ['unknown', 'n/a', 'none']:
+                        try:
+                            ownership = float(parts[2].replace('%', '').strip())
+                        except ValueError:
+                            pass
+
+                    # Only add if we have valid ownership percentage
+                    if ownership is not None:
+                        shareholders.append({
+                            'name': parts[0],
+                            'type': parts[1] if len(parts) > 1 else 'Unknown',
+                            'ownership_percentage': ownership,
+                            'jurisdiction': parts[3] if len(parts) > 3 and parts[3].lower() not in ['unknown', 'n/a', 'none'] else 'Unknown'
+                        })
+                    else:
+                        self._log(f"Skipped shareholder without valid ownership: '{parts[0]}'", "INFO")
+
+                elif current_section == 'transactions' and len(parts) >= 2:
+                    # Validate counterparty name
+                    if not self._validate_person_name(parts[1]) and not self._validate_company_name(parts[1]):
+                        self._log(f"Filtered out invalid counterparty name: '{parts[1]}'", "INFO")
+                        continue
+
+                    amount = None
+                    if len(parts) > 3 and parts[3].lower() not in ['unknown', 'n/a', 'none']:
+                        try:
+                            amount = float(parts[3].replace(',', '').strip())
+                        except ValueError:
+                            pass
+
+                    # Only add if we have a valid amount
+                    if amount is not None:
+                        transactions.append({
+                            'transaction_type': parts[0],
+                            'counterparty': parts[1],
+                            'relationship': parts[2] if len(parts) > 2 else 'Unknown',
+                            'amount': amount,
+                            'currency': parts[4] if len(parts) > 4 else 'USD',
+                            'transaction_date': parts[5] if len(parts) > 5 and parts[5].lower() not in ['unknown', 'n/a', 'none'] else 'Unknown',
+                            'purpose': parts[6] if len(parts) > 6 else ''
+                        })
+                    else:
+                        self._log(f"Skipped transaction without valid amount: '{parts[1]}'", "INFO")
+
+            self._log(f"Extracted {len(directors)} directors, {len(shareholders)} shareholders, {len(transactions)} transactions", "SUCCESS")
+
+            return {
+                'directors': directors,
+                'shareholders': shareholders,
+                'transactions': transactions,
+                'source_url': doc_url
+            }
+
+        except Exception as e:
+            self._log(f"Error extracting financial intelligence from 20-F: {e}", "ERROR")
+            return {'directors': [], 'shareholders': [], 'transactions': [], 'source_url': None}
+
+    def extract_financial_intelligence_from_proxy(self, proxy_data):
+        """
+        Extract directors, shareholders, and related party transactions from DEF 14A (proxy statement).
+
+        Args:
+            proxy_data (dict): Proxy filing data from get_latest_proxy_statement()
+
+        Returns:
+            dict: {
+                'directors': [...],
+                'shareholders': [...],
+                'transactions': [...]
+            }
+        """
+        try:
+            cik = proxy_data['cik']
+            cik_int = str(int(cik))
+            accession = proxy_data['accession']
+            accession_formatted = proxy_data['accession_formatted']
+
+            # Rate limit
+            time.sleep(0.1)
+
+            # Get the proxy statement index
+            index_url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{accession_formatted}-index.htm"
+            self._log(f"Accessing DEF 14A (proxy statement) for financial intelligence...", "INFO")
+
+            response = requests.get(index_url, headers=self.sec_headers, timeout=15)
+            if response.status_code != 200:
+                index_url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{accession_formatted}-index.html"
+                response = requests.get(index_url, headers=self.sec_headers, timeout=15)
+
+            content = response.text
+
+            # Find the main proxy document
+            import re
+            doc_pattern = r'href="([^"]*def[^"]*\.htm[l]?)"'
+            match = re.search(doc_pattern, content, re.IGNORECASE)
+
+            if not match:
+                # Try alternative - first htm file
+                doc_pattern = r'href="([^"]*\.htm[l]?)"'
+                matches = re.findall(doc_pattern, content, re.IGNORECASE)
+                if matches:
+                    main_doc = matches[0]
+                else:
+                    self._log("Could not find main proxy document", "WARN")
+                    return {'directors': [], 'shareholders': [], 'transactions': []}
+            else:
+                main_doc = match.group(1)
+
+            # Fetch main proxy document
+            if main_doc.startswith('http'):
+                doc_url = main_doc
+            else:
+                doc_url = f"https://www.sec.gov{main_doc}" if main_doc.startswith('/') else f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession}/{main_doc}"
+
+            self._log(f"Downloading proxy statement...", "INFO")
+            time.sleep(0.1)
+            doc_response = requests.get(doc_url, headers=self.sec_headers, timeout=30)
+            doc_response.raise_for_status()
+
+            doc_text = doc_response.text
+
+            # Strip HTML
+            text_only = re.sub(r'<[^>]+>', ' ', doc_text)
+            text_only = re.sub(r'\s+', ' ', text_only)
+            text_only = text_only.replace('&nbsp;', ' ').replace('&amp;', '&')
+
+            self._log(f"Extracting directors, shareholders, and transactions with LLM...", "INFO")
+
+            # Limit text size
+            max_chars = 100000
+            text_chunk = text_only[:max_chars]
+
+            prompt = f"""
+Extract financial intelligence from this DEF 14A (proxy statement). Find and extract ONLY real, verifiable information.
+
+CRITICAL RULES:
+1. Extract ONLY information explicitly stated in the document
+2. DO NOT generate placeholder names like "John Doe", "Jane Smith", or any example names
+3. DO NOT use "Unknown", "N/A", "None", or "blank" as values - just skip that entry
+4. If you cannot find real data for a section, respond with "NONE" for that section
+5. DO NOT make up or infer information
+
+Extract the following:
+
+1. **Directors and Executive Officers**
+   - Names of directors and officers (REAL NAMES ONLY)
+   - Their titles/positions
+   - Other board positions (only if mentioned)
+
+2. **Security Ownership of Certain Beneficial Owners and Management (5%+ shareholders)**
+   - Names of major shareholders (REAL NAMES ONLY)
+   - Type (Individual/Corporate/Institutional)
+   - Ownership percentage (must be a number)
+   - Jurisdiction/country (only if mentioned)
+
+3. **Related Person Transactions**
+   - Transaction type (Loan, Sale, Purchase, Guarantee, etc.)
+   - Counterparty name (REAL NAME ONLY)
+   - Relationship to company
+   - Amount and currency (must be actual numbers)
+   - Purpose (if mentioned)
+
+Document excerpt:
+{text_chunk}
+
+Output format (use three sections with headers):
+
+===DIRECTORS===
+NAME | TITLE | OTHER_POSITIONS
+(one per line, REAL NAMES ONLY - no placeholders)
+
+===SHAREHOLDERS===
+NAME | TYPE | OWNERSHIP_PERCENTAGE | JURISDICTION
+(one per line, REAL NAMES ONLY - percentage must be a number)
+
+===TRANSACTIONS===
+TRANSACTION_TYPE | COUNTERPARTY | RELATIONSHIP | AMOUNT | CURRENCY | PURPOSE
+(one per line, REAL NAMES ONLY - amount must be a number)
+
+IMPORTANT:
+- If you cannot find any real directors, write "NONE" under ===DIRECTORS===
+- If you cannot find any real shareholders, write "NONE" under ===SHAREHOLDERS===
+- If you cannot find any real transactions, write "NONE" under ===TRANSACTIONS===
+- DO NOT generate example or placeholder data
+- BE CONSERVATIVE - only extract information explicitly stated in the document
+"""
+
+            response = self.client.chat.completions.create(
+                model=self.model_id,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=8000
+            )
+
+            content_response = response.choices[0].message.content.strip()
+
+            # Parse the structured response
+            directors = []
+            shareholders = []
+            transactions = []
+
+            current_section = None
+            for line in content_response.split('\n'):
+                line = line.strip()
+                if line.startswith('===DIRECTORS==='):
+                    current_section = 'directors'
+                    continue
+                elif line.startswith('===SHAREHOLDERS==='):
+                    current_section = 'shareholders'
+                    continue
+                elif line.startswith('===TRANSACTIONS==='):
+                    current_section = 'transactions'
+                    continue
+
+                if not line or line == 'NONE' or not '|' in line:
+                    continue
+
+                parts = [p.strip() for p in line.split('|')]
+
+                if current_section == 'directors' and len(parts) >= 2:
+                    # Validate director name
+                    if self._validate_person_name(parts[0]):
+                        directors.append({
+                            'name': parts[0],
+                            'title': parts[1] if len(parts) > 1 else 'Unknown',
+                            'nationality': 'United States',  # Assume US for DEF 14A
+                            'other_positions': parts[2] if len(parts) > 2 else ''
+                        })
+                    else:
+                        self._log(f"Filtered out invalid director name: '{parts[0]}'", "INFO")
+
+                elif current_section == 'shareholders' and len(parts) >= 2:
+                    # Validate shareholder name
+                    if not self._validate_person_name(parts[0]) and not self._validate_company_name(parts[0]):
+                        self._log(f"Filtered out invalid shareholder name: '{parts[0]}'", "INFO")
+                        continue
+
+                    ownership = None
+                    if len(parts) > 2 and parts[2].lower() not in ['unknown', 'n/a', 'none']:
+                        try:
+                            ownership = float(parts[2].replace('%', '').strip())
+                        except ValueError:
+                            pass
+
+                    # Only add if we have valid ownership percentage
+                    if ownership is not None:
+                        shareholders.append({
+                            'name': parts[0],
+                            'type': parts[1] if len(parts) > 1 else 'Unknown',
+                            'ownership_percentage': ownership,
+                            'jurisdiction': parts[3] if len(parts) > 3 and parts[3].lower() not in ['unknown', 'n/a', 'none'] else 'United States'
+                        })
+                    else:
+                        self._log(f"Skipped shareholder without valid ownership: '{parts[0]}'", "INFO")
+
+                elif current_section == 'transactions' and len(parts) >= 2:
+                    # Validate counterparty name
+                    if not self._validate_person_name(parts[1]) and not self._validate_company_name(parts[1]):
+                        self._log(f"Filtered out invalid counterparty name: '{parts[1]}'", "INFO")
+                        continue
+
+                    amount = None
+                    if len(parts) > 3 and parts[3].lower() not in ['unknown', 'n/a', 'none']:
+                        try:
+                            amount = float(parts[3].replace(',', '').strip())
+                        except ValueError:
+                            pass
+
+                    # Only add if we have a valid amount
+                    if amount is not None:
+                        transactions.append({
+                            'transaction_type': parts[0],
+                            'counterparty': parts[1],
+                            'relationship': parts[2] if len(parts) > 2 else 'Unknown',
+                            'amount': amount,
+                            'currency': parts[4] if len(parts) > 4 else 'USD',
+                            'transaction_date': 'Unknown',
+                            'purpose': parts[5] if len(parts) > 5 else ''
+                        })
+                    else:
+                        self._log(f"Skipped transaction without valid amount: '{parts[1]}'", "INFO")
+
+            self._log(f"Extracted {len(directors)} directors, {len(shareholders)} shareholders, {len(transactions)} transactions", "SUCCESS")
+
+            return {
+                'directors': directors,
+                'shareholders': shareholders,
+                'transactions': transactions,
+                'source_url': doc_url
+            }
+
+        except Exception as e:
+            self._log(f"Error extracting financial intelligence from proxy: {e}", "ERROR")
+            return {'directors': [], 'shareholders': [], 'transactions': [], 'source_url': None}
 
     def search_opencorporates_company(self, company_name):
         """
@@ -900,6 +1665,144 @@ Extract ALL entities listed as subsidiaries. Continue until you've extracted eve
             'filing_date': None
         }
 
+    def _filter_by_ownership(self, subsidiaries, ownership_threshold):
+        """
+        Filter subsidiaries based on ownership threshold.
+
+        Args:
+            subsidiaries (list): List of subsidiary dictionaries
+            ownership_threshold (int): Minimum ownership percentage (0-100)
+
+        Returns:
+            list: Filtered list of subsidiaries
+        """
+        if ownership_threshold == 0:
+            return subsidiaries
+
+        filtered = []
+        for sub in subsidiaries:
+            ownership_pct = sub.get('ownership_percentage')
+
+            if ownership_pct is not None:
+                # If we have ownership data, check against threshold
+                if ownership_pct >= ownership_threshold:
+                    filtered.append(sub)
+            else:
+                # If ownership is unknown
+                # Include it only if threshold is not 100% (not requiring wholly-owned)
+                if ownership_threshold < 100:
+                    filtered.append(sub)
+
+        return filtered
+
+    def _validate_person_name(self, name):
+        """
+        Validate that a name looks like a real person's name, not a placeholder.
+
+        Args:
+            name (str): Person name to validate
+
+        Returns:
+            bool: True if name looks valid, False if it's a placeholder or invalid
+        """
+        if not name or not name.strip():
+            return False
+
+        name_lower = name.lower().strip()
+
+        # List of common placeholder names to reject
+        placeholder_names = [
+            'john doe', 'jane doe', 'john smith', 'jane smith',
+            'mr. smith', 'ms. jones', 'unknown', 'not available',
+            'n/a', 'blank', 'none', 'example', 'placeholder',
+            'director', 'officer', 'shareholder', 'name',
+            'person a', 'person b', 'individual'
+        ]
+
+        # Check if it matches any placeholder
+        for placeholder in placeholder_names:
+            if name_lower == placeholder or placeholder in name_lower:
+                return False
+
+        # Reject if it's too short (less than 3 characters)
+        if len(name.strip()) < 3:
+            return False
+
+        # Reject if it doesn't contain at least one letter
+        if not any(c.isalpha() for c in name):
+            return False
+
+        return True
+
+    def _validate_company_name(self, name):
+        """
+        Validate that a name looks like a legal entity name, not a description.
+
+        Args:
+            name (str): Company name to validate
+
+        Returns:
+            bool: True if name looks valid, False if it looks like a description
+        """
+        name_lower = name.lower()
+
+        # Reject if it contains description phrases
+        description_phrases = [
+            'subsidiary for', 'developer of', 'maker of', 'known for',
+            'specializing in', 'focused on', 'provider of', 'platform for',
+            'service for', 'company for', 'backed', 'owned by',
+            'operates in', 'based on', 'creator of'
+        ]
+
+        for phrase in description_phrases:
+            if phrase in name_lower:
+                return False
+
+        # Reject if it's too long (likely a description)
+        if len(name) > 100:
+            return False
+
+        # Reject if it contains multiple "of" or "for" (likely descriptive)
+        if name_lower.count(' of ') > 1 or name_lower.count(' for ') > 1:
+            return False
+
+        return True
+
+    def _store_financial_intelligence(self, sec_results):
+        """
+        Store directors, shareholders, and transactions in the database.
+
+        Args:
+            sec_results (dict): Results from find_subsidiaries_sec_edgar containing financial intelligence
+        """
+        try:
+            import database as db
+
+            company_name = sec_results.get('company_name')
+            cik = sec_results.get('cik')
+            filing_date = sec_results.get('filing_date')
+            filing_type = '10-K' if sec_results['method'] == 'sec_edgar_10k' else '20-F'
+            source_url = sec_results.get('fin_intel_url') or sec_results.get('source_url')
+
+            directors = sec_results.get('directors', [])
+            shareholders = sec_results.get('shareholders', [])
+            transactions = sec_results.get('transactions', [])
+
+            if directors:
+                self._log(f"Storing {len(directors)} directors in database...", "INFO")
+                db.insert_directors(company_name, cik, directors, filing_type, filing_date, source_url)
+
+            if shareholders:
+                self._log(f"Storing {len(shareholders)} shareholders in database...", "INFO")
+                db.insert_shareholders(company_name, cik, shareholders, filing_type, filing_date, source_url)
+
+            if transactions:
+                self._log(f"Storing {len(transactions)} transactions in database...", "INFO")
+                db.insert_transactions(company_name, cik, transactions, filing_type, filing_date, source_url)
+
+        except Exception as e:
+            self._log(f"Error storing financial intelligence: {e}", "ERROR")
+
     def _search_sister_companies(self, company_name):
         """
         Search for sister companies using DuckDuckGo (fallback method).
@@ -929,30 +1832,55 @@ Extract ALL entities listed as subsidiaries. Continue until you've extracted eve
             prompt = f"""
 Analyze the following search results about "{company_name}".
 
-Extract SISTER COMPANIES only. Sister companies are companies that share the SAME PARENT COMPANY with "{company_name}".
+Extract ONLY the LEGAL ENTITY NAMES of SISTER COMPANIES.
+
+Sister companies are companies that share the SAME PARENT COMPANY with "{company_name}".
+They are NOT subsidiaries OF "{company_name}" - they are OTHER subsidiaries of the same parent.
+
+CRITICAL RULES:
+1. Extract ONLY the actual legal company name (e.g., "Company A Inc.", "Company B Ltd.")
+2. DO NOT include descriptions, products, or services (e.g., NOT "Gaming subsidiary specializing in...")
+3. DO NOT include parent company references (e.g., NOT "Parent-backed company")
+4. DO NOT include phrases like "developer of", "maker of", "known for"
+5. DO NOT include any numbering or bullet points (e.g., NOT "1. Company Name" - just "Company Name")
+6. If you cannot find a clear legal name, SKIP that entry entirely
 
 DO NOT include:
 - "{company_name}" itself
 - Subsidiaries of "{company_name}" (companies owned BY "{company_name}")
 - The parent company itself
+- Numbered lists or bullets
 
 For each sister company found, provide:
-- Company name (full legal name)
+- Legal entity name ONLY (no numbers, no bullets)
 - Jurisdiction (country/state if mentioned)
 - Status (always mark as "Sister Company")
+- Source URL (the exact URL from the search result where this company was mentioned)
 
 Search Results:
 {text_data}
 
-Output format (one per line):
-COMPANY_NAME | JURISDICTION | Sister Company
+Output format (one per line, NO NUMBERING):
+LEGAL_ENTITY_NAME | JURISDICTION | Sister Company | SOURCE_URL
 
-Example:
-Huawei Technologies USA | United States | Sister Company
-Huawei Device Co., Ltd. | China | Sister Company
+GOOD Examples (format only - these are NOT real companies to be extracted):
+Disney Channel Networks | United States | Sister Company | https://opencorporates.com/companies/us/xyz123
+Paramount Television | United States | Sister Company | https://opencorporates.com/companies/ca/abc456
+Warner Bros. Entertainment | United States | Sister Company | https://opencorporates.com/companies/fi/tech789
+
+IMPORTANT:
+- DO NOT number the lines (no "1.", "2.", etc.)
+- Always include the SOURCE_URL from the search results above
+- Only output the pipe-delimited format shown above
+
+BAD Examples (DO NOT output these):
+1. Parent-backed company | United States | Sister Company  ← WRONG: numbered list
+2. Developer of products | United States | Sister Company  ← WRONG: numbered and description
+LEGAL_ENTITY_NAME | United States | Sister Company  ← WRONG: placeholder text
+Gaming subsidiary for mobile | China | Sister Company  ← WRONG: description not legal name
 
 If no sister companies are clearly identified, respond with "NO_SISTERS_FOUND".
-Be conservative - only extract entities clearly identified as sister companies or co-subsidiaries.
+Be conservative - only extract entities clearly identified as sister companies with clear legal names.
 """
 
             response = self.client.chat.completions.create(
@@ -967,7 +1895,7 @@ Be conservative - only extract entities clearly identified as sister companies o
             if "NO_SISTERS_FOUND" in content:
                 return []
 
-            # Parse LLM response
+            # Parse LLM response with validation
             sisters = []
             for line in content.split('\n'):
                 line = line.strip()
@@ -976,14 +1904,47 @@ Be conservative - only extract entities clearly identified as sister companies o
 
                 parts = [p.strip() for p in line.split('|')]
                 if len(parts) >= 3:
-                    sisters.append({
-                        'name': parts[0],
-                        'jurisdiction': parts[1],
-                        'status': parts[2],
-                        'relationship': 'sister',
-                        'level': 0,
-                        'source': 'duckduckgo'
-                    })
+                    company_name = parts[0]
+
+                    # Strip leading numbers (e.g., "1. Company Name" -> "Company Name")
+                    company_name = re.sub(r'^\d+\.\s*', '', company_name).strip()
+
+                    # Filter out placeholder text and invalid entries
+                    invalid_placeholders = [
+                        'LEGAL_ENTITY_NAME',
+                        'NO_SISTERS_FOUND',
+                        'COMPANY_NAME',
+                        'EXAMPLE',
+                        'XYZ Corporation',
+                        'ABC International',
+                        'Tech Solutions'
+                    ]
+
+                    # Skip if it's a placeholder or example
+                    if any(placeholder.lower() in company_name.lower() for placeholder in invalid_placeholders):
+                        self._log(f"Filtered out placeholder/example: '{company_name}'", "INFO")
+                        continue
+
+                    # Validate that it looks like a company name, not a description
+                    if self._validate_company_name(company_name):
+                        # Parse source URL if provided
+                        source_url = None
+                        if len(parts) >= 4:
+                            url = parts[3].strip()
+                            if url and url.startswith('http'):
+                                source_url = url
+
+                        sisters.append({
+                            'name': company_name,
+                            'jurisdiction': parts[1],
+                            'status': parts[2],
+                            'relationship': 'sister',
+                            'level': 0,
+                            'source': 'duckduckgo',
+                            'reference_url': source_url
+                        })
+                    else:
+                        self._log(f"Filtered out invalid entry: '{company_name}'", "INFO")
 
             return sisters
 
@@ -991,23 +1952,775 @@ Be conservative - only extract entities clearly identified as sister companies o
             self._log(f"Error searching sister companies via DuckDuckGo: {e}", "ERROR")
             return []
 
-    def find_subsidiaries(self, parent_company_name, depth=1, include_sisters=True, progress_callback=None):
+    def _search_subsidiaries_duckduckgo(self, company_name):
+        """
+        Search for subsidiaries using DuckDuckGo (fallback method).
+
+        Args:
+            company_name (str): Company name
+
+        Returns:
+            list: List of subsidiary dictionaries
+        """
+        # Enhanced search query for subsidiaries
+        query = f'"{company_name}" subsidiaries list OR "wholly owned" OR "majority owned" OR "owned by {company_name}"'
+
+        try:
+            results = self.ddgs.text(query, max_results=15)
+            if not results:
+                return []
+
+            # Aggregate search result text
+            text_data = ""
+            for r in results:
+                text_data += f"Title: {r.get('title', '')}\n"
+                text_data += f"URL: {r.get('href', '')}\n"
+                text_data += f"Snippet: {r.get('body', '')}\n\n"
+
+            # Use LLM to extract subsidiaries
+            prompt = f"""
+Analyze the following search results about "{company_name}".
+
+Extract ONLY the LEGAL ENTITY NAMES of SUBSIDIARY COMPANIES.
+
+Subsidiary companies are companies that are OWNED BY "{company_name}".
+They are NOT sister companies (companies owned by the same parent as "{company_name}").
+
+CRITICAL RULES:
+1. Extract ONLY the actual legal company name (e.g., "Company A Inc.", "Company B Ltd.")
+2. DO NOT include descriptions, products, or services (e.g., NOT "Gaming subsidiary specializing in...")
+3. DO NOT include parent company references (e.g., NOT "Parent-backed company")
+4. DO NOT include phrases like "developer of", "maker of", "known for"
+5. DO NOT include any numbering or bullet points (e.g., NOT "1. Company Name" - just "Company Name")
+6. If you cannot find a clear legal name, SKIP that entry entirely
+
+DO NOT include:
+- "{company_name}" itself
+- Sister companies (companies owned by the SAME PARENT as "{company_name}")
+- The parent company of "{company_name}"
+- Numbered lists or bullets
+
+For each subsidiary company found, provide:
+- Legal entity name ONLY (no numbers, no bullets)
+- Jurisdiction (country/state if mentioned)
+- Status (always mark as "Subsidiary")
+- Source URL (the exact URL from the search result where this company was mentioned)
+
+Search Results:
+{text_data}
+
+Output format (one per line, NO NUMBERING):
+LEGAL_ENTITY_NAME | JURISDICTION | Subsidiary | SOURCE_URL
+
+GOOD Examples (format only - these are NOT real companies to be extracted):
+Taobao Holding Limited | China | Subsidiary | https://example.com/page1
+Tmall Technology Co., Ltd. | China | Subsidiary | https://example.com/page2
+Alibaba Cloud Computing Ltd. | China | Subsidiary | https://example.com/page3
+
+IMPORTANT:
+- DO NOT number the lines (no "1.", "2.", etc.)
+- Always include the SOURCE_URL from the search results above
+- Only output the pipe-delimited format shown above
+
+BAD Examples (DO NOT output these):
+1. Parent-backed company | United States | Subsidiary  ← WRONG: numbered list
+2. Developer of products | United States | Subsidiary  ← WRONG: numbered and description
+LEGAL_ENTITY_NAME | United States | Subsidiary  ← WRONG: placeholder text
+Gaming subsidiary for mobile | China | Subsidiary  ← WRONG: description not legal name
+
+If no subsidiaries are clearly identified, respond with "NO_SUBSIDIARIES_FOUND".
+Be conservative - only extract entities clearly identified as subsidiaries with clear legal names.
+"""
+
+            response = self.client.chat.completions.create(
+                model=self.model_id,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=800
+            )
+
+            content = response.choices[0].message.content.strip()
+
+            if "NO_SUBSIDIARIES_FOUND" in content:
+                return []
+
+            # Parse LLM response with validation
+            subsidiaries = []
+            for line in content.split('\n'):
+                line = line.strip()
+                if not line or '|' not in line:
+                    continue
+
+                parts = [p.strip() for p in line.split('|')]
+                if len(parts) >= 3:
+                    company_name_extracted = parts[0]
+
+                    # Strip leading numbers (e.g., "1. Company Name" -> "Company Name")
+                    company_name_extracted = re.sub(r'^\d+\.\s*', '', company_name_extracted).strip()
+
+                    # Filter out placeholder text and invalid entries
+                    invalid_placeholders = [
+                        'LEGAL_ENTITY_NAME',
+                        'NO_SUBSIDIARIES_FOUND',
+                        'COMPANY_NAME',
+                        'EXAMPLE',
+                        'XYZ Corporation',
+                        'ABC International',
+                        'Tech Solutions'
+                    ]
+
+                    # Skip if it's a placeholder or example
+                    if any(placeholder.lower() in company_name_extracted.lower() for placeholder in invalid_placeholders):
+                        self._log(f"Filtered out placeholder/example: '{company_name_extracted}'", "INFO")
+                        continue
+
+                    # Validate that it looks like a company name, not a description
+                    if self._validate_company_name(company_name_extracted):
+                        # Parse source URL if provided
+                        source_url = None
+                        if len(parts) >= 4:
+                            url = parts[3].strip()
+                            if url and url.startswith('http'):
+                                source_url = url
+
+                        subsidiaries.append({
+                            'name': company_name_extracted,
+                            'jurisdiction': parts[1],
+                            'status': parts[2],
+                            'relationship': 'subsidiary',
+                            'level': 1,
+                            'source': 'duckduckgo',
+                            'reference_url': source_url
+                        })
+                    else:
+                        self._log(f"Filtered out invalid entry: '{company_name_extracted}'", "INFO")
+
+            return subsidiaries
+
+        except Exception as e:
+            self._log(f"Error searching subsidiaries via DuckDuckGo: {e}", "ERROR")
+            return []
+
+    def _search_wikipedia_subsidiaries(self, company_name):
+        """
+        Search Wikipedia for subsidiaries and sister companies.
+
+        Args:
+            company_name (str): Company name to search
+
+        Returns:
+            dict: {
+                'subsidiaries': [list of subsidiary dicts],
+                'sisters': [list of sister company dicts]
+            }
+        """
+        subsidiaries = []
+        sisters = []
+
+        try:
+            self._log(f"Searching Wikipedia for {company_name}...", "INFO")
+
+            # Wikipedia requires User-Agent header
+            headers = {
+                'User-Agent': 'SanctionsScreeningBot/1.0 (Research Tool; Python/requests)'
+            }
+
+            # Search for the Wikipedia page
+            search_url = "https://en.wikipedia.org/w/api.php"
+            search_params = {
+                'action': 'opensearch',
+                'search': company_name,
+                'limit': 1,
+                'format': 'json'
+            }
+
+            response = requests.get(search_url, params=search_params, headers=headers, timeout=10)
+            response.raise_for_status()
+            search_results = response.json()
+
+            # Get the first result's title
+            if not search_results[1]:
+                self._log(f"No Wikipedia page found for {company_name}", "WARN")
+                return {'subsidiaries': [], 'sisters': []}
+
+            page_title = search_results[1][0]
+            self._log(f"Found Wikipedia page: {page_title}", "SUCCESS")
+
+            # Fetch the page content
+            content_params = {
+                'action': 'query',
+                'titles': page_title,
+                'prop': 'extracts',
+                'explaintext': 1,  # Plain text (Wikipedia API expects integer, not boolean)
+                'exlimit': 1,  # Limit to 1 page
+                'format': 'json',
+                'formatversion': 2,  # Use newer API response format
+                'redirects': 1  # Follow redirects automatically
+            }
+
+            # Note: Not using exintro=1 because we need full article for subsidiaries/sisters
+            # Not using exsectionformat as it can cause empty responses
+
+            response = requests.get(search_url, params=content_params, headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+
+            # Extract the page content (formatversion 2 returns list, formatversion 1 returns dict)
+            pages = data.get('query', {}).get('pages', [])
+
+            # Handle both formatversion 2 (list) and formatversion 1 (dict)
+            if isinstance(pages, dict):
+                # Old format (formatversion 1) - dict with page IDs as keys
+                pages = list(pages.values())
+
+            # Debug: log what we got back
+            if not pages:
+                self._log(f"Wikipedia API returned no pages in response", "WARN")
+                self._log(f"Response data: {str(data)[:200]}", "DEBUG")
+                return {'subsidiaries': [], 'sisters': []}
+
+            page_content = None
+            for page_data in pages:
+                # Check if page exists (not missing)
+                if page_data.get('missing'):
+                    self._log(f"Wikipedia page '{page_title}' was found in search but doesn't exist", "WARN")
+                    return {'subsidiaries': [], 'sisters': []}
+
+                page_content = page_data.get('extract', '')
+
+                # Debug: show what we got
+                if page_content:
+                    self._log(f"Extracted {len(page_content)} characters from Wikipedia", "INFO")
+                    break
+                else:
+                    self._log(f"Wikipedia page exists but extract field is empty", "WARN")
+                    self._log(f"Page data keys: {list(page_data.keys())}", "DEBUG")
+                    # Show a sample of the page data to help diagnose
+                    page_sample = {k: str(v)[:100] if k != 'extract' else f"[empty, length={len(str(v))}]"
+                                   for k, v in page_data.items()}
+                    self._log(f"Page data sample: {page_sample}", "DEBUG")
+
+            if not page_content or len(page_content.strip()) < 100:
+                self._log(f"Could not extract meaningful Wikipedia content (page may be a stub, disambiguation, or redirect)", "WARN")
+                return {'subsidiaries': [], 'sisters': []}
+
+            # Limit content size (Wikipedia pages can be very long)
+            max_chars = 30000
+            if len(page_content) > max_chars:
+                self._log(f"Wikipedia page is long ({len(page_content)} chars), using first {max_chars} chars", "INFO")
+                page_content = page_content[:max_chars]
+
+            self._log(f"Parsing Wikipedia content with LLM ({len(page_content)} chars)...", "INFO")
+
+            # Use LLM to extract subsidiaries and sister companies
+            prompt = f"""
+Analyze this Wikipedia page about "{company_name}".
+
+Extract ONLY the LEGAL ENTITY NAMES of:
+1. SUBSIDIARIES: Companies that are owned/controlled by "{company_name}"
+2. SISTER COMPANIES: Companies that share the same parent company with "{company_name}" (but are not owned by "{company_name}")
+
+CRITICAL RULES:
+1. Extract ONLY the actual legal company name or brand name (e.g., "Brand Name", "Company Inc.")
+2. DO NOT include descriptions or products (e.g., NOT "Platform for services")
+3. DO NOT include parent references (e.g., NOT "Parent-owned company")
+4. DO NOT include phrases like "developer of", "maker of", "service for"
+5. Brand names are OK if they're the actual company name
+6. If you cannot find a clear legal or brand name, SKIP that entry
+
+For each company found, provide:
+- Legal entity name or brand name ONLY
+- Jurisdiction (country/state if mentioned, or "Unknown")
+- Relationship (either "subsidiary" or "sister")
+- Ownership percentage (if mentioned, otherwise "Unknown")
+
+Wikipedia Content:
+{page_content}
+
+Output format (one per line):
+LEGAL_NAME | JURISDICTION | RELATIONSHIP | OWNERSHIP_PCT
+
+GOOD Examples (format only - these are NOT real companies):
+ProductName | Country | subsidiary | 100
+XYZ Company Inc. | United States | subsidiary | Unknown
+ABC Corporation | Finland | subsidiary | 84.3
+Tech Co. Ltd. | United States | sister
+
+BAD Examples (DO NOT output these):
+Mobile messaging app | China | subsidiary  ← WRONG: description
+Parent-owned company | United States | subsidiary  ← WRONG: not a name
+Developer of products | United States | subsidiary  ← WRONG: description
+
+If no subsidiaries or sister companies are clearly mentioned, respond with "NO_COMPANIES_FOUND".
+Focus on sections that list subsidiaries, divisions, or related companies.
+Extract ALL entities with clear names.
+"""
+
+            response = self.client.chat.completions.create(
+                model=self.model_id,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=2000
+            )
+
+            content = response.choices[0].message.content.strip()
+
+            if "NO_COMPANIES_FOUND" in content:
+                self._log(f"No subsidiaries or sister companies found in Wikipedia", "WARN")
+                return {'subsidiaries': [], 'sisters': []}
+
+            # Parse LLM response with validation
+            for line in content.split('\n'):
+                line = line.strip()
+                if not line or '|' not in line:
+                    continue
+
+                parts = [p.strip() for p in line.split('|')]
+                if len(parts) >= 3:
+                    company_name = parts[0]
+                    relationship = parts[2].lower()
+
+                    # Validate that it looks like a company name, not a description
+                    if not self._validate_company_name(company_name):
+                        self._log(f"Filtered out invalid entry: '{company_name}'", "INFO")
+                        continue
+
+                    # Parse ownership percentage if provided
+                    ownership_pct = None
+                    if len(parts) >= 4:
+                        ownership_str = parts[3].lower()
+                        if ownership_str != 'unknown' and ownership_str != '':
+                            try:
+                                ownership_pct = float(ownership_str.replace('%', '').strip())
+                            except ValueError:
+                                pass
+
+                    company_dict = {
+                        'name': company_name,
+                        'jurisdiction': parts[1],
+                        'status': 'Active',
+                        'level': 1,
+                        'source': 'wikipedia',
+                        'ownership_percentage': ownership_pct
+                    }
+
+                    if relationship == 'subsidiary':
+                        company_dict['relationship'] = 'subsidiary'
+                        subsidiaries.append(company_dict)
+                    elif relationship == 'sister':
+                        company_dict['relationship'] = 'sister'
+                        company_dict['level'] = 0
+                        sisters.append(company_dict)
+
+            self._log(f"Found {len(subsidiaries)} subsidiaries and {len(sisters)} sister companies from Wikipedia", "SUCCESS")
+
+            return {'subsidiaries': subsidiaries, 'sisters': sisters}
+
+        except Exception as e:
+            self._log(f"Error searching Wikipedia: {e}", "ERROR")
+            return {'subsidiaries': [], 'sisters': []}
+
+    def find_parent_and_sisters(self, subsidiary_name, progress_callback=None):
+        """
+        Reverse search: Find parent company and sister companies when searching for a subsidiary.
+
+        Args:
+            subsidiary_name (str): Name of the subsidiary company
+            progress_callback (callable): Optional callback for progress updates
+
+        Returns:
+            dict: {
+                'parent': Parent company info (or None),
+                'sisters': List of sister companies,
+                'method': Search method used,
+                'subsidiary_info': Info about the searched subsidiary
+            }
+        """
+        print(f"[DEBUG] find_parent_and_sisters method ENTERED for: {subsidiary_name}")
+        print(f"[DEBUG] progress_callback is: {progress_callback}")
+
+        def log(msg, level):
+            print(f"[DEBUG LOG] {level}: {msg}")  # Always print to console
+            if progress_callback:
+                progress_callback(msg, level)
+            else:
+                self._log(msg, level)
+
+        log(f"Searching for parent company of {subsidiary_name}...", "SEARCH")
+
+        parent = None
+        sisters = []
+        subsidiary_info = None
+        method = 'none'
+
+        # Try OpenCorporates API first (best for finding parent companies)
+        if self.opencorporates_api_key:
+            log("Trying OpenCorporates API to find parent...", "INFO")
+            try:
+                # Search for the subsidiary company
+                subsidiary_data = self.search_opencorporates_company(subsidiary_name)
+
+                if subsidiary_data:
+                    subsidiary_info = subsidiary_data
+                    log(f"Found subsidiary: {subsidiary_data['name']} ({subsidiary_data['jurisdiction_code']})", "SUCCESS")
+
+                    # Search for parent company
+                    url = f"{self.opencorporates_base_url}/statements/control_statements/search"
+                    params = {
+                        'api_token': self.opencorporates_api_key,
+                        'controlled_jurisdiction_code': subsidiary_data['jurisdiction_code'],
+                        'controlled_company_number': subsidiary_data['company_number'],
+                        'per_page': 10
+                    }
+
+                    response = requests.get(url, params=params, timeout=30)
+
+                    if response.status_code != 429 and response.status_code == 200:
+                        data = response.json()
+
+                        if data.get('results', {}).get('statements'):
+                            statement = data['results']['statements'][0]
+                            controller = statement.get('statement', {}).get('controller', {})
+
+                            if controller:
+                                parent = {
+                                    'name': controller.get('name', 'Unknown'),
+                                    'jurisdiction': controller.get('jurisdiction_code', 'Unknown'),
+                                    'company_number': controller.get('company_number'),
+                                    'status': 'Active',
+                                    'source': 'opencorporates_api'
+                                }
+                                log(f"Found parent company: {parent['name']}", "SUCCESS")
+                                method = 'opencorporates_api'
+
+                                # Now find sister companies (other subsidiaries of the same parent)
+                                log(f"Searching for sister companies of {subsidiary_name}...", "INFO")
+
+                                params = {
+                                    'api_token': self.opencorporates_api_key,
+                                    'controller_jurisdiction_code': controller.get('jurisdiction_code'),
+                                    'controller_company_number': controller.get('company_number'),
+                                    'per_page': 100
+                                }
+
+                                response = requests.get(url, params=params, timeout=30)
+
+                                if response.status_code == 200:
+                                    data = response.json()
+
+                                    for statement in data.get('results', {}).get('statements', []):
+                                        controlled = statement.get('statement', {}).get('controlled_entity', {})
+                                        if controlled:
+                                            controlled_name = controlled.get('name', 'Unknown')
+
+                                            # Don't include the searched subsidiary itself
+                                            if controlled_name.lower() != subsidiary_name.lower():
+                                                sisters.append({
+                                                    'name': controlled_name,
+                                                    'jurisdiction': controlled.get('jurisdiction_code', 'Unknown'),
+                                                    'status': 'Active',
+                                                    'relationship': 'sister',
+                                                    'source': 'opencorporates_api'
+                                                })
+
+                                    if sisters:
+                                        log(f"Found {len(sisters)} sister companies", "SUCCESS")
+            except Exception as e:
+                log(f"OpenCorporates API error: {e}", "ERROR")
+        else:
+            log("No OpenCorporates API key configured", "INFO")
+
+        # If no parent found via API, try multiple sources
+        if not parent:
+            parent_candidates = []
+
+            # Method 1: Try Wikipedia
+            log("Trying Wikipedia to find parent company...", "INFO")
+            try:
+                headers = {'User-Agent': 'SanctionsScreeningBot/1.0 (Research Tool; Python/requests)'}
+                search_url = "https://en.wikipedia.org/w/api.php"
+
+                search_params = {
+                    'action': 'opensearch',
+                    'search': subsidiary_name,
+                    'limit': 1,
+                    'format': 'json'
+                }
+
+                response = requests.get(search_url, params=search_params, headers=headers, timeout=10)
+                response.raise_for_status()
+                search_results = response.json()
+
+                log(f"Wikipedia search found {len(search_results[1]) if search_results[1] else 0} results", "DEBUG")
+
+                if search_results[1]:
+                    page_title = search_results[1][0]
+                    log(f"Found Wikipedia page: {page_title}", "SUCCESS")
+
+                    content_params = {
+                        'action': 'query',
+                        'titles': page_title,
+                        'prop': 'extracts',
+                        'explaintext': 1,
+                        'exlimit': 1,
+                        'format': 'json',
+                        'formatversion': 2,
+                        'redirects': 1
+                    }
+
+                    response = requests.get(search_url, params=content_params, headers=headers, timeout=10)
+                    response.raise_for_status()
+                    data = response.json()
+
+                    pages = data.get('query', {}).get('pages', [])
+                    if isinstance(pages, dict):
+                        pages = list(pages.values())
+
+                    if pages:
+                        page_content = pages[0].get('extract', '')
+                        log(f"Wikipedia page content length: {len(page_content)} chars", "DEBUG")
+                        if page_content and len(page_content) > 100:
+                            intro = page_content[:3000]
+                            log(f"Analyzing Wikipedia content ({len(intro)} chars)...", "INFO")
+                            log(f"Wikipedia excerpt (first 200 chars): {intro[:200]}...", "DEBUG")
+
+                            prompt = f"""
+Extract the parent company from this Wikipedia excerpt about "{subsidiary_name}".
+
+Text:
+{intro}
+
+CRITICAL RULES:
+- Look for phrases: "subsidiary of", "owned by", "part of", "acquired by", "operated by", "division of"
+- Extract ONLY the parent company's legal name
+- DO NOT include any explanations, reasoning, or extra text
+- Output ONLY in the exact format shown below, nothing else
+
+Output format (ONLY output this line, nothing else):
+PARENT_NAME | COUNTRY
+
+If no parent company found, output only: NONE
+
+Examples of CORRECT output:
+Alibaba Group | China
+Meta Platforms | United States
+Google LLC | United States
+NONE
+"""
+
+                            response = self.client.chat.completions.create(
+                                model=self.model_id,
+                                messages=[{"role": "user", "content": prompt}],
+                                temperature=0.0,
+                            )
+                            result = response.choices[0].message.content.strip()
+                            log(f"Wikipedia LLM extraction result: {result}", "DEBUG")
+
+                            # Extract the actual "NAME | COUNTRY" line from potentially verbose response
+                            # Look for the last line containing a pipe character
+                            if result and result != 'NONE':
+                                lines = [line.strip() for line in result.split('\n') if line.strip() and '|' in line]
+                                if lines:
+                                    result = lines[-1]  # Take the last line with a pipe
+                                    log(f"Cleaned result: {result}", "DEBUG")
+
+                            if result and result != 'NONE' and '|' in result:
+                                parts = [p.strip() for p in result.split('|')]
+                                if len(parts) >= 1 and parts[0]:
+                                    parent_candidates.append({
+                                        'name': parts[0],
+                                        'jurisdiction': parts[1] if len(parts) > 1 else 'Unknown',
+                                        'source': 'wikipedia',
+                                        'confidence': 'high'
+                                    })
+                                    log(f"Wikipedia suggests parent: {parts[0]}", "INFO")
+            except Exception as e:
+                log(f"Wikipedia search error: {e}", "ERROR")
+
+            # Method 2: Try DuckDuckGo search
+            log("Trying DuckDuckGo search for parent company...", "INFO")
+            try:
+                import urllib.parse
+                search_query = urllib.parse.quote(f'"{subsidiary_name}" parent company owner')
+                ddg_url = f"https://html.duckduckgo.com/html/?q={search_query}"
+
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+
+                response = requests.get(ddg_url, headers=headers, timeout=10)
+                if response.status_code == 200:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(response.text, 'html.parser')
+
+                    # Extract search result snippets
+                    results = soup.find_all('a', class_='result__snippet')
+                    snippets = []
+                    for result in results[:3]:
+                        text = result.get_text(strip=True)
+                        if text:
+                            snippets.append(text)
+
+                    log(f"DuckDuckGo found {len(snippets)} snippets", "DEBUG")
+
+                    if snippets:
+                        combined_text = "\n".join(snippets[:3])
+                        log(f"Analyzing DuckDuckGo results ({len(combined_text)} chars)...", "INFO")
+                        log(f"DuckDuckGo snippets: {combined_text[:300]}...", "DEBUG")
+
+                        prompt = f"""
+Extract the parent company of "{subsidiary_name}" from these search results.
+
+Search results:
+{combined_text}
+
+CRITICAL RULES:
+- Look for phrases: "subsidiary of", "owned by", "part of", "acquired by"
+- Extract ONLY the parent company name
+- DO NOT include any explanations, reasoning, or extra text
+- Output ONLY in the exact format shown below, nothing else
+
+Output format (ONLY output this line, nothing else):
+PARENT_NAME | COUNTRY
+
+If no parent found, output only: NONE
+
+Examples of CORRECT output:
+Alibaba Group | China
+Meta Platforms | United States
+NONE
+"""
+
+                        response = self.client.chat.completions.create(
+                            model=self.model_id,
+                            messages=[{"role": "user", "content": prompt}],
+                            temperature=0.0,
+                        )
+                        result = response.choices[0].message.content.strip()
+                        log(f"DuckDuckGo LLM extraction result: {result}", "DEBUG")
+
+                        # Extract the actual "NAME | COUNTRY" line from potentially verbose response
+                        if result and result != 'NONE':
+                            lines = [line.strip() for line in result.split('\n') if line.strip() and '|' in line]
+                            if lines:
+                                result = lines[-1]  # Take the last line with a pipe
+                                log(f"Cleaned result: {result}", "DEBUG")
+
+                        if result and result != 'NONE' and '|' in result:
+                            parts = [p.strip() for p in result.split('|')]
+                            if len(parts) >= 1 and parts[0]:
+                                parent_candidates.append({
+                                    'name': parts[0],
+                                    'jurisdiction': parts[1] if len(parts) > 1 else 'Unknown',
+                                    'source': 'duckduckgo',
+                                    'confidence': 'medium'
+                                })
+                                log(f"DuckDuckGo suggests parent: {parts[0]}", "INFO")
+            except Exception as e:
+                log(f"DuckDuckGo search error: {e}", "ERROR")
+
+            # Method 3: Try SEC EDGAR (check if subsidiary is mentioned in any company's filings)
+            log("Trying SEC EDGAR to find parent company...", "INFO")
+            try:
+                # Try searching for the subsidiary name in SEC's full-text search
+                import urllib.parse
+                encoded_name = urllib.parse.quote(subsidiary_name)
+                search_url = f"https://www.sec.gov/cgi-bin/browse-edgar?company={encoded_name}&owner=exclude&action=getcompany"
+
+                time.sleep(0.2)  # Rate limiting
+                response = requests.get(search_url, headers=self.sec_headers, timeout=15)
+
+                if response.status_code == 200:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(response.text, 'html.parser')
+
+                    # Look for company name in the results
+                    company_info = soup.find('span', {'class': 'companyName'})
+                    if company_info:
+                        company_text = company_info.get_text().strip()
+                        # Remove CIK from the name
+                        import re
+                        company_name = re.sub(r'CIK#:\s*\d+', '', company_text).strip()
+
+                        # Check if this is the subsidiary itself or a parent
+                        if company_name.lower() != subsidiary_name.lower():
+                            parent_candidates.append({
+                                'name': company_name,
+                                'jurisdiction': 'United States',
+                                'source': 'sec_edgar',
+                                'confidence': 'medium'
+                            })
+                            log(f"SEC EDGAR suggests parent: {company_name}", "INFO")
+            except Exception as e:
+                log(f"SEC EDGAR search error: {e}", "ERROR")
+
+            # Consolidate results - choose best candidate
+            log(f"Total parent candidates found: {len(parent_candidates)}", "DEBUG")
+            for idx, candidate in enumerate(parent_candidates):
+                log(f"Candidate {idx+1}: {candidate['name']} from {candidate['source']} (confidence: {candidate['confidence']})", "DEBUG")
+
+            if parent_candidates:
+                # Prefer Wikipedia (most reliable), then DuckDuckGo, then SEC
+                parent_candidates.sort(key=lambda x: {'high': 0, 'medium': 1, 'low': 2}.get(x['confidence'], 3))
+
+                best_candidate = parent_candidates[0]
+                parent = {
+                    'name': best_candidate['name'],
+                    'jurisdiction': best_candidate['jurisdiction'],
+                    'status': 'Active',
+                    'relationship': 'parent',
+                    'source': best_candidate['source']
+                }
+                method = best_candidate['source']
+                log(f"Selected parent company: {parent['name']} (source: {method})", "SUCCESS")
+
+                # Now search for sister companies using the parent name
+                log(f"Searching for subsidiaries of parent: {parent['name']}...", "INFO")
+                parent_results = self.find_subsidiaries(parent['name'], depth=1, include_sisters=False, progress_callback=progress_callback)
+
+                # All subsidiaries of the parent are sister companies (except the one we searched for)
+                for sub in parent_results.get('subsidiaries', []):
+                    if sub['name'].lower() != subsidiary_name.lower():
+                        sub['relationship'] = 'sister'
+                        sisters.append(sub)
+
+                if sisters:
+                    log(f"Found {len(sisters)} sister companies", "SUCCESS")
+                else:
+                    log("No sister companies found", "WARN")
+
+        # Return results
+        if not parent:
+            log(f"No parent company found for {subsidiary_name}", "WARN")
+            log("This may be a parent company or independent entity", "INFO")
+
+        return {
+            'parent': parent,
+            'sisters': sisters,
+            'subsidiary_info': subsidiary_info,
+            'method': method,
+            'searched_company': subsidiary_name
+        }
+
+    def find_subsidiaries(self, parent_company_name, depth=1, include_sisters=True, progress_callback=None, ownership_threshold=0, depth_search_subsidiaries=None):
         """
         Search for subsidiaries and optionally sister companies.
-        Tries OpenCorporates API first, then SEC EDGAR, finally DuckDuckGo.
+        Tries OpenCorporates API first, then SEC EDGAR, then Wikipedia + DuckDuckGo.
 
         Args:
             parent_company_name (str): Name of the parent/target company
             depth (int): Search depth for subsidiaries (1-3 levels)
             include_sisters (bool): Whether to also search for sister companies
             progress_callback (callable): Optional callback for progress updates
+            ownership_threshold (int): Minimum ownership percentage (0-100). 0 = all subsidiaries, 100 = wholly-owned only
+            depth_search_subsidiaries (list): Optional list of subsidiary names to search at depth 2/3. If None, searches all subsidiaries
 
         Returns:
             dict: {
                 'subsidiaries': [...],
                 'sisters': [...],
                 'parent': {...} or None,
-                'method': 'api' or 'sec_edgar' or 'duckduckgo'
+                'method': 'api' or 'sec_edgar' or 'wikipedia+duckduckgo' or 'duckduckgo'
             }
         """
         # Set callback for this search
@@ -1018,9 +2731,76 @@ Be conservative - only extract entities clearly identified as sister companies o
             self._log(f"Trying OpenCorporates API for {parent_company_name}...", "SEARCH")
             api_results = self.find_related_companies_api(parent_company_name)
 
-            # If we got results from API, return them
+            # If we got results from API, filter and return them
             if api_results['method'] == 'api' and (api_results['subsidiaries'] or api_results['sisters']):
-                self._log(f"✓ API found {len(api_results['subsidiaries'])} subsidiaries, {len(api_results['sisters'])} sister companies", "SUCCESS")
+                self._log(f"✓ API found {len(api_results['subsidiaries'])} level 1 subsidiaries, {len(api_results['sisters'])} sister companies", "SUCCESS")
+
+                # Apply ownership filtering
+                if ownership_threshold > 0:
+                    original_count = len(api_results['subsidiaries'])
+                    api_results['subsidiaries'] = self._filter_by_ownership(api_results['subsidiaries'], ownership_threshold)
+                    filtered_count = original_count - len(api_results['subsidiaries'])
+                    if filtered_count > 0:
+                        self._log(f"Filtered out {filtered_count} subsidiaries not meeting {ownership_threshold}% ownership threshold", "INFO")
+
+                # Multi-level depth search if depth > 1
+                if depth >= 2:
+                    level_1_subs = list(api_results['subsidiaries'])  # Save current level 1
+
+                    # Filter to selected subsidiaries if specified
+                    if depth_search_subsidiaries is not None:
+                        level_1_subs_to_search = [sub for sub in level_1_subs if sub['name'] in depth_search_subsidiaries]
+                        self._log(f"Searching level 2 for {len(level_1_subs_to_search)} selected subsidiaries (out of {len(level_1_subs)} total)", "INFO")
+                    else:
+                        level_1_subs_to_search = level_1_subs
+                        self._log(f"Searching for level 2 subsidiaries (processing all {len(level_1_subs_to_search)} entities)...", "INFO")
+
+                    seen_names = set(sub['name'].lower() for sub in api_results['subsidiaries'])
+
+                    for idx, sub in enumerate(level_1_subs_to_search, 1):
+                        # Progress indicator
+                        self._log(f"[{idx}/{len(level_1_subs_to_search)}] Searching level 2 for: {sub['name']}", "INFO")
+
+                        # Search for subsidiaries of this subsidiary
+                        level_2_results = self.find_related_companies_api(sub['name'])
+                        if level_2_results['subsidiaries']:
+                            for sub2 in level_2_results['subsidiaries']:
+                                if sub2['name'].lower() not in seen_names:
+                                    sub2['level'] = 2
+                                    sub2['relationship'] = 'subsidiary'
+                                    api_results['subsidiaries'].append(sub2)
+                                    seen_names.add(sub2['name'].lower())
+
+                    self._log(f"✓ Found {len(api_results['subsidiaries']) - len(level_1_subs)} level 2 subsidiaries", "SUCCESS")
+
+                if depth >= 3:
+                    self._log(f"Searching for level 3 subsidiaries (subsidiaries of level 2)...", "INFO")
+                    level_2_subs = [s for s in api_results['subsidiaries'] if s.get('level') == 2]
+                    seen_names = set(sub['name'].lower() for sub in api_results['subsidiaries'])
+                    original_count = len(api_results['subsidiaries'])
+
+                    for sub in level_2_subs:
+                        # Search for subsidiaries of this level 2 subsidiary
+                        level_3_results = self.find_related_companies_api(sub['name'])
+                        if level_3_results['subsidiaries']:
+                            for sub3 in level_3_results['subsidiaries']:
+                                if sub3['name'].lower() not in seen_names:
+                                    sub3['level'] = 3
+                                    sub3['relationship'] = 'subsidiary'
+                                    api_results['subsidiaries'].append(sub3)
+                                    seen_names.add(sub3['name'].lower())
+
+                    self._log(f"✓ Found {len(api_results['subsidiaries']) - original_count} level 3 subsidiaries", "SUCCESS")
+
+                # Apply ownership filtering again after depth search
+                if ownership_threshold > 0 and depth > 1:
+                    original_count = len(api_results['subsidiaries'])
+                    api_results['subsidiaries'] = self._filter_by_ownership(api_results['subsidiaries'], ownership_threshold)
+                    filtered_count = original_count - len(api_results['subsidiaries'])
+                    if filtered_count > 0:
+                        self._log(f"Filtered out {filtered_count} level 2/3 subsidiaries not meeting {ownership_threshold}% ownership threshold", "INFO")
+
+                self._log(f"✓ Total: {len(api_results['subsidiaries'])} subsidiaries across {depth} level(s)", "SUCCESS")
                 return api_results
             else:
                 self._log("API returned no results or hit rate limit", "WARN")
@@ -1032,46 +2812,152 @@ Be conservative - only extract entities clearly identified as sister companies o
         try:
             sec_results = self.find_subsidiaries_sec_edgar(parent_company_name)
 
-            # If we got subsidiaries from SEC EDGAR
-            if sec_results['method'] == 'sec_edgar' and sec_results['subsidiaries']:
-                self._log(f"✓ SEC EDGAR found {len(sec_results['subsidiaries'])} subsidiaries", "SUCCESS")
+            # If we got subsidiaries from SEC EDGAR (either 10-K or 20-F)
+            if sec_results['method'] in ['sec_edgar_10k', 'sec_edgar_20f'] and sec_results['subsidiaries']:
+                filing_type_display = "10-K" if sec_results['method'] == 'sec_edgar_10k' else "20-F"
+                self._log(f"✓ SEC EDGAR found {len(sec_results['subsidiaries'])} level 1 subsidiaries via {filing_type_display}", "SUCCESS")
 
-                # If sister companies are NOT requested, return SEC results
-                if not include_sisters:
-                    return sec_results
+                # Store financial intelligence in database if available
+                if sec_results.get('directors') or sec_results.get('shareholders') or sec_results.get('transactions'):
+                    self._store_financial_intelligence(sec_results)
 
-                # If sister companies ARE requested, try to supplement with DuckDuckGo for sisters
-                self._log("SEC doesn't provide sister companies, searching with DuckDuckGo...", "INFO")
-                sisters = self._search_sister_companies(parent_company_name)
+                # Apply ownership filtering
+                if ownership_threshold > 0:
+                    original_count = len(sec_results['subsidiaries'])
+                    sec_results['subsidiaries'] = self._filter_by_ownership(sec_results['subsidiaries'], ownership_threshold)
+                    filtered_count = original_count - len(sec_results['subsidiaries'])
+                    if filtered_count > 0:
+                        self._log(f"Filtered out {filtered_count} subsidiaries not meeting {ownership_threshold}% ownership threshold", "INFO")
 
-                if sisters:
-                    self._log(f"✓ DuckDuckGo found {len(sisters)} sister companies", "SUCCESS")
-                    sec_results['sisters'] = sisters
-                    sec_results['method'] = 'sec_edgar+duckduckgo'
+                # Multi-level depth search if depth > 1
+                if depth >= 2:
+                    level_1_subs = list(sec_results['subsidiaries'])  # Save current level 1
 
+                    # Filter to selected subsidiaries if specified
+                    if depth_search_subsidiaries is not None:
+                        level_1_subs_to_search = [sub for sub in level_1_subs if sub['name'] in depth_search_subsidiaries]
+                        self._log(f"Searching level 2 for {len(level_1_subs_to_search)} selected subsidiaries (out of {len(level_1_subs)} total)", "INFO")
+                    else:
+                        level_1_subs_to_search = level_1_subs
+                        self._log(f"Searching for level 2 subsidiaries (processing all {len(level_1_subs_to_search)} entities)...", "INFO")
+
+                    seen_names = set(sub['name'].lower() for sub in sec_results['subsidiaries'])
+
+                    for idx, sub in enumerate(level_1_subs_to_search, 1):
+                        # Progress indicator
+                        self._log(f"[{idx}/{len(level_1_subs_to_search)}] Searching level 2 for: {sub['name']}", "INFO")
+
+                        # Search for subsidiaries of this subsidiary using DuckDuckGo
+                        level_2_subs = self._search_subsidiaries_level(sub['name'], 2)
+                        for sub2 in level_2_subs:
+                            if sub2['name'].lower() not in seen_names:
+                                sub2['relationship'] = 'subsidiary'
+                                sec_results['subsidiaries'].append(sub2)
+                                seen_names.add(sub2['name'].lower())
+
+                    self._log(f"✓ Found {len(sec_results['subsidiaries']) - len(level_1_subs)} level 2 subsidiaries", "SUCCESS")
+
+                if depth >= 3:
+                    level_2_subs = [s for s in sec_results['subsidiaries'] if s.get('level') == 2]
+
+                    # Filter to selected subsidiaries if specified
+                    if depth_search_subsidiaries is not None:
+                        level_2_subs_to_search = [sub for sub in level_2_subs if sub['name'] in depth_search_subsidiaries]
+                        self._log(f"Searching level 3 for {len(level_2_subs_to_search)} selected subsidiaries (out of {len(level_2_subs)} total)", "INFO")
+                    else:
+                        level_2_subs_to_search = level_2_subs
+                        self._log(f"Searching for level 3 subsidiaries (processing all {len(level_2_subs_to_search)} entities)...", "INFO")
+
+                    seen_names = set(sub['name'].lower() for sub in sec_results['subsidiaries'])
+                    original_count = len(sec_results['subsidiaries'])
+
+                    for idx, sub in enumerate(level_2_subs_to_search, 1):
+                        # Progress indicator
+                        self._log(f"[{idx}/{len(level_2_subs_to_search)}] Searching level 3 for: {sub['name']}", "INFO")
+
+                        # Search for subsidiaries of this level 2 subsidiary
+                        level_3_subs = self._search_subsidiaries_level(sub['name'], 3)
+                        for sub3 in level_3_subs:
+                            if sub3['name'].lower() not in seen_names:
+                                sub3['relationship'] = 'subsidiary'
+                                sec_results['subsidiaries'].append(sub3)
+                                seen_names.add(sub3['name'].lower())
+
+                    self._log(f"✓ Found {len(sec_results['subsidiaries']) - original_count} level 3 subsidiaries", "SUCCESS")
+
+                # Apply ownership filtering again after depth search
+                if ownership_threshold > 0 and depth > 1:
+                    original_count = len(sec_results['subsidiaries'])
+                    sec_results['subsidiaries'] = self._filter_by_ownership(sec_results['subsidiaries'], ownership_threshold)
+                    filtered_count = original_count - len(sec_results['subsidiaries'])
+                    if filtered_count > 0:
+                        self._log(f"Filtered out {filtered_count} level 2/3 subsidiaries not meeting {ownership_threshold}% ownership threshold", "INFO")
+
+                # If sister companies are requested, search with DuckDuckGo
+                if include_sisters:
+                    self._log("SEC doesn't provide sister companies, searching with DuckDuckGo...", "INFO")
+                    sisters = self._search_sister_companies(parent_company_name)
+
+                    if sisters:
+                        self._log(f"✓ DuckDuckGo found {len(sisters)} sister companies", "SUCCESS")
+                        sec_results['sisters'] = sisters
+                        # Preserve the filing type in the method name
+                        sec_results['method'] = f"{sec_results['method']}+duckduckgo"
+
+                self._log(f"✓ Total: {len(sec_results['subsidiaries'])} subsidiaries across {depth} level(s)", "SUCCESS")
                 return sec_results
             else:
                 self._log("SEC EDGAR returned no results", "WARN")
         except Exception as e:
             self._log(f"SEC EDGAR failed: {str(e)}", "ERROR")
 
-        # Method 3: Fall back to DuckDuckGo search
+        # Method 3: Try Wikipedia (good for well-known companies)
+        self._log(f"Trying Wikipedia for {parent_company_name}...", "SEARCH")
+        wiki_results = self._search_wikipedia_subsidiaries(parent_company_name)
+        wiki_subsidiaries = wiki_results.get('subsidiaries', [])
+        wiki_sisters = wiki_results.get('sisters', [])
+
+        # Method 4: Fall back to DuckDuckGo search (supplement Wikipedia)
         self._log(f"Using DuckDuckGo search for {parent_company_name}...", "SEARCH")
         subsidiaries = []
         seen_names = set()
 
-        # Search for subsidiaries (existing logic)
-        self._log(f"Searching level 1 subsidiaries via DuckDuckGo...", "INFO")
-        level_1_subs = self._search_subsidiaries_level(parent_company_name, 1)
-        for sub in level_1_subs:
-            sub['relationship'] = 'subsidiary'
+        # Add Wikipedia results first
+        for sub in wiki_subsidiaries:
             subsidiaries.append(sub)
             seen_names.add(sub['name'].lower())
 
+        # Search for subsidiaries via DuckDuckGo (to supplement Wikipedia)
+        self._log(f"Searching subsidiaries via DuckDuckGo...", "INFO")
+
+        # Use the direct DuckDuckGo subsidiary search
+        ddg_subs = self._search_subsidiaries_duckduckgo(parent_company_name)
+        for sub in ddg_subs:
+            if sub['name'].lower() not in seen_names:
+                subsidiaries.append(sub)
+                seen_names.add(sub['name'].lower())
+
+        # Also use the level-based search for deeper hierarchy
+        level_1_subs = self._search_subsidiaries_level(parent_company_name, 1)
+        for sub in level_1_subs:
+            if sub['name'].lower() not in seen_names:
+                sub['relationship'] = 'subsidiary'
+                subsidiaries.append(sub)
+                seen_names.add(sub['name'].lower())
+
         # Multi-level subsidiary search if depth > 1
         if depth >= 2:
-            self._log(f"Searching level 2 subsidiaries...", "INFO")
-            for sub in level_1_subs:
+            # Filter to selected subsidiaries if specified
+            if depth_search_subsidiaries is not None:
+                level_1_subs_to_search = [sub for sub in level_1_subs if sub['name'] in depth_search_subsidiaries]
+                self._log(f"Searching level 2 for {len(level_1_subs_to_search)} selected subsidiaries (out of {len(level_1_subs)} total)", "INFO")
+            else:
+                level_1_subs_to_search = level_1_subs
+                self._log(f"Searching level 2 subsidiaries (processing all {len(level_1_subs_to_search)} entities)...", "INFO")
+
+            for idx, sub in enumerate(level_1_subs_to_search, 1):
+                self._log(f"[{idx}/{len(level_1_subs_to_search)}] Searching level 2 for: {sub['name']}", "INFO")
+
                 level_2_subs = self._search_subsidiaries_level(sub['name'], 2)
                 for sub2 in level_2_subs:
                     if sub2['name'].lower() not in seen_names:
@@ -1080,9 +2966,19 @@ Be conservative - only extract entities clearly identified as sister companies o
                         seen_names.add(sub2['name'].lower())
 
         if depth >= 3:
-            self._log(f"Searching level 3 subsidiaries...", "INFO")
             level_2_only = [s for s in subsidiaries if s['level'] == 2]
-            for sub in level_2_only:
+
+            # Filter to selected subsidiaries if specified
+            if depth_search_subsidiaries is not None:
+                level_2_to_search = [sub for sub in level_2_only if sub['name'] in depth_search_subsidiaries]
+                self._log(f"Searching level 3 for {len(level_2_to_search)} selected subsidiaries (out of {len(level_2_only)} total)", "INFO")
+            else:
+                level_2_to_search = level_2_only
+                self._log(f"Searching level 3 subsidiaries (processing all {len(level_2_to_search)} entities)...", "INFO")
+
+            for idx, sub in enumerate(level_2_to_search, 1):
+                self._log(f"[{idx}/{len(level_2_to_search)}] Searching level 3 for: {sub['name']}", "INFO")
+
                 level_3_subs = self._search_subsidiaries_level(sub['name'], 3)
                 for sub3 in level_3_subs:
                     if sub3['name'].lower() not in seen_names:
@@ -1092,18 +2988,45 @@ Be conservative - only extract entities clearly identified as sister companies o
 
         # Search for sister companies if requested
         sisters = []
-        if include_sisters:
-            self._log("Searching for sister companies via DuckDuckGo...", "INFO")
-            sisters = self._search_sister_companies(parent_company_name)
+        seen_sister_names = set()
 
-        self._log(f"✓ DuckDuckGo found {len(subsidiaries)} subsidiaries, {len(sisters)} sister companies", "SUCCESS")
+        if include_sisters:
+            # Add Wikipedia sister companies first
+            for sister in wiki_sisters:
+                sisters.append(sister)
+                seen_sister_names.add(sister['name'].lower())
+
+            # Supplement with DuckDuckGo
+            self._log("Searching for sister companies via DuckDuckGo...", "INFO")
+            ddg_sisters = self._search_sister_companies(parent_company_name)
+            for sister in ddg_sisters:
+                if sister['name'].lower() not in seen_sister_names:
+                    sisters.append(sister)
+                    seen_sister_names.add(sister['name'].lower())
+
+        self._log(f"✓ Combined results: {len(subsidiaries)} subsidiaries, {len(sisters)} sister companies", "SUCCESS")
+
+        # Filter subsidiaries based on ownership threshold
+        if ownership_threshold > 0:
+            original_count = len(subsidiaries)
+            subsidiaries = self._filter_by_ownership(subsidiaries, ownership_threshold)
+            filtered_count = original_count - len(subsidiaries)
+
+            if filtered_count > 0:
+                self._log(f"Filtered out {filtered_count} subsidiaries not meeting {ownership_threshold}% ownership threshold", "INFO")
+
+        # Determine method label based on what found results
+        if wiki_subsidiaries or wiki_sisters:
+            method_label = 'wikipedia+duckduckgo'
+        else:
+            method_label = 'duckduckgo'
 
         return {
             'subsidiaries': subsidiaries,
             'sisters': sisters,
             'parent': None,
-            'method': 'duckduckgo',
-            'source_url': None,  # DuckDuckGo doesn't have a single source document
+            'method': method_label,
+            'source_url': None,  # Web search doesn't have a single source document
             'filing_date': None
         }
 
@@ -1138,23 +3061,41 @@ Be conservative - only extract entities clearly identified as sister companies o
             prompt = f"""
 Analyze the following search results from OpenCorporates about "{company_name}".
 
-Extract ALL subsidiary companies mentioned. For each subsidiary, provide:
-- Company name (full legal name)
+Extract ONLY the LEGAL ENTITY NAMES of subsidiary companies.
+
+CRITICAL RULES:
+1. Extract ONLY the actual legal company name (e.g., "Company Entertainment Inc.", "Business Corp.")
+2. DO NOT include descriptions, products, or services (e.g., NOT "Company subsidiary for Product X")
+3. DO NOT include parent company references (e.g., NOT "Parent-backed subsidiary")
+4. DO NOT include phrases like "subsidiary for", "developer of", "maker of"
+5. If you cannot find a clear legal name, SKIP that entry entirely
+
+For each subsidiary, provide:
+- Legal entity name ONLY (e.g., "Company Name Inc.", "Company Ltd.")
 - Jurisdiction (country/state if mentioned)
 - Status (active/inactive if mentioned, otherwise "Unknown")
+- Ownership percentage (if mentioned, otherwise "Unknown")
+- Source URL (the exact URL from the search result where this company was mentioned)
 
 Search Results:
 {subsidiaries_text}
 
 Output format (one per line):
-COMPANY_NAME | JURISDICTION | STATUS
+LEGAL_ENTITY_NAME | JURISDICTION | STATUS | OWNERSHIP_PCT | SOURCE_URL
 
-Example:
-Huawei Technologies Canada Co., Ltd. | Canada | Active
-Huawei Device Co., Ltd. | China | Active
+GOOD Examples (format only - these are NOT real companies):
+XYZ Entertainment Inc. | United States | Active | 100 | https://opencorporates.com/companies/us/xyz123
+ABC Technologies Oy | Finland | Active | Unknown | https://opencorporates.com/companies/fi/abc456
+Tech Solutions Ltd. | Canada | Active | 51 | https://opencorporates.com/companies/ca/tech789
 
-If no clear subsidiaries are found, respond with "NO_SUBSIDIARIES_FOUND".
-Extract ONLY entities clearly identified as subsidiaries, controlled companies, or affiliates.
+IMPORTANT: Always include the SOURCE_URL from the search results above. This is the URL where you found the information about each company.
+
+BAD Examples (DO NOT output these):
+Company subsidiary for Product | Canada | Active  ← WRONG: includes description
+Parent-backed subsidiary | Canada | Active  ← WRONG: includes parent reference
+Developer of products | United States | Active  ← WRONG: description not a company name
+
+If no clear legal entity names are found, respond with "NO_SUBSIDIARIES_FOUND".
 """
 
             response = self.client.chat.completions.create(
@@ -1169,7 +3110,7 @@ Extract ONLY entities clearly identified as subsidiaries, controlled companies, 
             if "NO_SUBSIDIARIES_FOUND" in content:
                 return []
 
-            # Parse LLM response
+            # Parse LLM response with validation
             subsidiaries = []
             for line in content.split('\n'):
                 line = line.strip()
@@ -1178,14 +3119,39 @@ Extract ONLY entities clearly identified as subsidiaries, controlled companies, 
 
                 parts = [p.strip() for p in line.split('|')]
                 if len(parts) >= 3:
-                    subsidiaries.append({
-                        'name': parts[0],
-                        'jurisdiction': parts[1],
-                        'status': parts[2],
-                        'level': level,
-                        'relationship': 'subsidiary',
-                        'source': 'duckduckgo'
-                    })
+                    company_name = parts[0]
+
+                    # Validate that it looks like a company name, not a description
+                    if self._validate_company_name(company_name):
+                        # Parse ownership percentage if provided
+                        ownership_pct = None
+                        if len(parts) >= 4:
+                            ownership_str = parts[3].lower()
+                            if ownership_str != 'unknown' and ownership_str != '':
+                                try:
+                                    ownership_pct = float(ownership_str.replace('%', '').strip())
+                                except ValueError:
+                                    pass
+
+                        # Parse source URL if provided
+                        source_url = None
+                        if len(parts) >= 5:
+                            url = parts[4].strip()
+                            if url and url.startswith('http'):
+                                source_url = url
+
+                        subsidiaries.append({
+                            'name': company_name,
+                            'jurisdiction': parts[1],
+                            'status': parts[2],
+                            'level': level,
+                            'relationship': 'subsidiary',
+                            'source': 'duckduckgo',
+                            'ownership_percentage': ownership_pct,
+                            'reference_url': source_url
+                        })
+                    else:
+                        self._log(f"Filtered out invalid entry: '{company_name}'", "INFO")
 
             return subsidiaries
 
