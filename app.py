@@ -1435,9 +1435,109 @@ def display_subsidiary_selection(parent_company, depth):
         </div>
         """, unsafe_allow_html=True)
 
+    # === LOAN AGREEMENTS SECTION ===
+    loan_agreements = results.get('loan_agreements', [])
+    loan_source_urls = results.get('loan_source_urls', [])
+
+    if loan_agreements:
+        st.markdown("---")
+        st.markdown("### 💰 Loan Agreements & Credit Facilities")
+        st.markdown(f"*Extracted from SEC EDGAR Exhibits 4.3 and 4.5*")
+
+        # Summary metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Agreements", len(loan_agreements))
+        with col2:
+            total_amount = sum([loan.get('principal_amount', 0) or 0 for loan in loan_agreements])
+            if total_amount > 0:
+                st.metric("Total Principal", f"${total_amount:,.0f}")
+            else:
+                st.metric("Total Principal", "Not disclosed")
+        with col3:
+            currencies = set([loan.get('currency') for loan in loan_agreements if loan.get('currency')])
+            st.metric("Currencies", len(currencies) if currencies else "N/A")
+
+        # Display each loan as expandable card
+        for idx, loan in enumerate(loan_agreements):
+            loan_type = loan.get('loan_type', 'Loan Agreement')
+            principal = loan.get('principal_amount')
+            currency = loan.get('currency', 'USD')
+
+            # Build expander title
+            if principal:
+                expander_title = f"🏦 {loan_type} - {currency} {principal:,.0f}"
+            else:
+                expander_title = f"🏦 {loan_type}"
+
+            with st.expander(expander_title, expanded=(idx == 0)):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.markdown("**Parties:**")
+                    st.markdown(f"- **Lender:** {loan.get('lender', 'N/A')}")
+                    st.markdown(f"- **Borrower:** {loan.get('borrower', 'N/A')}")
+
+                    if loan.get('guarantors'):
+                        import json
+                        guarantors = loan['guarantors']
+                        if isinstance(guarantors, str):
+                            try:
+                                guarantors = json.loads(guarantors)
+                            except:
+                                guarantors = []
+                        if guarantors:
+                            st.markdown(f"- **Guarantors:** {', '.join(guarantors)}")
+
+                    st.markdown("")
+                    if principal:
+                        st.markdown(f"**Amount:** {currency} {principal:,.0f}")
+                    else:
+                        st.markdown(f"**Amount:** Not disclosed")
+                    st.markdown(f"**Interest Rate:** {loan.get('interest_rate', 'N/A')}")
+
+                with col2:
+                    st.markdown("**Dates:**")
+                    st.markdown(f"- **Effective:** {loan.get('effective_date', 'N/A')}")
+                    st.markdown(f"- **Maturity:** {loan.get('maturity_date', 'N/A')}")
+
+                    st.markdown("")
+                    purpose = loan.get('purpose', 'N/A')
+                    if purpose and len(purpose) > 100:
+                        purpose = purpose[:100] + "..."
+                    st.markdown(f"**Purpose:** {purpose}")
+                    st.markdown(f"**Security:** {loan.get('security_collateral', 'N/A')}")
+
+                # Show covenants if present
+                if loan.get('covenants'):
+                    import json
+                    covenants = loan['covenants']
+                    if isinstance(covenants, str):
+                        try:
+                            covenants = json.loads(covenants)
+                        except:
+                            covenants = []
+
+                    if covenants:
+                        st.markdown("**Covenants:**")
+                        for covenant in covenants:
+                            st.markdown(f"- {covenant}")
+
+                # Show prepayment terms
+                if loan.get('prepayment_terms'):
+                    st.markdown(f"**Prepayment:** {loan['prepayment_terms']}")
+
+                # Source link
+                if loan.get('source_url'):
+                    st.markdown(f"📄 [View Exhibit {loan.get('exhibit_type')}]({loan['source_url']})")
+
+        # Export button
+        if st.button("📥 Export Loan Agreements", key="export_loans"):
+            export_loan_agreements_excel(loan_agreements, final_query_name)
+
     # === RELATIONSHIP DIAGRAM SECTION ===
     # Build graph from collected data
-    if subsidiaries or sisters or directors or shareholders or transactions:
+    if subsidiaries or sisters or directors or shareholders or transactions or loan_agreements:
         st.markdown("---")
         st.markdown("### 🔗 Relationship Diagram")
 
@@ -1533,11 +1633,26 @@ def display_subsidiary_selection(parent_company, depth):
         viz_tab1, viz_tab2 = st.tabs(["🔗 Network View", "🌍 Geographic View"])
 
         with viz_tab1:
+            # Collect highlighted nodes (selected subsidiaries/sisters)
+            highlighted_nodes = []
+
+            # Add selected companies from checkboxes
+            if hasattr(st.session_state, 'selected_sub_indices') and st.session_state.selected_sub_indices:
+                # Get company names from all_companies list using selected indices
+                # all_companies = subsidiaries + sisters (defined earlier in this function)
+                for idx in st.session_state.selected_sub_indices:
+                    if 0 <= idx < len(all_companies):
+                        highlighted_nodes.append(all_companies[idx]['name'])
+
+            # Note: The searched entity (parent_company) is automatically highlighted in red
+            # via the 'is_searched_entity' graph attribute, so we don't add it here
+
             # Use the new visualization selector for multiple visualization options
             viz_selector.display_visualization_selector(
                 graph=graph,
                 parent_company=parent_company,
-                key_prefix="subsidiary_preview"
+                key_prefix="subsidiary_preview",
+                highlighted_nodes=highlighted_nodes
             )
 
         with viz_tab2:
@@ -2467,8 +2582,9 @@ def run_analysis(name_input, country_input, fuzzy):
     # --- FOOTER ---
     st.markdown("---")
 
-    with st.expander("📜 SAVED SEARCH HISTORY"):
-        display_search_history()
+    # Display search history (function creates its own expanders)
+    st.markdown("### 📜 Saved Search History")
+    display_search_history()
 
 def display_entity_results(entity_name, data, country_input, fuzzy, conglomerate_context=None):
     """
@@ -2710,10 +2826,13 @@ def display_entity_results(entity_name, data, country_input, fuzzy, conglomerate
                 filtered_graph_display = gb.filter_graph(graph_display, show_directors_display, show_shareholders_display, True)
 
                 # Create and display interactive network diagram
+                # For single entity view, no additional highlighting needed
+                # (the searched entity is automatically highlighted via is_searched_entity)
                 network_html_display = viz.create_interactive_network(
                     filtered_graph_display,
                     title=f"Entity Relationship Network: {final_query_name}",
-                    height="700px"
+                    height="700px",
+                    highlighted_nodes=None
                 )
                 components.html(network_html_display, height=750, scrolling=True)
 
@@ -3060,6 +3179,73 @@ def run_conglomerate_analysis(parent_company, selected_subsidiaries, country_inp
         parent_company,
         total_matches,
         "CONGLOMERATE_SEARCH"
+    )
+
+# ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
+
+def export_loan_agreements_excel(loans, company_name):
+    """Export loan agreements as Excel file"""
+    from io import BytesIO
+    import json
+
+    # Convert to DataFrame
+    df_data = []
+    for loan in loans:
+        # Handle JSON fields
+        guarantors = loan.get('guarantors', [])
+        if isinstance(guarantors, str):
+            try:
+                guarantors = json.loads(guarantors)
+            except:
+                guarantors = []
+
+        covenants = loan.get('covenants', [])
+        if isinstance(covenants, str):
+            try:
+                covenants = json.loads(covenants)
+            except:
+                covenants = []
+
+        df_data.append({
+            'Lender': loan.get('lender'),
+            'Borrower': loan.get('borrower'),
+            'Guarantors': ', '.join(guarantors) if guarantors else '',
+            'Loan Type': loan.get('loan_type'),
+            'Principal Amount': loan.get('principal_amount'),
+            'Currency': loan.get('currency'),
+            'Interest Rate': loan.get('interest_rate'),
+            'Effective Date': loan.get('effective_date'),
+            'Maturity Date': loan.get('maturity_date'),
+            'Purpose': loan.get('purpose'),
+            'Covenants': '; '.join(covenants) if covenants else '',
+            'Security': loan.get('security_collateral'),
+            'Prepayment Terms': loan.get('prepayment_terms'),
+            'Exhibit': loan.get('exhibit_type'),
+            'Source URL': loan.get('source_url')
+        })
+
+    df = pd.DataFrame(df_data)
+
+    # Create Excel file
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='Loan Agreements', index=False)
+
+        # Auto-adjust column widths
+        worksheet = writer.sheets['Loan Agreements']
+        for idx, col in enumerate(df.columns):
+            max_len = max(df[col].astype(str).str.len().max(), len(col)) + 2
+            worksheet.set_column(idx, idx, min(max_len, 50))
+
+    output.seek(0)
+
+    st.download_button(
+        label="📥 Download Excel",
+        data=output.getvalue(),
+        file_name=f"loan_agreements_{company_name.replace(' ', '_')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 if __name__ == "__main__":

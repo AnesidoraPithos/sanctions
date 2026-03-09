@@ -76,6 +76,36 @@ def init_db():
                   date_added TEXT,
                   last_updated TEXT)''')
 
+    # --- NEW TABLE: LOAN AGREEMENTS (Exhibit 4.3 and 4.5) ---
+    c.execute('''CREATE TABLE IF NOT EXISTS loan_agreements
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  company_name TEXT NOT NULL,
+                  cik TEXT,
+                  lender TEXT NOT NULL,
+                  borrower TEXT NOT NULL,
+                  guarantors TEXT,
+                  loan_type TEXT,
+                  principal_amount REAL,
+                  currency TEXT,
+                  interest_rate TEXT,
+                  maturity_date TEXT,
+                  effective_date TEXT,
+                  purpose TEXT,
+                  covenants TEXT,
+                  security_collateral TEXT,
+                  prepayment_terms TEXT,
+                  exhibit_type TEXT,
+                  filing_type TEXT,
+                  filing_date TEXT,
+                  source_url TEXT,
+                  date_added TEXT,
+                  last_updated TEXT)''')
+
+    # Create indexes for loan_agreements
+    c.execute('''CREATE INDEX IF NOT EXISTS idx_loan_company ON loan_agreements(company_name)''')
+    c.execute('''CREATE INDEX IF NOT EXISTS idx_loan_lender ON loan_agreements(lender)''')
+    c.execute('''CREATE INDEX IF NOT EXISTS idx_loan_borrower ON loan_agreements(borrower)''')
+
     # --- NEW TABLE: SAVED SEARCHES (Complete Search Results) ---
     c.execute('''CREATE TABLE IF NOT EXISTS saved_searches
                  (search_id TEXT PRIMARY KEY,
@@ -539,6 +569,171 @@ def get_transactions(company_name=None, cik=None):
         return transactions
     except Exception as e:
         print(f"Error retrieving transactions: {e}")
+        return []
+    finally:
+        conn.close()
+
+# ============================================================================
+# LOAN AGREEMENTS FUNCTIONS (Exhibit 4.3 and 4.5)
+# ============================================================================
+
+def insert_loan_agreements(company_name, cik, loan_agreements_list, filing_type, filing_date, source_url):
+    """
+    Insert loan agreements extracted from SEC Exhibit 4.3 or 4.5.
+
+    Args:
+        company_name (str): Company name
+        cik (str): Company CIK number
+        loan_agreements_list (list): List of loan agreement dictionaries
+        filing_type (str): Filing type (10-K, 20-F)
+        filing_date (str): Filing date
+        source_url (str): Source URL
+
+    Returns:
+        int: Number of records inserted
+    """
+    import json
+
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Clear existing loan agreements for this company/filing
+    c.execute("DELETE FROM loan_agreements WHERE company_name = ? AND cik = ?", (company_name, cik))
+
+    count = 0
+    for loan in loan_agreements_list:
+        c.execute("""INSERT INTO loan_agreements
+                     (company_name, cik, lender, borrower, guarantors,
+                      loan_type, principal_amount, currency, interest_rate,
+                      maturity_date, effective_date, purpose, covenants,
+                      security_collateral, prepayment_terms, exhibit_type,
+                      filing_type, filing_date, source_url, date_added, last_updated)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                  (company_name, cik,
+                   loan.get('lender'), loan.get('borrower'),
+                   json.dumps(loan.get('guarantors', [])),
+                   loan.get('loan_type'), loan.get('principal_amount'),
+                   loan.get('currency'), loan.get('interest_rate'),
+                   loan.get('maturity_date'), loan.get('effective_date'),
+                   loan.get('purpose'), json.dumps(loan.get('covenants', [])),
+                   loan.get('security_collateral'), loan.get('prepayment_terms'),
+                   loan.get('exhibit_type'), filing_type,
+                   filing_date, source_url,
+                   timestamp, timestamp))
+        count += 1
+
+    conn.commit()
+    conn.close()
+    return count
+
+
+def get_loan_agreements(company_name=None, cik=None):
+    """
+    Retrieve all loan agreements for a company.
+
+    Args:
+        company_name (str): Company name (optional)
+        cik (str): Company CIK (optional)
+
+    Returns:
+        list: List of loan agreement dictionaries
+    """
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    try:
+        if cik:
+            c.execute("SELECT * FROM loan_agreements WHERE cik = ? ORDER BY filing_date DESC", (cik,))
+        elif company_name:
+            c.execute("SELECT * FROM loan_agreements WHERE company_name = ? ORDER BY filing_date DESC", (company_name,))
+        else:
+            return []
+
+        rows = c.fetchall()
+        loans = []
+        for row in rows:
+            loans.append({
+                'id': row[0],
+                'company_name': row[1],
+                'cik': row[2],
+                'lender': row[3],
+                'borrower': row[4],
+                'guarantors': row[5],
+                'loan_type': row[6],
+                'principal_amount': row[7],
+                'currency': row[8],
+                'interest_rate': row[9],
+                'maturity_date': row[10],
+                'effective_date': row[11],
+                'purpose': row[12],
+                'covenants': row[13],
+                'security_collateral': row[14],
+                'prepayment_terms': row[15],
+                'exhibit_type': row[16],
+                'filing_type': row[17],
+                'filing_date': row[18],
+                'source_url': row[19],
+                'date_added': row[20],
+                'last_updated': row[21]
+            })
+        return loans
+    except Exception as e:
+        print(f"Error retrieving loan agreements: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def get_loan_agreements_by_entity(entity_name):
+    """
+    Get all loans where entity is lender, borrower, or guarantor.
+
+    Args:
+        entity_name (str): Entity name to search for
+
+    Returns:
+        list: List of loan agreement dictionaries
+    """
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    try:
+        c.execute("""SELECT * FROM loan_agreements
+                     WHERE lender LIKE ? OR borrower LIKE ? OR guarantors LIKE ?
+                     ORDER BY filing_date DESC""",
+                  (f'%{entity_name}%', f'%{entity_name}%', f'%{entity_name}%'))
+
+        rows = c.fetchall()
+        loans = []
+        for row in rows:
+            loans.append({
+                'id': row[0],
+                'company_name': row[1],
+                'cik': row[2],
+                'lender': row[3],
+                'borrower': row[4],
+                'guarantors': row[5],
+                'loan_type': row[6],
+                'principal_amount': row[7],
+                'currency': row[8],
+                'interest_rate': row[9],
+                'maturity_date': row[10],
+                'effective_date': row[11],
+                'purpose': row[12],
+                'covenants': row[13],
+                'security_collateral': row[14],
+                'prepayment_terms': row[15],
+                'exhibit_type': row[16],
+                'filing_type': row[17],
+                'filing_date': row[18],
+                'source_url': row[19],
+                'date_added': row[20],
+                'last_updated': row[21]
+            })
+        return loans
+    except Exception as e:
+        print(f"Error retrieving loan agreements by entity: {e}")
         return []
     finally:
         conn.close()

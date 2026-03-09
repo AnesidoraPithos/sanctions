@@ -16,7 +16,8 @@ from typing import Optional
 def display_visualization_selector(
     graph: nx.MultiDiGraph,
     parent_company: str,
-    key_prefix: str = "viz"
+    key_prefix: str = "viz",
+    highlighted_nodes: list = None
 ):
     """
     Display a visualization selector with multiple options optimized for different graph sizes.
@@ -25,6 +26,7 @@ def display_visualization_selector(
         graph: NetworkX graph to visualize
         parent_company: Name of parent company for titles
         key_prefix: Unique prefix for Streamlit widget keys
+        highlighted_nodes: List of node names to highlight (e.g., selected subsidiaries)
     """
     num_nodes = graph.number_of_nodes()
 
@@ -49,14 +51,14 @@ def display_visualization_selector(
     st.markdown("---")
 
     # Display only filtered network visualization
-    display_filtered_network(graph, parent_company, key_prefix)
+    display_filtered_network(graph, parent_company, key_prefix, highlighted_nodes)
 
 
 # REMOVED VISUALIZATIONS - Treemap, Hierarchical Network, Collapsible Tree, Sunburst
 # Keeping only Filtered Network (Level Control)
 
 
-def display_filtered_network(graph, parent_company, key_prefix):
+def display_filtered_network(graph, parent_company, key_prefix, highlighted_nodes=None):
     """Display network with level and country filters"""
     st.markdown(
         """<div class='alert-box alert-info'>
@@ -110,11 +112,16 @@ def display_filtered_network(graph, parent_company, key_prefix):
     # Show statistics
     st.markdown(f"**Filtered Graph:** {filtered_graph.number_of_nodes()} nodes, {filtered_graph.number_of_edges()} edges")
 
+    # Show highlighted nodes info
+    if highlighted_nodes:
+        st.markdown(f"**⭐ Selected Entities:** {len(highlighted_nodes)} highlighted in gold")
+
     # Create and display
     network_html = viz.create_interactive_network(
         filtered_graph,
         title=f"Filtered Network: {parent_company}",
-        height="700px"
+        height="700px",
+        highlighted_nodes=highlighted_nodes
     )
     components.html(network_html, height=750, scrolling=True)
 

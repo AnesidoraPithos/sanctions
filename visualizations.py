@@ -155,7 +155,8 @@ def geocode_location(location: str) -> Optional[Tuple[float, float]]:
 def create_interactive_network(
     G: nx.MultiDiGraph,
     title: str = "Entity Relationship Network",
-    height: str = "700px"
+    height: str = "700px",
+    highlighted_nodes: list = None
 ) -> str:
     """
     Create a Neo4j-style interactive network diagram using PyVis.
@@ -167,13 +168,18 @@ def create_interactive_network(
         G: NetworkX graph to visualize
         title: Title for the diagram
         height: Height of the visualization (e.g., "700px")
+        highlighted_nodes: List of node names to highlight (e.g., selected subsidiaries)
 
     Returns:
         HTML string containing the interactive network
     """
     # Define special colors
     SEARCHED_ENTITY_COLOR = '#ef4444'  # Bright red for main search entity
+    HIGHLIGHTED_NODE_COLOR = '#fbbf24'  # Gold/amber for highlighted nodes
     PARENT_COMPANY_COLOR = '#0ea5e9'   # Bright cyan for parent companies
+
+    # Convert highlighted_nodes to set for faster lookup
+    highlighted_set = set(highlighted_nodes) if highlighted_nodes else set()
 
     # Country color palette (distinct, accessible colors)
     COUNTRY_COLORS = [
@@ -361,17 +367,30 @@ def create_interactive_network(
 
         # Determine node color based on priority:
         # 1. Main search entity (highest priority)
-        # 2. Parent company
-        # 3. Country-based color
+        # 2. Highlighted nodes (selected via checkboxes)
+        # 3. Parent company
+        # 4. Country-based color
         is_searched_entity = attrs.get('is_searched_entity', False)
+        is_highlighted = node in highlighted_set
 
         if is_searched_entity:
             color = SEARCHED_ENTITY_COLOR
-            size = size * 1.2  # Make searched entity slightly larger
+            size = size * 1.3  # Make searched entity larger
+            border_color = '#fca5a5'  # Light red border
+            border_width = 5
+        elif is_highlighted:
+            color = HIGHLIGHTED_NODE_COLOR
+            size = size * 1.2  # Make highlighted nodes slightly larger
+            border_color = '#fde047'  # Light yellow border
+            border_width = 4
         elif node_type == 'parent':
             color = PARENT_COMPANY_COLOR
+            border_color = '#7dd3fc'  # Light cyan border
+            border_width = 3
         else:
             color = country_to_color.get(jurisdiction, '#64748b')
+            border_color = '#94a3b8'  # Gray border
+            border_width = 2
 
         # Create hover title with details
         title_text = f"<b>{node}</b><br>"
@@ -391,6 +410,9 @@ def create_interactive_network(
         if is_searched_entity:
             title_text += f"<br>🔍 MAIN SEARCH ENTITY<br>"
 
+        if is_highlighted:
+            title_text += f"<br>⭐ SELECTED<br>"
+
         # Get hierarchical position for this node
         base_x, base_y = node_positions.get(node, (0, 0))
 
@@ -409,11 +431,11 @@ def create_interactive_network(
         net.add_node(
             node,
             label=node,
-            color=color,
+            color={'background': color, 'border': border_color},
             size=size,
             title=title_text,
-            borderWidth=2,
-            borderWidthSelected=4,
+            borderWidth=border_width,
+            borderWidthSelected=border_width + 2,
             level=level,  # Set level for hierarchical layout
             x=base_x + offset_x,  # Initial x position
             y=base_y + offset_y,  # Initial y position

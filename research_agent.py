@@ -961,11 +961,34 @@ Extract ALL entities listed as subsidiaries. Continue until you've extracted eve
             else:
                 self._log("No proxy statement found", "WARN")
 
+        # Step 5: Extract loan agreements from Exhibits 4.3 and 4.5
+        loan_agreements = []
+        loan_source_urls = []
+
+        self._log("Extracting loan agreements from Exhibits 4.3 and 4.5...", "INFO")
+        loan_result = self.extract_loan_agreements_from_sec_filing(filing_data)
+        loan_agreements = loan_result.get('loan_agreements', [])
+        loan_source_urls = loan_result.get('source_urls', [])
+
+        # Save loan agreements to database
+        if loan_agreements:
+            import database as db
+            count = db.insert_loan_agreements(
+                company_name=company_name,
+                cik=cik,
+                loan_agreements_list=loan_agreements,
+                filing_type=filing_type,
+                filing_date=filing_date,
+                source_url=exhibit_url if exhibit_url else ''
+            )
+            self._log(f"Saved {count} loan agreements to database", "SUCCESS")
+
         if not subsidiaries:
             return {
                 'subsidiaries': [], 'sisters': [], 'parent': None, 'method': 'none',
                 'source_url': None, 'filing_date': None,
-                'directors': directors, 'shareholders': shareholders, 'transactions': transactions
+                'directors': directors, 'shareholders': shareholders, 'transactions': transactions,
+                'loan_agreements': loan_agreements, 'loan_source_urls': loan_source_urls
             }
 
         # Set method based on filing type
@@ -981,6 +1004,8 @@ Extract ALL entities listed as subsidiaries. Continue until you've extracted eve
             'directors': directors,
             'shareholders': shareholders,
             'transactions': transactions,
+            'loan_agreements': loan_agreements,
+            'loan_source_urls': loan_source_urls,
             'fin_intel_url': fin_intel_url,
             'cik': cik,
             'company_name': company_name
@@ -1481,6 +1506,221 @@ IMPORTANT:
             self._log(f"Error extracting financial intelligence from proxy: {e}", "ERROR")
             return {'directors': [], 'shareholders': [], 'transactions': [], 'source_url': None}
 
+    def extract_loan_agreements_from_sec_filing(self, filing_data):
+        """
+        Extract loan agreements from SEC filing Exhibits 4.3 and 4.5.
+
+        Exhibit 4.3: Credit agreements, revolving facilities, term loans
+        Exhibit 4.5: Indentures, notes, debt instruments
+
+        Args:
+            filing_data (dict): Filing metadata with CIK, accession, filing_type
+
+        Returns:
+            dict: {
+                'loan_agreements': [list of loan dicts],
+                'source_urls': [list of exhibit URL dicts],
+                'filing_type': str
+            }
+        """
+        try:
+            cik = filing_data['cik']
+            accession = filing_data['accession']
+            filing_type = filing_data['filing_type']
+
+            self._log(f"Extracting loan agreements from Exhibits 4.3 and 4.5...", "INFO")
+
+            # Construct URL to filing index - handle both with and without dashes
+            accession_clean = accession.replace('-', '')
+
+            # Try to fetch the filing index page
+            index_url = f"https://www.sec.gov/cgi-bin/viewer?action=view&cik={cik}&accession_number={accession}&xbrl_type=v"
+
+            time.sleep(0.1)
+            response = requests.get(index_url, headers=self.sec_headers, timeout=15)
+            response.raise_for_status()
+            index_html = response.text
+
+            # Look for Exhibit 4.3 and 4.5 URLs
+            exhibit_patterns = [
+                (r'href="([^"]*ex-?4[-._]3[^"]*\.htm[l]?)"', '4.3', 'Credit Agreement'),
+                (r'href="([^"]*ex-?4[-._]5[^"]*\.htm[l]?)"', '4.5', 'Indenture/Note')
+            ]
+
+            all_loan_agreements = []
+            exhibit_urls = []
+
+            for pattern, exhibit_num, exhibit_desc in exhibit_patterns:
+                matches = re.findall(pattern, index_html, re.IGNORECASE)
+
+                if matches:
+                    # Get first match
+                    relative_url = matches[0]
+
+                    # Construct full URL
+                    if relative_url.startswith('http'):
+                        exhibit_url = relative_url
+                    else:
+                        # Build full URL from CIK and accession
+                        exhibit_url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession_clean}/{relative_url.lstrip('/')}"
+
+                    self._log(f"Found Exhibit {exhibit_num} ({exhibit_desc}): {exhibit_url}", "SUCCESS")
+
+                    # Fetch exhibit HTML
+                    time.sleep(0.1)
+                    exhibit_response = requests.get(exhibit_url, headers=self.sec_headers, timeout=15)
+                    exhibit_response.raise_for_status()
+                    exhibit_html = exhibit_response.text
+
+                    # Strip HTML tags
+                    clean_text = re.sub(r'<[^>]+>', ' ', exhibit_html)
+                    clean_text = re.sub(r'\s+', ' ', clean_text)
+                    clean_text = clean_text.replace('&nbsp;', ' ').replace('&amp;', '&')
+
+                    # Truncate if too long (keep first 100,000 chars to stay within token limits)
+                    if len(clean_text) > 100000:
+                        clean_text = clean_text[:100000] + "\n\n[DOCUMENT TRUNCATED]"
+                        self._log(f"Exhibit {exhibit_num} truncated to 100K chars", "WARN")
+
+                    # Use LLM to extract structured loan data
+                    loan_agreements = self._extract_loan_data_with_llm(clean_text, exhibit_num)
+
+                    # Add exhibit metadata to each loan
+                    for loan in loan_agreements:
+                        loan['exhibit_type'] = exhibit_num
+                        loan['source_url'] = exhibit_url
+
+                    all_loan_agreements.extend(loan_agreements)
+                    exhibit_urls.append({'exhibit': exhibit_num, 'url': exhibit_url})
+
+            if not all_loan_agreements:
+                self._log("No loan agreements found in Exhibits 4.3 or 4.5", "WARN")
+                return {
+                    'loan_agreements': [],
+                    'source_urls': [],
+                    'filing_type': filing_type
+                }
+
+            self._log(f"Extracted {len(all_loan_agreements)} loan agreements", "SUCCESS")
+
+            return {
+                'loan_agreements': all_loan_agreements,
+                'source_urls': exhibit_urls,
+                'filing_type': filing_type
+            }
+
+        except Exception as e:
+            self._log(f"Error extracting loan agreements: {e}", "ERROR")
+            return {
+                'loan_agreements': [],
+                'source_urls': [],
+                'filing_type': filing_type
+            }
+
+    def _extract_loan_data_with_llm(self, text_content, exhibit_type):
+        """
+        Use LLM to extract structured loan data from exhibit text.
+
+        Args:
+            text_content (str): Clean text from exhibit
+            exhibit_type (str): '4.3' or '4.5'
+
+        Returns:
+            list: List of loan agreement dicts
+        """
+        try:
+            prompt = f"""You are analyzing a SEC filing Exhibit {exhibit_type} document containing loan/credit agreements.
+
+Extract ALL loan agreements, credit facilities, notes, or debt instruments mentioned in this document.
+
+For each loan/credit agreement, extract:
+
+1. **Lender**: The entity providing the loan/credit (bank, financial institution, parent company)
+2. **Borrower**: The entity receiving the loan/credit
+3. **Guarantors**: Any entities guaranteeing the loan (if mentioned)
+4. **Loan Type**: Type of agreement (e.g., "Revolving Credit Facility", "Term Loan", "Senior Notes", "Convertible Notes")
+5. **Principal Amount**: The loan amount with currency
+6. **Currency**: Currency code (USD, EUR, etc.)
+7. **Interest Rate**: Interest rate terms (e.g., "LIBOR + 2.5%", "5.75% per annum")
+8. **Maturity Date**: When the loan matures or expires
+9. **Effective Date**: When the agreement became effective
+10. **Purpose**: Purpose of the loan (e.g., "working capital", "acquisition financing", "general corporate purposes")
+11. **Covenants**: Any important covenants or conditions (as list)
+12. **Security/Collateral**: Any collateral or security mentioned
+13. **Prepayment Terms**: Any prepayment or early termination terms
+
+**IMPORTANT**:
+- Return a JSON array of loan objects
+- If a field is not mentioned, set it to null
+- Extract ALL loans mentioned in the document
+- Be precise with amounts and dates
+- Preserve entity names exactly as written
+- For amounts, extract only the numeric value (e.g., 8000000000 not "8 billion")
+
+Return ONLY valid JSON in this format:
+[
+    {{
+        "lender": "Bank of America",
+        "borrower": "Alibaba Group Holding Limited",
+        "guarantors": ["Alibaba.com Limited", "Taobao China Holding Limited"],
+        "loan_type": "Revolving Credit Facility",
+        "principal_amount": 8000000000,
+        "currency": "USD",
+        "interest_rate": "LIBOR + 1.75%",
+        "maturity_date": "2027-07-28",
+        "effective_date": "2022-07-28",
+        "purpose": "General corporate purposes and working capital",
+        "covenants": ["Maintain debt-to-equity ratio below 3.0", "Quarterly financial reporting"],
+        "security_collateral": "Unsecured",
+        "prepayment_terms": "Voluntary prepayment allowed without penalty"
+    }}
+]
+
+Document text:
+{text_content}
+"""
+
+            # Call LLM API
+            response = self.client.chat.completions.create(
+                model=self.model_id,
+                messages=[
+                    {"role": "system", "content": "You are a financial document analysis expert specializing in SEC filings and loan agreements. Extract information precisely and return only valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=4000
+            )
+
+            result_text = response.choices[0].message.content.strip()
+
+            # Parse JSON response
+            # Remove markdown code blocks if present
+            if result_text.startswith('```json'):
+                result_text = result_text[7:]
+            if result_text.startswith('```'):
+                result_text = result_text[3:]
+            if result_text.endswith('```'):
+                result_text = result_text[:-3]
+            result_text = result_text.strip()
+
+            import json
+            loan_agreements = json.loads(result_text)
+
+            # Validate structure
+            if not isinstance(loan_agreements, list):
+                self._log("LLM returned non-list format", "ERROR")
+                return []
+
+            return loan_agreements
+
+        except json.JSONDecodeError as e:
+            self._log(f"Failed to parse LLM response as JSON: {e}", "ERROR")
+            self._log(f"LLM response: {result_text[:500] if 'result_text' in locals() else 'N/A'}...", "DEBUG")
+            return []
+        except Exception as e:
+            self._log(f"Error in LLM extraction: {e}", "ERROR")
+            return []
+
     def search_opencorporates_company(self, company_name):
         """
         Search OpenCorporates API for a company by name.
@@ -1906,8 +2146,10 @@ Be conservative - only extract entities clearly identified as sister companies w
                 if len(parts) >= 3:
                     company_name = parts[0]
 
-                    # Strip leading numbers (e.g., "1. Company Name" -> "Company Name")
-                    company_name = re.sub(r'^\d+\.\s*', '', company_name).strip()
+                    # Strip leading numbering (e.g., "1. ", "9. ", "12. ") from search results
+                    # Pattern: optional whitespace + digits + dot + optional whitespace
+                    # This preserves numbers in company names like "3M Company", "21st Century Fox"
+                    company_name = re.sub(r'^\s*\d+\.\s*', '', company_name).strip()
 
                     # Filter out placeholder text and invalid entries
                     invalid_placeholders = [
@@ -2055,8 +2297,10 @@ Be conservative - only extract entities clearly identified as subsidiaries with 
                 if len(parts) >= 3:
                     company_name_extracted = parts[0]
 
-                    # Strip leading numbers (e.g., "1. Company Name" -> "Company Name")
-                    company_name_extracted = re.sub(r'^\d+\.\s*', '', company_name_extracted).strip()
+                    # Strip leading numbering (e.g., "1. ", "9. ", "12. ") from search results
+                    # Pattern: optional whitespace + digits + dot + optional whitespace
+                    # This preserves numbers in company names like "3M Company", "21st Century Fox"
+                    company_name_extracted = re.sub(r'^\s*\d+\.\s*', '', company_name_extracted).strip()
 
                     # Filter out placeholder text and invalid entries
                     invalid_placeholders = [
@@ -2278,6 +2522,12 @@ Extract ALL entities with clear names.
                 parts = [p.strip() for p in line.split('|')]
                 if len(parts) >= 3:
                     company_name = parts[0]
+
+                    # Strip leading numbering (e.g., "1. ", "9. ", "12. ") from Wikipedia lists
+                    # Pattern: optional whitespace + digits + dot + optional whitespace
+                    # This preserves numbers in company names like "3M Company", "21st Century Fox"
+                    company_name = re.sub(r'^\s*\d+\.\s*', '', company_name).strip()
+
                     relationship = parts[2].lower()
 
                     # Validate that it looks like a company name, not a description
