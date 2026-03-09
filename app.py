@@ -2,7 +2,12 @@ import streamlit as st
 import pandas as pd
 import database as db
 from usa_agent import USASanctionsAgent
-from research_agent import SanctionsResearchAgent 
+from research_agent import SanctionsResearchAgent
+import graph_builder as gb
+import visualizations as viz
+import streamlit.components.v1 as components
+import serialization_utils as serializer
+import export_utils as exporter 
 
 # --- CONFIGURATION ---
 st.set_page_config(
@@ -233,6 +238,219 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def escape_markdown_for_display(text):
+    """
+    Escape problematic characters in markdown text to prevent formatting issues.
+    Specifically handles dollar signs that trigger LaTeX math mode in Streamlit.
+
+    Args:
+        text (str): Raw markdown text
+
+    Returns:
+        str: Escaped text safe for st.markdown() display
+    """
+    if not text:
+        return text
+
+    # Escape dollar signs to prevent LaTeX/math mode rendering
+    # Use double backslash in replacement because markdown processes it
+    text = text.replace('$', r'\$')
+
+    return text
+
+
+def display_search_history():
+    """Display enhanced search history with restore, delete, and export functionality"""
+    st.markdown("### Search History & Restore")
+
+    # Filters
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        search_filter = st.text_input("🔍 Filter by entity name", key="history_filter")
+    with col2:
+        all_tags = db.get_all_tags()
+        tag_filter = st.multiselect("🏷️ Filter by tags", all_tags, key="history_tag_filter")
+    with col3:
+        sort_by = st.selectbox("Sort by", ["Date (newest)", "Date (oldest)", "Risk Level", "Entity Name"], key="history_sort")
+
+    # Get filtered searches
+    filters = {}
+    if search_filter:
+        filters['entity_name'] = search_filter
+    if tag_filter:
+        filters['tags'] = tag_filter
+
+    searches_df = db.get_saved_searches(limit=50, filters=filters)
+
+    if searches_df.empty:
+        st.info("No saved searches found. Searches will appear here when auto-save is enabled or you manually save a search.")
+        return
+
+    # Apply sorting
+    if sort_by == "Date (oldest)":
+        searches_df = searches_df.sort_values('timestamp', ascending=True)
+    elif sort_by == "Risk Level":
+        risk_order = {"VERY HIGH": 0, "HIGH": 1, "MID": 2, "LOW": 3, "SAFE": 4}
+        searches_df['risk_order'] = searches_df['risk_level'].map(risk_order)
+        searches_df = searches_df.sort_values('risk_order')
+    elif sort_by == "Entity Name":
+        searches_df = searches_df.sort_values('entity_name')
+
+    # Display searches
+    st.markdown(f"**Showing {len(searches_df)} saved search{'es' if len(searches_df) != 1 else ''}**")
+
+    for idx, search in searches_df.iterrows():
+        # Format tags for display
+        tags_list = serializer.format_tags_for_display(search['tags'])
+        tags_display = ', '.join([f"🏷️ {tag}" for tag in tags_list]) if tags_list else 'No tags'
+
+        # Risk level badge
+        risk_colors = {
+            "VERY HIGH": "#ef4444",
+            "HIGH": "#f97316",
+            "MID": "#eab308",
+            "LOW": "#3b82f6",
+            "SAFE": "#10b981"
+        }
+        risk_color = risk_colors.get(search['risk_level'], "#64748b")
+
+        # Create expander for each search
+        with st.expander(
+            f"🔍 {search['entity_name']} | {search['timestamp']} | "
+            f"Risk: {search['risk_level']} | Matches: {search['match_count']}"
+        ):
+            col_info1, col_info2 = st.columns(2)
+
+            with col_info1:
+                st.markdown(f"""
+                **Entity:** {search['entity_name']}
+                **Date:** {search['timestamp']}
+                **Risk Level:** <span style='color: {risk_color}; font-weight: bold;'>{search['risk_level']}</span>
+                **Match Count:** {search['match_count']}
+                **Subsidiaries:** {search['subsidiary_count']} | **Sisters:** {search['sister_count']}
+                """, unsafe_allow_html=True)
+
+            with col_info2:
+                st.markdown(f"""
+                **Country Filter:** {search['country_filter']}
+                **Fuzzy Search:** {'Yes' if search['fuzzy_search'] else 'No'}
+                **Conglomerate:** {'Yes' if search['is_conglomerate'] else 'No'}
+                **Tags:** {tags_display}
+                **Auto-saved:** {'Yes' if search['is_auto_saved'] else 'No'}
+                """)
+
+            if search['notes']:
+                st.markdown(f"**Notes:** {search['notes']}")
+
+            # Action buttons
+            col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
+
+            with col_btn1:
+                if st.button("📂 Restore", key=f"restore_{search['search_id']}", use_container_width=True):
+                    restore_search(search['search_id'])
+
+            with col_btn2:
+                if st.button("📤 Export", key=f"export_{search['search_id']}", use_container_width=True):
+                    st.session_state[f"show_export_{search['search_id']}"] = True
+
+            with col_btn3:
+                if st.button("✏️ Edit", key=f"edit_{search['search_id']}", use_container_width=True):
+                    st.session_state[f"show_edit_{search['search_id']}"] = True
+
+            with col_btn4:
+                if st.button("🗑️ Delete", key=f"delete_{search['search_id']}", use_container_width=True):
+                    if db.delete_saved_search(search['search_id']):
+                        st.success("Search deleted")
+                        st.rerun()
+                    else:
+                        st.error("Failed to delete search")
+
+            # Export options for this search
+            if st.session_state.get(f"show_export_{search['search_id']}", False):
+                st.markdown("---")
+                st.markdown("**Export Options:**")
+
+                # Load full search data
+                saved_search = db.load_search_results(search['search_id'])
+                if saved_search:
+                    export_data = {
+                        'search_id': search['search_id'],
+                        'timestamp': saved_search['timestamp'],
+                        'entity_name': saved_search['entity_name'],
+                        'risk_level': saved_search['risk_level'],
+                        'match_count': saved_search['match_count'],
+                        'subsidiary_count': saved_search['subsidiary_count'],
+                        'sister_count': saved_search['sister_count'],
+                        'country_filter': saved_search['country_filter'],
+                        'fuzzy_search': saved_search['fuzzy_search'],
+                        'notes': saved_search['notes'],
+                        'results': serializer.deserialize_search_results(saved_search)
+                    }
+
+                    col_e1, col_e2, col_e3 = st.columns(3)
+                    with col_e1:
+                        exporter.create_download_button_json(search['search_id'], export_data, saved_search['entity_name'])
+                    with col_e2:
+                        exporter.create_download_button_excel(search['search_id'], export_data, saved_search['entity_name'])
+                    with col_e3:
+                        exporter.create_download_button_pdf(search['search_id'], export_data, saved_search['entity_name'])
+
+            # Edit metadata form
+            if st.session_state.get(f"show_edit_{search['search_id']}", False):
+                st.markdown("---")
+                with st.form(f"edit_form_{search['search_id']}"):
+                    new_notes = st.text_area("Notes", value=search['notes'] or '', key=f"notes_{search['search_id']}")
+                    current_tags = ', '.join(serializer.format_tags_for_display(search['tags']))
+                    new_tags = st.text_input("Tags (comma-separated)", value=current_tags, key=f"tags_{search['search_id']}")
+
+                    col_s1, col_s2 = st.columns(2)
+                    with col_s1:
+                        if st.form_submit_button("Save Changes", use_container_width=True):
+                            tags_json = serializer.parse_tags(new_tags)
+                            if db.update_search_metadata(search['search_id'], notes=new_notes, tags=tags_json):
+                                st.success("Metadata updated")
+                                st.session_state[f"show_edit_{search['search_id']}"] = False
+                                st.rerun()
+                    with col_s2:
+                        if st.form_submit_button("Cancel", use_container_width=True):
+                            st.session_state[f"show_edit_{search['search_id']}"] = False
+                            st.rerun()
+
+
+def restore_search(search_id):
+    """
+    Restore a saved search into the current session.
+    This loads all search results from the database without re-running API calls.
+    """
+    # Load search from database
+    saved_search = db.load_search_results(search_id)
+
+    if not saved_search:
+        st.error("Failed to load search")
+        return
+
+    # Deserialize results
+    results = serializer.deserialize_search_results(saved_search)
+
+    # Store in session state
+    st.session_state.showing_restored_search = True
+    st.session_state.restored_search_id = search_id
+    st.session_state.restored_entity_name = saved_search['entity_name']
+    st.session_state.restored_results = results
+    st.session_state.restored_params = {
+        'country': saved_search['country_filter'],
+        'fuzzy': bool(saved_search['fuzzy_search']),
+        'conglomerate': bool(saved_search['is_conglomerate']),
+        'reverse_search': bool(saved_search['is_reverse_search'])
+    }
+
+    # Store conglomerate data if available
+    if results.get('conglomerate_data'):
+        st.session_state.related_companies_found = results['conglomerate_data']
+
+    st.success(f"✓ Restored search for: {saved_search['entity_name']}")
+    st.rerun()
+
 def main():
     db.init_db()
 
@@ -241,6 +459,18 @@ def main():
         st.session_state.current_search_id = None
     if 'analysis_complete' not in st.session_state:
         st.session_state.analysis_complete = False
+
+    # Initialize session state for save/restore functionality
+    if 'auto_save_enabled' not in st.session_state:
+        st.session_state.auto_save_enabled = True
+    if 'showing_restored_search' not in st.session_state:
+        st.session_state.showing_restored_search = False
+    if 'restored_search_id' not in st.session_state:
+        st.session_state.restored_search_id = None
+    if 'restored_results' not in st.session_state:
+        st.session_state.restored_results = None
+    if 'show_save_dialog' not in st.session_state:
+        st.session_state.show_save_dialog = False
 
     # --- HEADER ---
     c_head1, c_head2 = st.columns([12, 2])
@@ -331,6 +561,35 @@ def main():
 
     st.markdown("---")
 
+    # --- SETTINGS PANEL ---
+    with st.expander("⚙️ SETTINGS"):
+        st.markdown("### Search Settings")
+
+        col_set1, col_set2 = st.columns(2)
+
+        with col_set1:
+            auto_save = st.checkbox(
+                "Auto-save all searches",
+                value=st.session_state.auto_save_enabled,
+                help="Automatically save every search for future reference and restore"
+            )
+            st.session_state.auto_save_enabled = auto_save
+
+            if auto_save:
+                st.markdown("<div class='alert-box alert-success'>✓ All searches will be automatically saved</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("<div class='alert-box alert-warning'>⚠ Manual save required for each search</div>", unsafe_allow_html=True)
+
+        with col_set2:
+            # Show storage stats
+            saved_count = len(db.get_saved_searches(limit=1000))
+            st.metric("Saved Searches", saved_count)
+
+            if st.button("View Search History"):
+                st.session_state.show_history = True
+
+    st.markdown("---")
+
     # --- CONTROL PANEL ---
     st.subheader("01 // SEARCH PARAMS")
     
@@ -346,15 +605,68 @@ def main():
             fuzzy = st.toggle("FUZZY LOGIC", value=True)
             conglomerate = st.toggle("CONGLOMERATE SEARCH", value=False)
 
+            # Initialize reverse_search (will be set later)
+            reverse_search = False
+
             # Show depth selector and sister companies option when conglomerate search is enabled
             if conglomerate:
                 depth = st.selectbox("SEARCH DEPTH", [1, 2, 3], index=0,
                                    help="1 = Direct subsidiaries only, 2 = Subsidiaries + their children, 3 = Three levels deep")
-                include_sisters = st.checkbox("INCLUDE SISTER COMPANIES", value=True,
-                                            help="Also search for companies with the same parent (sister companies)")
+
+                # Option to select which subsidiaries to search at depth 2/3
+                if depth >= 2:
+                    st.info(f"""
+**📊 Depth {depth} Search:**
+- You'll be able to select which subsidiaries to search at level {depth}
+- Progress tracking will show which subsidiary is currently being processed
+- Each subsidiary search takes 5-10 seconds
+                    """)
+
+                # Ownership threshold filter
+                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+                ownership_filter = st.selectbox(
+                    "OWNERSHIP THRESHOLD",
+                    ["All subsidiaries", "Wholly-owned (100%)", "Majority (>50%)", "Custom threshold"],
+                    index=0,
+                    help="Filter subsidiaries by ownership percentage"
+                )
+
+                if ownership_filter == "Custom threshold":
+                    ownership_threshold = st.slider(
+                        "Minimum ownership %",
+                        min_value=0,
+                        max_value=100,
+                        value=51,
+                        step=1,
+                        help="Only include subsidiaries with at least this ownership percentage"
+                    )
+                elif ownership_filter == "Wholly-owned (100%)":
+                    ownership_threshold = 100
+                elif ownership_filter == "Majority (>50%)":
+                    ownership_threshold = 51
+                else:
+                    ownership_threshold = 0  # All subsidiaries
+
+                # Sister companies not applicable when searching parent company
+                include_sisters = False
+                reverse_search = False
             else:
                 depth = 1  # Default when disabled
-                include_sisters = False
+                ownership_threshold = 0
+
+                # Reverse search: Find parent and sister companies
+                reverse_search = st.checkbox("SEARCH FOR PARENT & SISTERS", value=False,
+                                            help="Enable if searching for a subsidiary company. Will find its parent company and sister companies (other subsidiaries of the same parent)")
+
+                # Show visual confirmation when enabled
+                if reverse_search:
+                    st.info("🔄 **Reverse Search Mode**: Will search for parent company and sister companies")
+
+                # Sister companies only available when NOT in conglomerate mode and reverse search is disabled
+                # (entity could be a subsidiary with sister companies)
+                if not reverse_search:
+                    include_sisters = st.checkbox("INCLUDE SISTER COMPANIES", value=False,
+                                            help="Search for other companies owned by the same parent company (sister companies)")
         with c4:
             st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
             col_btn1, col_btn2 = st.columns([3, 1])
@@ -379,24 +691,95 @@ def main():
         st.session_state.search_fuzzy = fuzzy
         st.session_state.search_conglomerate = conglomerate
         st.session_state.search_depth = depth if conglomerate else 1
-        st.session_state.include_sisters = include_sisters if conglomerate else False
+        st.session_state.include_sisters = include_sisters if (not conglomerate and not reverse_search) else False
+        st.session_state.ownership_threshold = ownership_threshold if conglomerate else 0
+        st.session_state.reverse_search = reverse_search if not conglomerate else False
 
-        # If conglomerate search, show subsidiary selection interface first
-        if conglomerate:
+        # Reset depth search state on new search
+        st.session_state.depth_search_stage = 'initial'
+        st.session_state.selected_depth_subsidiaries = []
+        st.session_state.requested_depth = depth if conglomerate else 1
+
+        # Clear previous related companies results
+        if 'related_companies_found' in st.session_state:
+            del st.session_state.related_companies_found
+
+        # If conglomerate search OR reverse search, show subsidiary selection interface first
+        if conglomerate or reverse_search:
             st.session_state.show_subsidiary_selection = True
             st.session_state.analysis_complete = False
+            # Debug logging
+            if reverse_search:
+                print(f"[DEBUG] Reverse search enabled for: {name_input}")
         else:
             st.session_state.analysis_complete = True
 
+    # Check if we're displaying a restored search
+    if st.session_state.get('showing_restored_search', False):
+        st.markdown("---")
+        st.markdown("<div class='alert-box alert-info'>📂 Displaying Restored Search - No API calls were made</div>", unsafe_allow_html=True)
+
+        # Display restored results
+        restored_results = st.session_state.restored_results
+        restored_params = st.session_state.restored_params
+        entity_name = st.session_state.restored_entity_name
+
+        # Create a fake "data" object that matches the structure expected by run_analysis
+        # Since run_analysis expects fetch_analysis_data format
+        # We'll call display_entity_results directly with the restored data
+
+        data = {
+            'final_query_name': entity_name,
+            'us_results': restored_results.get('us_results', []),
+            'media_hits': restored_results.get('media_hits', []),
+            'report': restored_results.get('report', ''),
+            'pdf_bytes': restored_results.get('pdf_bytes')
+        }
+
+        # Determine if this is a conglomerate search based on stored data
+        conglom_data = restored_results.get('conglomerate_data')
+        if conglom_data:
+            # Prepare conglomerate context
+            conglomerate_context = {
+                'parent': entity_name,
+                'subsidiaries': conglom_data.get('subsidiaries', []),
+                'sisters': conglom_data.get('sisters', [])
+            }
+            display_entity_results(
+                entity_name,
+                data,
+                restored_params.get('country', 'GLOBAL'),
+                restored_params.get('fuzzy', True),
+                conglomerate_context=conglomerate_context
+            )
+        else:
+            # Single entity search
+            display_entity_results(
+                entity_name,
+                data,
+                restored_params.get('country', 'GLOBAL'),
+                restored_params.get('fuzzy', True)
+            )
+
+        # Add button to clear restored search
+        if st.button("🔄 Start New Search", use_container_width=False):
+            st.session_state.showing_restored_search = False
+            st.session_state.restored_search_id = None
+            st.session_state.restored_results = None
+            st.session_state.restored_entity_name = None
+            if 'related_companies_found' in st.session_state:
+                del st.session_state.related_companies_found
+            st.rerun()
+
     # Display subsidiary selection interface if needed
-    if st.session_state.get('show_subsidiary_selection', False):
+    elif st.session_state.get('show_subsidiary_selection', False):
         display_subsidiary_selection(
             st.session_state.search_name,
             st.session_state.search_depth
         )
 
     # Display results if analysis has been run
-    if st.session_state.analysis_complete:
+    elif st.session_state.analysis_complete:
         if st.session_state.get('search_conglomerate', False):
             run_conglomerate_analysis(
                 st.session_state.search_name,
@@ -451,9 +834,30 @@ def fetch_analysis_data(name_input, country_input, fuzzy):
 def display_subsidiary_selection(parent_company, depth):
     """
     Display interface for users to select which subsidiaries and sister companies to search.
+    Supports both normal conglomerate search (parent → subsidiaries) and reverse search (subsidiary → parent → sisters).
     """
     st.markdown("---")
-    st.subheader("02 // SUBSIDIARY SELECTION")
+
+    # Check if this is a reverse search
+    reverse_search = st.session_state.get('reverse_search', False)
+
+    # Debug logging
+    print(f"[DEBUG] display_subsidiary_selection called")
+    print(f"[DEBUG] reverse_search = {reverse_search}")
+    print(f"[DEBUG] parent_company = {parent_company}")
+
+    if reverse_search:
+        st.subheader("02 // PARENT & SISTER COMPANIES")
+    else:
+        st.subheader("02 // SUBSIDIARY SELECTION")
+
+    # Initialize depth search session state
+    if 'depth_search_stage' not in st.session_state:
+        st.session_state.depth_search_stage = 'initial'
+    if 'selected_depth_subsidiaries' not in st.session_state:
+        st.session_state.selected_depth_subsidiaries = []
+    if 'requested_depth' not in st.session_state:
+        st.session_state.requested_depth = depth
 
     # Initialize session state for related companies if not exists
     if 'related_companies_found' not in st.session_state:
@@ -488,12 +892,79 @@ def display_subsidiary_selection(parent_company, depth):
             log_html += "</div>"
             progress_log.markdown(log_html, unsafe_allow_html=True)
 
+        # Check if this is a reverse search (subsidiary → parent → sisters)
+        reverse_search_enabled = st.session_state.get('reverse_search', False)
+
+        # Debug logging
+        print(f"[DEBUG] Inside search block")
+        print(f"[DEBUG] reverse_search_enabled = {reverse_search_enabled}")
+        print(f"[DEBUG] parent_company = {parent_company}")
+
+        # Determine actual search depth based on stage
+        # If depth >= 2 and this is initial search, start with depth 1 only
+        if depth >= 2 and st.session_state.depth_search_stage == 'initial':
+            actual_depth = 1
+            st.session_state.requested_depth = depth
+            st.session_state.depth_search_stage = 'selecting'
+            progress_callback(f"📊 Starting depth 1 search (depth {depth} will be performed on selected subsidiaries)", "INFO")
+        else:
+            actual_depth = depth
+
+        # Get selected subsidiaries for depth search if applicable
+        depth_search_subs = st.session_state.get('selected_depth_subsidiaries', None) if actual_depth >= 2 else None
+
         # Perform search with progress callback
-        with st.spinner(f"Searching for related companies of {parent_company}..."):
-            research_agent = SanctionsResearchAgent()
-            include_sisters = st.session_state.get('include_sisters', False)
-            results = research_agent.find_subsidiaries(parent_company, depth, include_sisters, progress_callback)
-            st.session_state.related_companies_found = results
+        research_agent = SanctionsResearchAgent()
+
+        # Check if this is a reverse search (subsidiary → parent → sisters)
+        if reverse_search_enabled:
+            print(f"[DEBUG] About to call find_parent_and_sisters for: {parent_company}")
+            with st.spinner(f"Searching for parent and sister companies of {parent_company}..."):
+                print(f"[DEBUG] Inside spinner, calling find_parent_and_sisters...")
+                reverse_results = research_agent.find_parent_and_sisters(
+                    parent_company,
+                    progress_callback
+                )
+                print(f"[DEBUG] find_parent_and_sisters returned: {reverse_results.keys() if reverse_results else 'None'}")
+
+                # Transform reverse search results to match expected format
+                parent_info = reverse_results.get('parent')
+                sisters = reverse_results.get('sisters', [])
+
+                # Add parent as a "subsidiary" for display purposes (will be shown differently)
+                subsidiaries = []
+                if parent_info:
+                    subsidiaries.append({
+                        'name': parent_info['name'],
+                        'jurisdiction': parent_info.get('jurisdiction', 'Unknown'),
+                        'status': parent_info.get('status', 'Unknown'),
+                        'relationship': 'parent',
+                        'level': 0,
+                        'source': parent_info.get('source', 'unknown')
+                    })
+
+                results = {
+                    'subsidiaries': subsidiaries,
+                    'sisters': sisters,
+                    'method': reverse_results.get('method', 'unknown'),
+                    'source_url': None,
+                    'filing_date': None,
+                    'is_reverse_search': True
+                }
+                st.session_state.related_companies_found = results
+        else:
+            with st.spinner(f"Searching for related companies of {parent_company}..."):
+                include_sisters = st.session_state.get('include_sisters', False)
+                ownership_threshold = st.session_state.get('ownership_threshold', 0)
+                results = research_agent.find_subsidiaries(
+                    parent_company,
+                    actual_depth,
+                    include_sisters,
+                    progress_callback,
+                    ownership_threshold,
+                    depth_search_subsidiaries=depth_search_subs
+                )
+                st.session_state.related_companies_found = results
 
         # Show final completion message
         progress_callback("✨ Search complete!", "SUCCESS")
@@ -502,50 +973,106 @@ def display_subsidiary_selection(parent_company, depth):
     subsidiaries = results.get('subsidiaries', [])
     sisters = results.get('sisters', [])
     method = results.get('method', 'unknown')
+    is_reverse_search = results.get('is_reverse_search', False)
 
-    # Combine for display
-    all_companies = subsidiaries + sisters
-
-    if not all_companies:
-        st.warning(f"No subsidiaries or sister companies found for {parent_company}. Proceeding with parent company search only.")
-        st.session_state.selected_subsidiaries = []
-        st.session_state.show_subsidiary_selection = False
-        st.session_state.analysis_complete = True
-        st.rerun()
-        return
-
-    # Display count with method info
+    # Method labels for display
     method_labels = {
+        'opencorporates_api': 'OpenCorporates API',
         'api': 'OpenCorporates API',
         'sec_edgar': 'SEC EDGAR (10-K Filings)',
+        'sec_edgar_10k': 'SEC EDGAR (10-K - US Company)',
+        'sec_edgar_20f': 'SEC EDGAR (20-F - Foreign Issuer)',
         'sec_edgar+duckduckgo': 'SEC EDGAR + DuckDuckGo',
+        'sec_edgar_10k+duckduckgo': 'SEC EDGAR (10-K) + DuckDuckGo',
+        'sec_edgar_20f+duckduckgo': 'SEC EDGAR (20-F) + DuckDuckGo',
+        'wikipedia+duckduckgo': 'Wikipedia + DuckDuckGo',
         'duckduckgo': 'DuckDuckGo Search'
     }
-    method_label = method_labels.get(method, 'Unknown')
 
-    # Get source URL and filing date if available
-    source_url = results.get('source_url')
-    filing_date = results.get('filing_date')
+    # Handle reverse search display differently
+    if is_reverse_search:
+        # For reverse search: subsidiaries[0] is the parent, sisters are actual sisters
+        parent_company_info = subsidiaries[0] if subsidiaries else None
 
-    # Build the info box HTML
-    info_html = f"""
-    <div class='alert-box alert-info'>
-        Found {len(subsidiaries)} subsidiaries and {len(sisters)} sister companies for {parent_company}<br>
-        <span style='font-size: 0.85em;'>Search Method: {method_label}</span>
-    """
+        if parent_company_info:
+            # Display parent company info prominently
+            st.markdown(f"""
+            <div class='alert-box alert-success'>
+                <strong>🏢 Parent Company Found:</strong> {parent_company_info['name']}<br>
+                <span style='font-size: 0.85em;'>📍 Jurisdiction: {parent_company_info.get('jurisdiction', 'Unknown')} | Status: {parent_company_info.get('status', 'Unknown')}</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # Add source link if available (SEC EDGAR)
-    if source_url:
-        info_html += f"""<br>
-        <span style='font-size: 0.85em;'>
-            📋 <a href="{source_url}" target="_blank" style="color: #3b82f6; text-decoration: underline;">View Original SEC Exhibit 21</a>
-            {f' (Filed: {filing_date})' if filing_date else ''}
-        </span>
+        if not sisters:
+            st.warning(f"Found parent company but no sister companies for {parent_company}.")
+            st.info("Proceeding with parent company and searched subsidiary only.")
+            # Add both parent and searched subsidiary
+            st.session_state.selected_subsidiaries = [parent_company_info] if parent_company_info else []
+            st.session_state.show_subsidiary_selection = False
+            st.session_state.analysis_complete = True
+            st.rerun()
+            return
+
+        # For reverse search, include parent + sisters in all_companies
+        # (parent is in subsidiaries list with level 0)
+        all_companies = subsidiaries + sisters
+
+        # Display parent info
+        if subsidiaries:
+            parent_name = subsidiaries[0]['name']
+            parent_country = subsidiaries[0].get('jurisdiction', 'Unknown')
+            st.markdown(f"""
+            <div class='alert-box alert-success'>
+                🏢 <strong>Parent Company Found:</strong> {parent_name}<br>
+                📍 {parent_country} | Source: {method_labels.get(method, 'Unknown')}
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class='alert-box alert-info'>
+            Found {len(sisters)} sister companies of {parent_company}
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        # Normal conglomerate search: combine subsidiaries and sisters
+        all_companies = subsidiaries + sisters
+
+        if not all_companies:
+            st.warning(f"No subsidiaries or sister companies found for {parent_company}. Proceeding with parent company search only.")
+            st.session_state.selected_subsidiaries = []
+            st.session_state.show_subsidiary_selection = False
+            st.session_state.analysis_complete = True
+            st.rerun()
+            return
+
+    # Display count with method info (for normal search)
+    # Display count with method info (skip for reverse search as already displayed above)
+    if not is_reverse_search:
+        method_label = method_labels.get(method, 'Unknown')
+
+        # Get source URL and filing date if available
+        source_url = results.get('source_url')
+        filing_date = results.get('filing_date')
+
+        # Build the info box HTML
+        info_html = f"""
+        <div class='alert-box alert-info'>
+            Found {len(subsidiaries)} subsidiaries and {len(sisters)} sister companies for {parent_company}<br>
+            <span style='font-size: 0.85em;'>Search Method: {method_label}</span>
         """
 
-    info_html += "</div>"
+        # Add source link if available (SEC EDGAR)
+        if source_url:
+            info_html += f"""<br>
+            <span style='font-size: 0.85em;'>
+                📋 <a href="{source_url}" target="_blank" style="color: #3b82f6; text-decoration: underline;">View Original SEC Exhibit 21</a>
+                {f' (Filed: {filing_date})' if filing_date else ''}
+            </span>
+            """
 
-    st.markdown(info_html, unsafe_allow_html=True)
+        info_html += "</div>"
+
+        st.markdown(info_html, unsafe_allow_html=True)
 
     # Select/Deselect All buttons
     col1, col2, col3 = st.columns([1, 1, 8])
@@ -591,23 +1118,37 @@ def display_subsidiary_selection(parent_company, depth):
                         source_labels = {
                             'sec_edgar': '📋 SEC EDGAR',
                             'opencorporates_api': '🌐 OpenCorporates API',
+                            'wikipedia': '📖 Wikipedia',
                             'duckduckgo': '🔍 DuckDuckGo'
                         }
                         source_colors = {
                             'sec_edgar': '#10b981',
                             'opencorporates_api': '#3b82f6',
+                            'wikipedia': '#a855f7',
                             'duckduckgo': '#94a3b8'
                         }
                         source_label = source_labels.get(source, '❓ Unknown')
                         source_color = source_colors.get(source, '#64748b')
+
+                        # Format ownership percentage if available
+                        ownership_pct = sub.get('ownership_percentage')
+                        ownership_display = ""
+                        if ownership_pct is not None:
+                            ownership_display = f" | Ownership: {ownership_pct}%"
+
+                        # Format reference URL if available
+                        reference_url = sub.get('reference_url')
+                        reference_link = ""
+                        if reference_url:
+                            reference_link = f"<br><span style='font-size: 0.75em;'>🔗 <a href='{reference_url}' target='_blank' style='color: #60a5fa;'>View Source</a></span>"
 
                         st.markdown(f"""
                         <div style='padding: 8px; background: #172033; border-left: 3px solid {status_color}; margin-bottom: 5px;'>
                             <strong style='color: #e2e8f0;'>{sub['name']}</strong>
                             <span style='background: {source_color}; color: #ffffff; padding: 2px 6px; border-radius: 3px; font-size: 0.7em; margin-left: 8px;'>{source_label}</span><br>
                             <span style='color: #94a3b8; font-size: 0.85em;'>
-                                📍 {sub['jurisdiction']} | Level: {sub.get('level', 1)} | Status: {sub['status']}
-                            </span>
+                                📍 {sub['jurisdiction']} | Level: {sub.get('level', 1)} | Status: {sub['status']}{ownership_display}
+                            </span>{reference_link}
                         </div>
                         """, unsafe_allow_html=True)
 
@@ -635,36 +1176,447 @@ def display_subsidiary_selection(parent_company, depth):
                     source_labels = {
                         'sec_edgar': '📋 SEC EDGAR',
                         'opencorporates_api': '🌐 OpenCorporates API',
+                        'wikipedia': '📖 Wikipedia',
                         'duckduckgo': '🔍 DuckDuckGo'
                     }
                     source_colors = {
                         'sec_edgar': '#10b981',
                         'opencorporates_api': '#3b82f6',
+                        'wikipedia': '#a855f7',
                         'duckduckgo': '#94a3b8'
                     }
                     source_label = source_labels.get(source, '❓ Unknown')
                     source_color = source_colors.get(source, '#64748b')
+
+                    # Format ownership percentage if available
+                    ownership_pct = sister.get('ownership_percentage')
+                    ownership_display = ""
+                    if ownership_pct is not None:
+                        ownership_display = f" | Ownership: {ownership_pct}%"
+
+                    # Format reference URL if available
+                    reference_url = sister.get('reference_url')
+                    reference_link = ""
+                    if reference_url:
+                        reference_link = f"<br><span style='font-size: 0.75em;'>🔗 <a href='{reference_url}' target='_blank' style='color: #60a5fa;'>View Source</a></span>"
 
                     st.markdown(f"""
                     <div style='padding: 8px; background: #172033; border-left: 3px solid {status_color}; margin-bottom: 5px;'>
                         <strong style='color: #e2e8f0;'>{sister['name']}</strong>
                         <span style='background: {source_color}; color: #ffffff; padding: 2px 6px; border-radius: 3px; font-size: 0.7em; margin-left: 8px;'>{source_label}</span><br>
                         <span style='color: #94a3b8; font-size: 0.85em;'>
-                            📍 {sister['jurisdiction']} | Relationship: Sister Company | Status: {sister['status']}
+                            📍 {sister['jurisdiction']} | Relationship: Sister Company | Status: {sister['status']}{ownership_display}
+                        </span>{reference_link}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+    # Display Financial Intelligence (Directors, Shareholders, Transactions) if available
+    directors = results.get('directors', [])
+    shareholders = results.get('shareholders', [])
+    transactions = results.get('transactions', [])
+
+    # Debug: Show what was found
+    total_fin_items = len(directors) + len(shareholders) + len(transactions)
+
+    # Always show the Financial Intelligence section (even if no data)
+    st.markdown("---")
+    st.markdown(f"### 📊 Financial Intelligence (SEC Filing Data) {f'({total_fin_items} items found)' if total_fin_items > 0 else ''}")
+
+    if directors or shareholders or transactions:
+        # Display directors
+        if directors:
+            with st.expander(f"👥 Directors & Officers ({len(directors)})", expanded=False):
+                st.markdown(f"<div class='alert-box alert-info'>Extracted from SEC filings for {parent_company}</div>", unsafe_allow_html=True)
+                for director in directors:
+                    nationality = director.get('nationality', 'Unknown')
+                    other_positions = director.get('other_positions', '')
+
+                    other_positions_html = ""
+                    if other_positions and other_positions != 'Unknown':
+                        other_positions_html = f"<br><span style='font-size: 0.75em; color: #94a3b8;'>Other Positions: {other_positions}</span>"
+
+                    st.markdown(f"""
+                    <div style='padding: 10px; background: #172033; border-left: 3px solid #3b82f6; margin-bottom: 8px;'>
+                        <strong style='color: #e2e8f0; font-size: 1.05em;'>{director['name']}</strong><br>
+                        <span style='color: #3b82f6; font-size: 0.9em;'>📋 {director['title']}</span><br>
+                        <span style='color: #94a3b8; font-size: 0.85em;'>
+                            🌍 Nationality: {nationality}
+                        </span>{other_positions_html}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        # Display major shareholders
+        if shareholders:
+            with st.expander(f"💼 Major Shareholders ({len(shareholders)})", expanded=False):
+                st.markdown(f"<div class='alert-box alert-info'>Major shareholders (5%+ ownership) from SEC filings for {parent_company}</div>", unsafe_allow_html=True)
+                for shareholder in shareholders:
+                    ownership_pct = shareholder.get('ownership_percentage')
+                    shareholder_type = shareholder.get('type', 'Unknown')
+                    jurisdiction = shareholder.get('jurisdiction', 'Unknown')
+
+                    ownership_display = f"{ownership_pct}%" if ownership_pct else "Unknown %"
+                    type_badge_color = '#10b981' if shareholder_type == 'Corporate' else '#3b82f6' if shareholder_type == 'Institutional' else '#f59e0b'
+
+                    st.markdown(f"""
+                    <div style='padding: 10px; background: #172033; border-left: 3px solid {type_badge_color}; margin-bottom: 8px;'>
+                        <strong style='color: #e2e8f0; font-size: 1.05em;'>{shareholder['name']}</strong>
+                        <span style='background: {type_badge_color}; color: #ffffff; padding: 2px 8px; border-radius: 3px; font-size: 0.7em; margin-left: 8px;'>{shareholder_type}</span><br>
+                        <span style='color: #10b981; font-size: 1.1em; font-weight: bold;'>Ownership: {ownership_display}</span><br>
+                        <span style='color: #94a3b8; font-size: 0.85em;'>
+                            🌍 Jurisdiction: {jurisdiction}
                         </span>
                     </div>
                     """, unsafe_allow_html=True)
 
-    # Proceed button
-    st.markdown("---")
-    col1, col2, col3 = st.columns([3, 3, 6])
-    with col1:
-        if st.button("PROCEED WITH SEARCH", use_container_width=True, type="primary"):
-            selected_companies = [all_companies[i] for i in st.session_state.selected_sub_indices]
-            st.session_state.selected_subsidiaries = selected_companies
-            st.session_state.show_subsidiary_selection = False
-            st.session_state.analysis_complete = True
-            st.rerun()
+        # Display related party transactions
+        if transactions:
+            with st.expander(f"💸 Related Party Transactions ({len(transactions)})", expanded=False):
+                st.markdown(f"<div class='alert-box alert-warning'>Financial transactions between {parent_company} and related parties</div>", unsafe_allow_html=True)
+                for txn in transactions:
+                    txn_type = txn.get('transaction_type', 'Unknown')
+                    counterparty = txn.get('counterparty', 'Unknown')
+                    relationship = txn.get('relationship', 'Unknown')
+                    amount = txn.get('amount')
+                    currency = txn.get('currency', 'USD')
+                    txn_date = txn.get('transaction_date', 'Unknown')
+                    purpose = txn.get('purpose', '')
+
+                    # Format amount
+                    if amount:
+                        amount_display = f"{currency} {amount:,.0f}"
+                    else:
+                        amount_display = "Amount not disclosed"
+
+                    # Type badge color
+                    type_badge_color = '#10b981' if 'Loan' in txn_type else '#3b82f6' if 'Sale' in txn_type else '#f59e0b'
+
+                    purpose_html = ""
+                    if purpose and purpose != 'Unknown':
+                        purpose_html = f"<br><span style='font-size: 0.75em; color: #94a3b8;'>Purpose: {purpose}</span>"
+
+                    st.markdown(f"""
+                    <div style='padding: 10px; background: #172033; border-left: 3px solid {type_badge_color}; margin-bottom: 8px;'>
+                        <strong style='color: #e2e8f0; font-size: 1.05em;'>{counterparty}</strong>
+                        <span style='background: {type_badge_color}; color: #ffffff; padding: 2px 8px; border-radius: 3px; font-size: 0.7em; margin-left: 8px;'>{txn_type}</span><br>
+                        <span style='color: #10b981; font-size: 1.1em; font-weight: bold;'>{amount_display}</span><br>
+                        <span style='color: #94a3b8; font-size: 0.85em;'>
+                            🔗 Relationship: {relationship} | 📅 Date: {txn_date}
+                        </span>{purpose_html}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        # Add link to source filing if available
+        fin_intel_url = results.get('fin_intel_url')
+        if fin_intel_url:
+            st.markdown(f"""
+            <div style='margin-top: 10px; text-align: right;'>
+                <a href="{fin_intel_url}" target="_blank" style="color: #3b82f6; text-decoration: underline; font-size: 0.85em;">
+                    📋 View Full SEC Filing (Items 6 & 7 / Proxy Statement)
+                </a>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        # No financial intelligence data available
+        st.markdown("""
+        <div class='alert-box alert-info'>
+            <strong>ℹ INFO:</strong> No financial intelligence data available for this entity.
+            Financial intelligence includes directors, officers, major shareholders (5%+ ownership), and related party transactions from SEC filings (10-K, 20-F, DEF 14A).
+            <br><br>
+            <strong>Possible reasons:</strong>
+            <ul>
+                <li>Entity is not publicly traded or doesn't file with SEC</li>
+                <li>Entity is foreign and doesn't have U.S. SEC filings</li>
+                <li>SEC filing data extraction is still in progress</li>
+                <li>Data was filtered out due to quality validation (placeholder names removed)</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # === RELATIONSHIP DIAGRAM SECTION ===
+    # Build graph from collected data
+    if subsidiaries or sisters or directors or shareholders or transactions:
+        st.markdown("---")
+        st.markdown("### 🔗 Relationship Diagram")
+
+        # Build graph
+        with st.spinner("Building relationship network..."):
+            # Collect all directors and shareholders from all entities
+            all_directors = list(directors) if directors else []
+            all_shareholders = list(shareholders) if shareholders else []
+            all_transactions = list(transactions) if transactions else []
+
+            # Fetch directors and shareholders for each subsidiary
+            all_entity_names = [parent_company]
+            if subsidiaries:
+                all_entity_names.extend([sub.get('name') for sub in subsidiaries if sub.get('name')])
+            if sisters:
+                all_entity_names.extend([sis.get('name') for sis in sisters if sis.get('name')])
+
+            for entity_name in all_entity_names:
+                if entity_name != parent_company:  # Already have parent data
+                    # Fetch from database
+                    entity_directors = db.get_directors(company_name=entity_name)
+                    entity_shareholders = db.get_shareholders(company_name=entity_name)
+                    entity_transactions = db.get_transactions(company_name=entity_name)
+
+                    if entity_directors:
+                        all_directors.extend(entity_directors)
+                    if entity_shareholders:
+                        all_shareholders.extend(entity_shareholders)
+                    if entity_transactions:
+                        all_transactions.extend(entity_transactions)
+
+            parent_info = {'jurisdiction': 'Unknown', 'status': 'Active'}
+            graph = gb.build_entity_graph(
+                company_name=parent_company,
+                subsidiaries=subsidiaries,
+                sisters=sisters,
+                directors=all_directors,
+                shareholders=all_shareholders,
+                transactions=all_transactions,
+                parent_info=parent_info
+            )
+
+        # Get graph statistics
+        stats = gb.get_graph_statistics(graph)
+
+        # Display quick stats
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Entities", stats['total_nodes'])
+        with col2:
+            st.metric("Relationships", stats['total_edges'])
+        with col3:
+            st.metric("Countries", stats['num_countries'])
+        with col4:
+            if stats['most_connected']:
+                st.metric("Most Connected", stats['most_connected'][:15] + "..." if len(stats['most_connected']) > 15 else stats['most_connected'])
+
+        # Sub-tabs for different visualizations
+        viz_tab1, viz_tab2 = st.tabs(["🔗 Network View", "🌍 Geographic View"])
+
+        with viz_tab1:
+            st.markdown("<div class='alert-box alert-info'>Interactive Neo4j-style network diagram - Drag nodes to rearrange, scroll to zoom, click to explore</div>", unsafe_allow_html=True)
+
+            # Filter controls
+            col1, col2 = st.columns(2)
+            with col1:
+                show_directors = st.checkbox("Show Directors", value=True, key="show_directors_sub")
+            with col2:
+                show_shareholders = st.checkbox("Show Shareholders", value=True, key="show_shareholders_sub")
+
+            # Filter graph
+            filtered_graph = gb.filter_graph(graph, show_directors, show_shareholders, True)
+
+            # Create and display interactive network diagram (Neo4j-style)
+            network_html = viz.create_interactive_network(
+                filtered_graph,
+                title=f"Entity Relationship Network: {parent_company}",
+                height="700px"
+            )
+            components.html(network_html, height=750, scrolling=True)
+
+        with viz_tab2:
+            st.markdown("<div class='alert-box alert-info'>Geographic distribution of entities showing jurisdictions and cross-border relationships</div>", unsafe_allow_html=True)
+
+            # Create and display geographic map
+            geo_map = viz.create_geographic_map(filtered_graph, title=f"Geographic Distribution: {parent_company}")
+            components.html(geo_map._repr_html_(), height=650)
+
+        # Graph Explorer
+        with st.expander("📊 EXPLORE GRAPH DATABASE"):
+            st.markdown("### Graph Statistics")
+
+            # Display detailed statistics
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"""
+                **Network Composition:**
+                - Total Nodes: {stats['total_nodes']}
+                - Companies: {stats['companies']}
+                - People: {stats['people']}
+                - Total Relationships: {stats['total_edges']}
+                """)
+            with col2:
+                st.markdown(f"""
+                **Geographic Distribution:**
+                - Countries Represented: {stats['num_countries']}
+                - Countries: {', '.join(stats['countries'][:5])}{'...' if len(stats['countries']) > 5 else ''}
+                """)
+
+            st.markdown("---")
+            st.markdown("### Relationship Explorer")
+
+            # Entity selector
+            node_list = list(filtered_graph.nodes())
+            if node_list:
+                selected_entity = st.selectbox("Select Entity to Explore", node_list, key="entity_explorer_sub")
+
+                if selected_entity:
+                    # Get neighbors
+                    neighbors = gb.get_neighbors_table(filtered_graph, selected_entity)
+
+                    if neighbors:
+                        st.markdown(f"**Showing {len(neighbors)} relationships for {selected_entity}:**")
+
+                        # Convert to DataFrame for display
+                        df_neighbors = pd.DataFrame(neighbors)
+                        st.dataframe(df_neighbors, use_container_width=True, hide_index=True)
+                    else:
+                        st.info(f"No relationships found for {selected_entity}")
+
+            st.markdown("---")
+            st.markdown("### Path Finder")
+
+            # Path finder
+            col1, col2 = st.columns(2)
+            with col1:
+                source_entity = st.selectbox("From Entity", node_list, key="path_source_sub")
+            with col2:
+                target_entity = st.selectbox("To Entity", node_list, key="path_target_sub")
+
+            if st.button("Find Paths", key="find_paths_sub"):
+                if source_entity and target_entity and source_entity != target_entity:
+                    paths = gb.find_paths(filtered_graph, source_entity, target_entity, max_paths=5)
+
+                    if paths:
+                        st.success(f"Found {len(paths)} path(s) between {source_entity} and {target_entity}:")
+                        for i, path in enumerate(paths, 1):
+                            path_str = " → ".join(path)
+                            st.markdown(f"**Path {i}:** {path_str}")
+                    else:
+                        st.warning(f"No paths found between {source_entity} and {target_entity}")
+                else:
+                    st.warning("Please select two different entities")
+
+    # Depth Search Selection Interface (if depth >= 2 and in selection stage)
+    if (st.session_state.get('depth_search_stage') == 'selecting' and
+        st.session_state.requested_depth >= 2 and
+        len(subsidiaries) > 0):
+
+        st.markdown("---")
+        st.markdown(f"### 📊 Select Subsidiaries for Depth {st.session_state.requested_depth} Search")
+
+        st.info(f"""
+**Depth {st.session_state.requested_depth} Search:**
+- Found **{len(subsidiaries)} level 1 subsidiaries**
+- Select which ones to search at depth {st.session_state.requested_depth}
+- Each subsidiary search takes 5-10 seconds
+- Progress tracking will show which subsidiary is being processed
+        """)
+
+        # SELECT ALL / CLEAR ALL buttons
+        col1, col2, col3 = st.columns([2, 2, 8])
+        with col1:
+            if st.button("✓ SELECT ALL", key="select_all_depth"):
+                st.session_state.selected_depth_subsidiaries = [sub['name'] for sub in subsidiaries]
+                st.rerun()
+        with col2:
+            if st.button("✗ CLEAR ALL", key="clear_all_depth"):
+                st.session_state.selected_depth_subsidiaries = []
+                st.rerun()
+
+        # Display subsidiaries with checkboxes for depth search
+        st.markdown("#### Select Level 1 Subsidiaries:")
+
+        # Use columns for checkbox display
+        for sub in subsidiaries:
+            sub_name = sub['name']
+            is_selected = sub_name in st.session_state.selected_depth_subsidiaries
+
+            col1, col2 = st.columns([1, 20])
+            with col1:
+                if st.checkbox("", value=is_selected, key=f"depth_select_{sub_name}"):
+                    if sub_name not in st.session_state.selected_depth_subsidiaries:
+                        st.session_state.selected_depth_subsidiaries.append(sub_name)
+                        st.rerun()
+                else:
+                    if sub_name in st.session_state.selected_depth_subsidiaries:
+                        st.session_state.selected_depth_subsidiaries.remove(sub_name)
+                        st.rerun()
+
+            with col2:
+                # Get source badge
+                source = sub.get('source', method)
+                source_badges = {
+                    'opencorporates_api': '<span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.75em; font-weight: 500;">🏢 API</span>',
+                    'sec_edgar': '<span style="background: #3b82f6; color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.75em; font-weight: 500;">📋 SEC EDGAR</span>',
+                    'duckduckgo': '<span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.75em; font-weight: 500;">🔍 DuckDuckGo</span>',
+                    'wikipedia': '<span style="background: #a855f7; color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.75em; font-weight: 500;">📖 Wikipedia</span>',
+                }
+                source_badge = source_badges.get(source, '<span style="background: #6b7280; color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.75em; font-weight: 500;">🔍 Web</span>')
+
+                st.markdown(f"""
+                <div style='padding: 8px; border-left: 3px solid #3b82f6; margin: 5px 0; background: #1e293b;'>
+                    <strong>{sub_name}</strong> {source_badge}<br>
+                    <span style='font-size: 0.85em; color: #9ca3af;'>
+                        📍 {sub.get('jurisdiction', 'Unknown')} |
+                        Level: {sub.get('level', 1)} |
+                        Status: {sub.get('status', 'Unknown')}
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # Show selection count and CONTINUE button
+        selected_count = len(st.session_state.selected_depth_subsidiaries)
+        st.markdown(f"**Selected: {selected_count} subsidiaries**")
+
+        if selected_count > 0:
+            estimated_time = selected_count * 7  # 7 seconds per subsidiary average
+            estimated_min = max(1, estimated_time // 60)
+
+            st.markdown("---")
+            col1, col2, col3 = st.columns([4, 2, 6])
+            with col1:
+                if st.button(f"🔍 CONTINUE DEPTH {st.session_state.requested_depth} SEARCH", use_container_width=True, type="primary"):
+                    st.session_state.depth_search_stage = 'searching'
+                    # Clear the related_companies_found to trigger new search with depth
+                    if 'related_companies_found' in st.session_state:
+                        del st.session_state.related_companies_found
+                    st.rerun()
+            with col2:
+                st.markdown(f"<div style='padding: 10px; text-align: center; color: #9ca3af;'>~{estimated_min} min</div>", unsafe_allow_html=True)
+            with col3:
+                if st.button("⏭️ SKIP DEPTH SEARCH", use_container_width=True):
+                    st.session_state.depth_search_stage = 'complete'
+                    st.rerun()
+        else:
+            st.warning("Please select at least one subsidiary to continue depth search, or click SKIP to proceed without depth search.")
+            if st.button("⏭️ SKIP DEPTH SEARCH", use_container_width=True):
+                st.session_state.depth_search_stage = 'complete'
+                st.rerun()
+
+    # Proceed button (only show if not in depth selection stage)
+    if not (st.session_state.get('depth_search_stage') == 'selecting' and st.session_state.requested_depth >= 2):
+        st.markdown("---")
+        col1, col2, col3 = st.columns([3, 3, 6])
+        with col1:
+            if st.button("PROCEED WITH SEARCH", use_container_width=True, type="primary"):
+                selected_companies = [all_companies[i] for i in st.session_state.selected_sub_indices]
+                st.session_state.selected_subsidiaries = selected_companies
+
+                # Store conglomerate structure for relationship diagrams
+                if is_reverse_search:
+                    # For reverse search: subsidiaries[0] contains parent info
+                    parent_name = subsidiaries[0]['name'] if subsidiaries else parent_company
+                    st.session_state.conglomerate_structure = {
+                        'parent': parent_name,
+                        'all_subsidiaries': [],
+                        'all_sisters': sisters,
+                        'is_reverse': True
+                    }
+                else:
+                    # For normal search: parent_company is the parent
+                    st.session_state.conglomerate_structure = {
+                        'parent': parent_company,
+                        'all_subsidiaries': subsidiaries,
+                        'all_sisters': sisters,
+                        'is_reverse': False
+                    }
+
+                st.session_state.show_subsidiary_selection = False
+                st.session_state.analysis_complete = True
+                st.rerun()
     with col2:
         if st.button("CANCEL", use_container_width=True):
             # Reset and go back to search form
@@ -718,6 +1670,36 @@ def run_analysis(name_input, country_input, fuzzy):
     log(f"INTELLIGENCE GATHERED: {media_count} RELEVANT SIGNALS ({official_count} OFFICIAL).",
         "INFO" if media_count > 0 else "WARN")
 
+    # --- EXTRACT AI THREAT ASSESSMENT FROM REPORT ---
+    def extract_ai_threat_level(report_text):
+        """Extract threat level from AI intelligence report (Executive Summary)"""
+        import re
+        if not report_text:
+            return None
+
+        # Search first 1000 chars (Executive Summary section)
+        summary = report_text[:1000].lower()
+
+        # Look for threat/risk level patterns
+        patterns = [
+            r'threat level[:\s]+(high|medium|low)',
+            r'risk level[:\s]+(high|medium|low)',
+            r'overall risk[:\s]+(high|medium|low)',
+            r'assessed as[:\s]+(high|medium|low)\s+(risk|threat)',
+            r'represents a[:\s]+(high|medium|low)\s+risk',
+            r'poses a[:\s]+(high|medium|low)\s+risk',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, summary)
+            if match:
+                level = match.group(1).upper()
+                return 'HIGH' if level == 'HIGH' else 'MEDIUM' if level == 'MEDIUM' else 'LOW'
+
+        return None
+
+    ai_threat = extract_ai_threat_level(report)
+
     # --- THREAT CALCULATION ---
     # Use combined_score instead of API score for more granular threat assessment
     max_score = 0
@@ -733,17 +1715,42 @@ def run_analysis(name_input, country_input, fuzzy):
 
     # New 5-level classification system with granular fuzzy matching
     if not match_exists:
-        # No database matches at all
-        risk_level = "SAFE"
-        risk_class = "safe"
+        # No database matches - check AI assessment
+        if ai_threat == 'HIGH':
+            risk_level = "MID"  # No DB match but AI flags high risk
+            risk_class = "mid"
+            log("AI ASSESSMENT: HIGH RISK (No database match)", "WARN")
+        elif ai_threat == 'MEDIUM':
+            risk_level = "MID"  # No DB match but AI flags medium risk
+            risk_class = "mid"
+            log("AI ASSESSMENT: MEDIUM RISK (No database match)", "WARN")
+        elif ai_threat == 'LOW':
+            risk_level = "LOW"  # No DB match, AI says low risk
+            risk_class = "low"
+            log("AI ASSESSMENT: LOW RISK (No database match)", "INFO")
+        else:
+            risk_level = "SAFE"  # No DB match, no clear AI threat identified
+            risk_class = "safe"
     elif has_low_match:
         # Weak match, likely false positive
-        risk_level = "LOW"
-        risk_class = "low"
+        # But elevate if AI assessment indicates higher risk
+        if ai_threat == 'HIGH' or ai_threat == 'MEDIUM':
+            risk_level = "MID"
+            risk_class = "mid"
+            log(f"AI ASSESSMENT: {ai_threat} RISK + Low fuzzy match → Elevated to MID", "WARN")
+        else:
+            risk_level = "LOW"
+            risk_class = "low"
     elif has_medium_match:
         # Moderate match, requires investigation
-        risk_level = "LOW"
-        risk_class = "low"
+        # Elevate if AI assessment indicates higher risk
+        if ai_threat == 'HIGH':
+            risk_level = "MID"
+            risk_class = "mid"
+            log(f"AI ASSESSMENT: HIGH RISK + Medium fuzzy match → Elevated to MID", "WARN")
+        else:
+            risk_level = "LOW"
+            risk_class = "low"
     elif has_high_match:
         # Strong fuzzy match
         if media_count <= 1:
@@ -772,13 +1779,28 @@ def run_analysis(name_input, country_input, fuzzy):
         risk_class = "low"
 
     # Define threat level descriptions for tooltips
-    threat_descriptions = {
-        "SAFE": "No matches found in sanctions databases. Entity appears clear of federal restrictions.",
-        "LOW": f"Weak or fuzzy database match (score: {max_score:.0f}). Likely false positive or unrelated entity. Manual verification recommended.",
-        "MID": f"Exact database match found (score: {max_score:.0f}) with minimal media coverage ({media_count} source{'s' if media_count != 1 else ''}). Entity is on sanctions list but has low public profile.",
-        "HIGH": f"Exact database match (score: {max_score:.0f}) with significant media coverage ({media_count} sources, {official_count} official). Entity is actively sanctioned with public documentation.",
-        "VERY HIGH": f"Exact database match (score: {max_score:.0f}) with extensive media coverage ({media_count} sources, {official_count} official government sources). Major sanctioned entity with widespread enforcement."
-    }
+    if not match_exists:
+        # No database matches - use AI-driven descriptions
+        if ai_threat in ['HIGH', 'MEDIUM']:
+            threat_descriptions = {
+                "MID": f"No database match, but AI intelligence analysis identifies medium-to-high risk indicators ({media_count} media source{'s' if media_count != 1 else ''} found). Review Info Summary tab for details. Manual investigation recommended.",
+                "LOW": f"No database match. AI analysis suggests low risk profile ({media_count} media source{'s' if media_count != 1 else ''} found). Standard due diligence recommended.",
+                "SAFE": "No matches found in sanctions databases. Entity appears clear of federal restrictions."
+            }
+        else:
+            threat_descriptions = {
+                "LOW": f"No database match. Limited intelligence available ({media_count} media source{'s' if media_count != 1 else ''} found). Manual verification recommended.",
+                "SAFE": "No matches found in sanctions databases. Entity appears clear of federal restrictions."
+            }
+    else:
+        # Database matches exist - use database-driven descriptions
+        threat_descriptions = {
+            "SAFE": "No matches found in sanctions databases. Entity appears clear of federal restrictions.",
+            "LOW": f"Weak or fuzzy database match (score: {max_score:.0f}). Likely false positive or unrelated entity. Manual verification recommended.",
+            "MID": f"Exact database match found (score: {max_score:.0f}) with minimal media coverage ({media_count} source{'s' if media_count != 1 else ''}). Entity is on sanctions list but has low public profile.",
+            "HIGH": f"Exact database match (score: {max_score:.0f}) with significant media coverage ({media_count} sources, {official_count} official). Entity is actively sanctioned with public documentation.",
+            "VERY HIGH": f"Exact database match (score: {max_score:.0f}) with extensive media coverage ({media_count} sources, {official_count} official government sources). Major sanctioned entity with widespread enforcement."
+        }
 
     tooltip_text = threat_descriptions.get(risk_level, "Classification in progress.")
 
@@ -819,8 +1841,8 @@ def run_analysis(name_input, country_input, fuzzy):
         st.markdown(f"<div style='text-align: right; font-family: JetBrains Mono; font-size: 0.9em; color: #64748b; padding-top: 5px;'>CONFIDENCE: {'HIGH' if match_count > 0 else 'STANDARD'}</div>", unsafe_allow_html=True)
 
     # TABS
-    tab1, tab2, tab3 = st.tabs(["[1] ENTITY LIST", "[2] INFO SUMMARY", "[3] NEWS REPORT"])
-    
+    tab1, tab2, tab3, tab4 = st.tabs(["[1] ENTITY LIST", "[2] INFO SUMMARY", "[3] NEWS REPORT", "[4] RELATIONSHIP DIAGRAM"])
+
     # TAB 1: DB RECORDS
     with tab1:
         if match_exists:
@@ -961,7 +1983,8 @@ def run_analysis(name_input, country_input, fuzzy):
         # Report and PDF are already generated in cached data
         c_rep, c_dl = st.columns([5, 1])
         with c_rep:
-            st.markdown(report)
+            # Escape dollar signs and other problematic markdown characters
+            st.markdown(escape_markdown_for_display(report))
         with c_dl:
             st.download_button("DOWNLOAD PDF", pdf_bytes, f"{final_query_name}_INTEL.pdf", "application/pdf", use_container_width=True)
 
@@ -1008,19 +2031,324 @@ def run_analysis(name_input, country_input, fuzzy):
             </div>
             """, unsafe_allow_html=True)
 
+    # TAB 4: RELATIONSHIP DIAGRAM
+    with tab4:
+        # Disclaimer banner
+        st.markdown("""
+        <div class="alert-box alert-info">
+            <strong>ℹ INFO:</strong> This relationship diagram is built from available data including corporate filings,
+            ownership structures, and related party information. Entity network coverage may vary based on data availability.
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Fetch financial intelligence data for the entity
+        directors_single = db.get_directors(company_name=final_query_name)
+        shareholders_single = db.get_shareholders(company_name=final_query_name)
+        transactions_single = db.get_transactions(company_name=final_query_name)
+
+        # Check if we have any relationship data
+        if not directors_single and not shareholders_single and not transactions_single:
+            st.info("No relationship data available for this entity. Relationship diagrams require corporate structure data from SEC filings or other sources.")
+        else:
+            # Build graph from available data
+            with st.spinner("Building relationship network..."):
+                parent_info_single = {'jurisdiction': 'Unknown', 'status': 'Active'}
+                graph_single = gb.build_entity_graph(
+                    company_name=final_query_name,
+                    subsidiaries=[],
+                    sisters=[],
+                    directors=directors_single,
+                    shareholders=shareholders_single,
+                    transactions=transactions_single,
+                    parent_info=parent_info_single
+                )
+
+            # Get graph statistics
+            stats_single = gb.get_graph_statistics(graph_single)
+
+            # Display quick stats
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Entities", stats_single['total_nodes'])
+            with col2:
+                st.metric("Relationships", stats_single['total_edges'])
+            with col3:
+                st.metric("Countries", stats_single['num_countries'])
+            with col4:
+                if stats_single['most_connected']:
+                    st.metric("Most Connected", stats_single['most_connected'][:15] + "..." if len(stats_single['most_connected']) > 15 else stats_single['most_connected'])
+
+            # Sub-tabs for different visualizations
+            viz_tab1_single, viz_tab2_single = st.tabs(["🔗 Network View", "🌍 Geographic View"])
+
+            with viz_tab1_single:
+                st.markdown("<div class='alert-box alert-info'>Interactive Neo4j-style network - Drag nodes, scroll to zoom, click to explore relationships</div>", unsafe_allow_html=True)
+
+                # Filter controls
+                col1, col2 = st.columns(2)
+                with col1:
+                    show_directors_single = st.checkbox("Show Directors", value=True, key="show_directors_single")
+                with col2:
+                    show_shareholders_single = st.checkbox("Show Shareholders", value=True, key="show_shareholders_single")
+
+                # Filter graph
+                filtered_graph_single = gb.filter_graph(graph_single, show_directors_single, show_shareholders_single, True)
+
+                # Create and display interactive network diagram
+                network_html_single = viz.create_interactive_network(
+                    filtered_graph_single,
+                    title=f"Entity Relationship Network: {final_query_name}",
+                    height="700px"
+                )
+                components.html(network_html_single, height=750, scrolling=True)
+
+            with viz_tab2_single:
+                # Create and display geographic map
+                geo_map_single = viz.create_geographic_map(filtered_graph_single, title=f"Geographic Distribution: {final_query_name}")
+                components.html(geo_map_single._repr_html_(), height=650)
+
+            # Graph Explorer
+            with st.expander("📊 EXPLORE GRAPH DATABASE"):
+                st.markdown("### Graph Statistics")
+
+                # Display detailed statistics
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"""
+                    **Network Composition:**
+                    - Total Nodes: {stats_single['total_nodes']}
+                    - Companies: {stats_single['companies']}
+                    - People: {stats_single['people']}
+                    - Total Relationships: {stats_single['total_edges']}
+                    """)
+                with col2:
+                    st.markdown(f"""
+                    **Geographic Distribution:**
+                    - Countries Represented: {stats_single['num_countries']}
+                    - Countries: {', '.join(stats_single['countries'][:5])}{'...' if len(stats_single['countries']) > 5 else ''}
+                    """)
+
+                st.markdown("---")
+                st.markdown("### Relationship Explorer")
+
+                # Entity selector
+                node_list_single = list(filtered_graph_single.nodes())
+                if node_list_single:
+                    selected_entity_single = st.selectbox("Select Entity to Explore", node_list_single, key="entity_explorer_single")
+
+                    if selected_entity_single:
+                        # Get neighbors
+                        neighbors_single = gb.get_neighbors_table(filtered_graph_single, selected_entity_single)
+
+                        if neighbors_single:
+                            st.markdown(f"**Showing {len(neighbors_single)} relationships for {selected_entity_single}:**")
+
+                            # Convert to DataFrame for display
+                            df_neighbors_single = pd.DataFrame(neighbors_single)
+                            st.dataframe(df_neighbors_single, use_container_width=True, hide_index=True)
+                        else:
+                            st.info(f"No relationships found for {selected_entity_single}")
+
+                st.markdown("---")
+                st.markdown("### Path Finder")
+
+                # Path finder
+                col1, col2 = st.columns(2)
+                with col1:
+                    source_entity_single = st.selectbox("From Entity", node_list_single, key="path_source_single")
+                with col2:
+                    target_entity_single = st.selectbox("To Entity", node_list_single, key="path_target_single")
+
+                if st.button("Find Paths", key="find_paths_single"):
+                    if source_entity_single and target_entity_single and source_entity_single != target_entity_single:
+                        paths_single = gb.find_paths(filtered_graph_single, source_entity_single, target_entity_single, max_paths=5)
+
+                        if paths_single:
+                            st.success(f"Found {len(paths_single)} path(s) between {source_entity_single} and {target_entity_single}:")
+                            for i, path in enumerate(paths_single, 1):
+                                path_str = " → ".join(path)
+                                st.markdown(f"**Path {i}:** {path_str}")
+                        else:
+                            st.warning(f"No paths found between {source_entity_single} and {target_entity_single}")
+                    else:
+                        st.warning("Please select two different entities")
+
+    # --- SAVE & EXPORT SECTION ---
+    st.markdown("---")
+    st.markdown("### 💾 SAVE & EXPORT")
+
+    # Prepare search data for saving
+    search_data_to_save = {
+        'entity_name': final_query_name,
+        'translated_name': final_query_name if final_query_name != name_input else None,
+        'search_params': {
+            'country': country_input,
+            'fuzzy': fuzzy,
+            'conglomerate': st.session_state.get('search_conglomerate', False),
+            'reverse_search': st.session_state.get('reverse_search', False),
+            'search_depth': st.session_state.get('search_depth', 1),
+            'ownership_threshold': st.session_state.get('ownership_threshold', 0.0)
+        },
+        'results': {
+            'us_results': us_results,
+            'media_hits': media_hits,
+            'report': report,
+            'pdf_bytes': pdf_bytes,
+            'conglomerate_data': st.session_state.get('related_companies_found')
+        }
+    }
+
+    # Auto-save functionality
+    if st.session_state.auto_save_enabled and not st.session_state.get(f'auto_saved_{analysis_id}', False):
+        # Generate search ID
+        search_id = serializer.generate_search_id()
+
+        # Serialize parameters and results
+        serialized_params = serializer.serialize_search_params(search_data_to_save['search_params'])
+        serialized_results = serializer.serialize_search_results(search_data_to_save['results'])
+        summary_metrics = serializer.calculate_summary_metrics(search_data_to_save['results'])
+
+        # Save to database
+        success = db.save_search_results(
+            search_id=search_id,
+            entity_name=final_query_name,
+            translated_name=search_data_to_save['translated_name'],
+            search_params=serialized_params,
+            results_data=serialized_results,
+            summary_metrics=summary_metrics,
+            user_metadata={'notes': '', 'tags': '[]', 'is_auto_saved': 1}
+        )
+
+        if success:
+            st.session_state[f'auto_saved_{analysis_id}'] = True
+            st.session_state.current_search_id = search_id
+            st.toast(f"✓ Search auto-saved (ID: {search_id[:12]}...)")
+
+    # Manual save and export buttons
+    col_save1, col_save2, col_save3, col_save4 = st.columns(4)
+
+    with col_save1:
+        if st.button("💾 SAVE SEARCH", use_container_width=True, help="Save this search with notes and tags"):
+            st.session_state.show_save_dialog = True
+
+    with col_save2:
+        if st.session_state.get('current_search_id'):
+            # Show export options if search is saved
+            if st.button("📤 EXPORT", use_container_width=True, help="Export search as JSON, Excel, or PDF"):
+                st.session_state.show_export_dialog = True
+
+    with col_save3:
+        # Auto-save status indicator
+        if st.session_state.auto_save_enabled:
+            st.markdown("<div class='alert-box alert-success' style='padding: 8px; text-align: center;'>✓ AUTO-SAVED</div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div class='alert-box alert-info' style='padding: 8px; text-align: center;'>MANUAL MODE</div>", unsafe_allow_html=True)
+
+    # Save dialog
+    if st.session_state.get('show_save_dialog', False):
+        with st.form("save_search_form"):
+            st.markdown("#### Save Search")
+            notes = st.text_area("Notes (optional)", placeholder="Add notes about this search...")
+            tags = st.text_input("Tags (comma-separated)", placeholder="high-priority, q1-2026, compliance")
+
+            col_submit, col_cancel = st.columns(2)
+            with col_submit:
+                submitted = st.form_submit_button("💾 Save", use_container_width=True)
+            with col_cancel:
+                cancelled = st.form_submit_button("Cancel", use_container_width=True)
+
+            if submitted:
+                # Generate search ID
+                search_id = serializer.generate_search_id()
+
+                # Serialize parameters and results
+                serialized_params = serializer.serialize_search_params(search_data_to_save['search_params'])
+                serialized_results = serializer.serialize_search_results(search_data_to_save['results'])
+                summary_metrics = serializer.calculate_summary_metrics(search_data_to_save['results'])
+
+                # Parse tags
+                tags_json = serializer.parse_tags(tags)
+
+                # Save to database
+                success = db.save_search_results(
+                    search_id=search_id,
+                    entity_name=final_query_name,
+                    translated_name=search_data_to_save['translated_name'],
+                    search_params=serialized_params,
+                    results_data=serialized_results,
+                    summary_metrics=summary_metrics,
+                    user_metadata={'notes': notes, 'tags': tags_json, 'is_auto_saved': 0}
+                )
+
+                if success:
+                    st.success(f"✓ Search saved! ID: {search_id}")
+                    st.session_state.current_search_id = search_id
+                    st.session_state.show_save_dialog = False
+                    st.rerun()
+                else:
+                    st.error("Failed to save search")
+
+            if cancelled:
+                st.session_state.show_save_dialog = False
+                st.rerun()
+
+    # Export dialog
+    if st.session_state.get('show_export_dialog', False) and st.session_state.get('current_search_id'):
+        st.markdown("#### Export Options")
+
+        # Load full search data for export
+        search_id = st.session_state.current_search_id
+        saved_search = db.load_search_results(search_id)
+
+        if saved_search:
+            # Reconstruct search data for export
+            export_data = {
+                'search_id': search_id,
+                'timestamp': saved_search['timestamp'],
+                'entity_name': saved_search['entity_name'],
+                'risk_level': saved_search['risk_level'],
+                'match_count': saved_search['match_count'],
+                'subsidiary_count': saved_search['subsidiary_count'],
+                'sister_count': saved_search['sister_count'],
+                'country_filter': saved_search['country_filter'],
+                'fuzzy_search': saved_search['fuzzy_search'],
+                'notes': saved_search['notes'],
+                'results': serializer.deserialize_search_results(saved_search)
+            }
+
+            col_exp1, col_exp2, col_exp3 = st.columns(3)
+
+            with col_exp1:
+                exporter.create_download_button_json(search_id, export_data, saved_search['entity_name'])
+
+            with col_exp2:
+                exporter.create_download_button_excel(search_id, export_data, saved_search['entity_name'])
+
+            with col_exp3:
+                exporter.create_download_button_pdf(search_id, export_data, saved_search['entity_name'])
+
+            if st.button("Close Export", use_container_width=True):
+                st.session_state.show_export_dialog = False
+                st.rerun()
+
     # --- FOOTER ---
     st.markdown("---")
 
-    with st.expander("📜 SEARCH HISTORY"):
-        if st.button("REFRESH LOGS"):
-            st.dataframe(db.get_analysis_history(20), use_container_width=True, hide_index=True)
-        else:
-            st.dataframe(db.get_analysis_history(5), use_container_width=True, hide_index=True)
+    with st.expander("📜 SAVED SEARCH HISTORY"):
+        display_search_history()
 
-def display_entity_results(entity_name, data, country_input, fuzzy):
+def display_entity_results(entity_name, data, country_input, fuzzy, conglomerate_context=None):
     """
     Display results for a single entity (reusable for both single and conglomerate searches).
     This is extracted from run_analysis() for code reuse.
+
+    Args:
+        entity_name: Name of the entity being displayed
+        data: Analysis data for the entity
+        country_input: Country filter
+        fuzzy: Fuzzy search flag
+        conglomerate_context: Optional dict with {'parent': str, 'subsidiaries': list, 'sisters': list}
+                            for relationship diagram in conglomerate mode
     """
     final_query_name = data['final_query_name']
     us_results = data['us_results']
@@ -1088,7 +2416,7 @@ def display_entity_results(entity_name, data, country_input, fuzzy):
         st.markdown(f"<div style='text-align: right; font-family: JetBrains Mono; font-size: 0.9em; color: #64748b; padding-top: 5px;'>MATCHES: {match_count}</div>", unsafe_allow_html=True)
 
     # TABS (same as run_analysis but simplified)
-    tab1, tab2, tab3 = st.tabs(["[1] ENTITY LIST", "[2] INFO SUMMARY", "[3] NEWS REPORT"])
+    tab1, tab2, tab3, tab4 = st.tabs(["[1] ENTITY LIST", "[2] INFO SUMMARY", "[3] NEWS REPORT", "[4] RELATIONSHIP DIAGRAM"])
 
     with tab1:
         if match_exists:
@@ -1144,7 +2472,8 @@ def display_entity_results(entity_name, data, country_input, fuzzy):
             st.markdown('<div class="alert-box alert-success">[SYSTEM] NO MATCHES FOUND</div>', unsafe_allow_html=True)
 
     with tab2:
-        st.markdown(report)
+        # Escape dollar signs and other problematic markdown characters
+        st.markdown(escape_markdown_for_display(report))
 
     with tab3:
         if media_count > 0:
@@ -1164,6 +2493,123 @@ def display_entity_results(entity_name, data, country_input, fuzzy):
                 """, unsafe_allow_html=True)
         else:
             st.markdown('<div class="alert-box alert-info">[SYSTEM] NO MEDIA DETECTED</div>', unsafe_allow_html=True)
+
+    # TAB 4: RELATIONSHIP DIAGRAM (for display_entity_results)
+    with tab4:
+        st.markdown("""
+        <div class="alert-box alert-info">
+            <strong>ℹ INFO:</strong> This relationship diagram shows connections from available corporate data.
+            Coverage varies based on data availability in SEC filings and other sources.
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Fetch financial intelligence data
+        directors_display = db.get_directors(company_name=final_query_name)
+        shareholders_display = db.get_shareholders(company_name=final_query_name)
+        transactions_display = db.get_transactions(company_name=final_query_name)
+
+        # Determine if we have relationship data to display
+        graph_display = None
+
+        # If conglomerate context is provided, use it for the diagram
+        if conglomerate_context:
+            # Build graph with full conglomerate structure
+            with st.spinner("Building relationship network..."):
+                parent_info_display = {'jurisdiction': 'Unknown', 'status': 'Active'}
+                graph_display = gb.build_entity_graph(
+                    company_name=conglomerate_context['parent'],
+                    subsidiaries=conglomerate_context.get('subsidiaries', []),
+                    sisters=conglomerate_context.get('sisters', []),
+                    directors=directors_display,
+                    shareholders=shareholders_display,
+                    transactions=transactions_display,
+                    parent_info=parent_info_display
+                )
+
+        # Check if we have any relationship data for single entity mode
+        elif not directors_display and not shareholders_display and not transactions_display:
+            st.info("No relationship data available for this entity. Relationship diagrams require corporate structure data from SEC filings or other sources.")
+        else:
+            # Build graph from available data (single entity mode)
+            with st.spinner("Building relationship network..."):
+                parent_info_display = {'jurisdiction': 'Unknown', 'status': 'Active'}
+                graph_display = gb.build_entity_graph(
+                    company_name=final_query_name,
+                    subsidiaries=[],
+                    sisters=[],
+                    directors=directors_display,
+                    shareholders=shareholders_display,
+                    transactions=transactions_display,
+                    parent_info=parent_info_display
+                )
+
+        # If graph was built, display visualizations
+        if graph_display:
+            # Get graph statistics
+            stats_display = gb.get_graph_statistics(graph_display)
+
+            # Display quick stats
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Entities", stats_display['total_nodes'])
+            with col2:
+                st.metric("Relationships", stats_display['total_edges'])
+            with col3:
+                st.metric("Countries", stats_display['num_countries'])
+            with col4:
+                if stats_display['most_connected']:
+                    st.metric("Most Connected", stats_display['most_connected'][:15] + "..." if len(stats_display['most_connected']) > 15 else stats_display['most_connected'])
+
+            # Sub-tabs for different visualizations
+            viz_tab1_display, viz_tab2_display = st.tabs(["🔗 Network View", "🌍 Geographic View"])
+
+            with viz_tab1_display:
+                st.markdown("<div class='alert-box alert-info'>Interactive Neo4j-style network - Drag nodes, scroll to zoom, click to explore relationships</div>", unsafe_allow_html=True)
+
+                # Filter controls
+                col1, col2 = st.columns(2)
+                with col1:
+                    show_directors_display = st.checkbox("Show Directors", value=True, key=f"show_directors_display_{final_query_name}")
+                with col2:
+                    show_shareholders_display = st.checkbox("Show Shareholders", value=True, key=f"show_shareholders_display_{final_query_name}")
+
+                # Filter graph
+                filtered_graph_display = gb.filter_graph(graph_display, show_directors_display, show_shareholders_display, True)
+
+                # Create and display interactive network diagram
+                network_html_display = viz.create_interactive_network(
+                    filtered_graph_display,
+                    title=f"Entity Relationship Network: {final_query_name}",
+                    height="700px"
+                )
+                components.html(network_html_display, height=750, scrolling=True)
+
+            with viz_tab2_display:
+                # Create and display geographic map
+                geo_map_display = viz.create_geographic_map(filtered_graph_display, title=f"Geographic Distribution: {final_query_name}")
+                components.html(geo_map_display._repr_html_(), height=650)
+
+            # Graph Explorer (simplified for individual entity view)
+            with st.expander("📊 EXPLORE GRAPH DATABASE"):
+                st.markdown("### Relationship Explorer")
+
+                # Entity selector
+                node_list_display = list(filtered_graph_display.nodes())
+                if node_list_display:
+                    selected_entity_display = st.selectbox("Select Entity to Explore", node_list_display, key=f"entity_explorer_display_{final_query_name}")
+
+                    if selected_entity_display:
+                        # Get neighbors
+                        neighbors_display = gb.get_neighbors_table(filtered_graph_display, selected_entity_display)
+
+                        if neighbors_display:
+                            st.markdown(f"**Showing {len(neighbors_display)} relationships for {selected_entity_display}:**")
+
+                            # Convert to DataFrame for display
+                            df_neighbors_display = pd.DataFrame(neighbors_display)
+                            st.dataframe(df_neighbors_display, use_container_width=True, hide_index=True)
+                        else:
+                            st.info(f"No relationships found for {selected_entity_display}")
 
 def run_conglomerate_analysis(parent_company, selected_subsidiaries, country_input, fuzzy):
     """
@@ -1243,6 +2689,176 @@ def run_conglomerate_analysis(parent_company, selected_subsidiaries, country_inp
     </div>
     """, unsafe_allow_html=True)
 
+    # === CONGLOMERATE RELATIONSHIP DIAGRAM ===
+    st.markdown("---")
+    st.markdown("### 🔗 Conglomerate Relationship Network")
+
+    # Fetch financial intelligence data for the parent company
+    directors = db.get_directors(company_name=parent_company)
+    shareholders = db.get_shareholders(company_name=parent_company)
+    transactions = db.get_transactions(company_name=parent_company)
+
+    # Build graph from conglomerate data
+    with st.spinner("Building conglomerate relationship network..."):
+        # Convert entities_to_search to subsidiaries/sisters format
+        subsidiaries_list = []
+        sisters_list = []
+
+        for entity in entities_to_search:
+            if entity['type'] == 'PARENT':
+                continue
+            elif entity.get('relationship') == 'sister':
+                sisters_list.append({
+                    'name': entity['name'],
+                    'jurisdiction': entity.get('jurisdiction', 'Unknown'),
+                    'status': 'Active',
+                    'level': entity.get('level', 1)
+                })
+            else:  # SUBSIDIARY
+                subsidiaries_list.append({
+                    'name': entity['name'],
+                    'jurisdiction': entity.get('jurisdiction', 'Unknown'),
+                    'status': 'Active',
+                    'level': entity.get('level', 1)
+                })
+
+        parent_info = {'jurisdiction': 'Unknown', 'status': 'Active'}
+        graph = gb.build_entity_graph(
+            company_name=parent_company,
+            subsidiaries=subsidiaries_list,
+            sisters=sisters_list,
+            directors=directors,
+            shareholders=shareholders,
+            transactions=transactions,
+            parent_info=parent_info
+        )
+
+    # Get graph statistics
+    stats = gb.get_graph_statistics(graph)
+
+    # Display quick stats
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Entities", stats['total_nodes'])
+    with col2:
+        st.metric("Relationships", stats['total_edges'])
+    with col3:
+        st.metric("Countries", stats['num_countries'])
+    with col4:
+        if stats['most_connected']:
+            st.metric("Most Connected", stats['most_connected'][:15] + "..." if len(stats['most_connected']) > 15 else stats['most_connected'])
+
+    # Sub-tabs for different visualizations
+    viz_tab1, viz_tab2 = st.tabs(["🔗 Network View", "🌍 Geographic View"])
+
+    with viz_tab1:
+        st.markdown("<div class='alert-box alert-info'>Interactive Neo4j-style network - Drag nodes, scroll to zoom, physics-based layout automatically arranges entities</div>", unsafe_allow_html=True)
+
+        # Filter controls
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            show_directors_cong = st.checkbox("Show Directors", value=True, key="show_directors_cong")
+        with col2:
+            show_shareholders_cong = st.checkbox("Show Shareholders", value=True, key="show_shareholders_cong")
+        with col3:
+            # Country filter
+            all_countries = ['All'] + stats['countries']
+            country_filter = st.selectbox("Filter by Country", all_countries, key="country_filter_cong")
+
+        # Filter graph
+        filtered_graph_cong = gb.filter_graph(
+            graph,
+            show_directors_cong,
+            show_shareholders_cong,
+            True,
+            country_filter if country_filter != 'All' else None
+        )
+
+        # Create and display interactive network diagram
+        network_html_cong = viz.create_interactive_network(
+            filtered_graph_cong,
+            title=f"Conglomerate Network: {parent_company}",
+            height="700px"
+        )
+        components.html(network_html_cong, height=750, scrolling=True)
+
+    with viz_tab2:
+        st.markdown("<div class='alert-box alert-info'>Geographic distribution showing entity locations and cross-border relationships</div>", unsafe_allow_html=True)
+
+        # Create and display geographic map
+        geo_map_cong = viz.create_geographic_map(filtered_graph_cong, title=f"Geographic Distribution: {parent_company} Conglomerate")
+        components.html(geo_map_cong._repr_html_(), height=650)
+
+    # Graph Explorer
+    with st.expander("📊 EXPLORE GRAPH DATABASE"):
+        st.markdown("### Graph Statistics")
+
+        # Display detailed statistics
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"""
+            **Network Composition:**
+            - Total Nodes: {stats['total_nodes']}
+            - Companies: {stats['companies']}
+            - People: {stats['people']}
+            - Total Relationships: {stats['total_edges']}
+            """)
+        with col2:
+            st.markdown(f"""
+            **Geographic Distribution:**
+            - Countries Represented: {stats['num_countries']}
+            - Countries: {', '.join(stats['countries'][:5])}{'...' if len(stats['countries']) > 5 else ''}
+            """)
+
+        st.markdown("---")
+        st.markdown("### Relationship Explorer")
+
+        # Entity selector
+        node_list_cong = list(filtered_graph_cong.nodes())
+        if node_list_cong:
+            selected_entity_cong = st.selectbox("Select Entity to Explore", node_list_cong, key="entity_explorer_cong")
+
+            if selected_entity_cong:
+                # Get neighbors
+                neighbors_cong = gb.get_neighbors_table(filtered_graph_cong, selected_entity_cong)
+
+                if neighbors_cong:
+                    st.markdown(f"**Showing {len(neighbors_cong)} relationships for {selected_entity_cong}:**")
+
+                    # Convert to DataFrame for display
+                    df_neighbors_cong = pd.DataFrame(neighbors_cong)
+                    st.dataframe(df_neighbors_cong, use_container_width=True, hide_index=True)
+                else:
+                    st.info(f"No relationships found for {selected_entity_cong}")
+
+        st.markdown("---")
+        st.markdown("### Path Finder")
+
+        # Path finder
+        col1, col2 = st.columns(2)
+        with col1:
+            source_entity_cong = st.selectbox("From Entity", node_list_cong, key="path_source_cong")
+        with col2:
+            target_entity_cong = st.selectbox("To Entity", node_list_cong, key="path_target_cong")
+
+        if st.button("Find Paths", key="find_paths_cong"):
+            if source_entity_cong and target_entity_cong and source_entity_cong != target_entity_cong:
+                paths_cong = gb.find_paths(filtered_graph_cong, source_entity_cong, target_entity_cong, max_paths=5)
+
+                if paths_cong:
+                    st.success(f"Found {len(paths_cong)} path(s) between {source_entity_cong} and {target_entity_cong}:")
+                    for i, path in enumerate(paths_cong, 1):
+                        path_str = " → ".join(path)
+                        st.markdown(f"**Path {i}:** {path_str}")
+                else:
+                    st.warning(f"No paths found between {source_entity_cong} and {target_entity_cong}")
+            else:
+                st.warning("Please select two different entities")
+
+    st.markdown("---")
+    st.markdown("### 📋 Individual Entity Analysis")
+    st.markdown("<div class='alert-box alert-info'>Detailed sanctions screening results for each entity in the conglomerate</div>", unsafe_allow_html=True)
+
     # Display each entity's results
     for result in all_entity_results:
         entity = result['entity']
@@ -1263,7 +2879,13 @@ def run_conglomerate_analysis(parent_company, selected_subsidiaries, country_inp
 
         with st.expander(f"{entity_label}: {entity['name']} - {match_count} matches", expanded=(match_count > 0)):
             # Display results using same format as run_analysis
-            display_entity_results(entity['name'], data, country_input, fuzzy)
+            # Pass conglomerate context so relationship diagram shows parent-sister structure
+            conglomerate_ctx = {
+                'parent': parent_company,
+                'subsidiaries': subsidiaries_list,
+                'sisters': sisters_list
+            }
+            display_entity_results(entity['name'], data, country_input, fuzzy, conglomerate_context=conglomerate_ctx)
 
     # Log to database
     db.log_analysis_run(
