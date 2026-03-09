@@ -166,8 +166,32 @@ def display_treemap(graph, parent_company, key_prefix):
             height=750
         )
         print(f"[DISPLAY_TREEMAP DEBUG] Treemap created successfully")
-        st.plotly_chart(fig, use_container_width=True)
-        print(f"[DISPLAY_TREEMAP DEBUG] Plotly chart displayed")
+        print(f"[DISPLAY_TREEMAP DEBUG] Figure data length: {len(fig.data)}")
+        print(f"[DISPLAY_TREEMAP DEBUG] Figure layout: {fig.layout}")
+
+        # Use config to ensure proper rendering
+        config = {
+            'displayModeBar': True,
+            'displaylogo': False,
+            'modeBarButtonsToRemove': ['pan2d', 'lasso2d']
+        }
+
+        # Display with explicit key and config
+        st.plotly_chart(
+            fig,
+            use_container_width=True,
+            key=f"{key_prefix}_treemap",
+            config=config
+        )
+        print(f"[DISPLAY_TREEMAP DEBUG] Plotly chart displayed with key: {key_prefix}_treemap")
+
+        # Show a simple test to verify Plotly is working
+        if st.checkbox("Debug: Show simple test chart", value=False, key=f"{key_prefix}_debug_test"):
+            import plotly.graph_objects as go
+            test_fig = go.Figure(go.Bar(x=[1, 2, 3], y=[4, 5, 6]))
+            test_fig.update_layout(title="Test Chart", height=300)
+            st.plotly_chart(test_fig, use_container_width=True, key=f"{key_prefix}_test_chart")
+            st.info("If you can see the test bar chart above but not the treemap, there's an issue with the treemap data structure.")
     except Exception as e:
         print(f"[DISPLAY_TREEMAP ERROR] {type(e).__name__}: {str(e)}")
         import traceback

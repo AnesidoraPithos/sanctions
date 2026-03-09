@@ -515,8 +515,13 @@ def create_treemap_visualization(
         plot_bgcolor='#0b1121',
         paper_bgcolor='#0b1121',
         height=height,
-        margin=dict(t=60, l=10, r=10, b=10)
+        width=None,  # Let Streamlit handle width
+        margin=dict(t=60, l=10, r=10, b=10),
+        autosize=True
     )
+
+    print(f"[TREEMAP DEBUG] Figure created with {len(fig.data)} data traces")
+    print(f"[TREEMAP DEBUG] Treemap has {len(labels)} labels in total")
 
     return fig
 
