@@ -31,8 +31,11 @@ def create_collapsible_tree(
     Returns:
         HTML string with interactive collapsible tree
     """
+    print(f"[COLLAPSIBLE_TREE DEBUG] Creating tree for graph with {G.number_of_nodes()} nodes")
+
     # Convert NetworkX graph to hierarchical JSON structure
     tree_data = graph_to_tree_json(G)
+    print(f"[COLLAPSIBLE_TREE DEBUG] Tree data created: {list(tree_data.keys())}")
 
     # Color mappings
     SEARCHED_ENTITY_COLOR = '#ef4444'
@@ -343,6 +346,83 @@ def create_collapsible_tree(
     """
 
     return html
+
+
+def create_simple_treemap(
+    G: nx.MultiDiGraph,
+    title: str = "Entity Treemap (Simple)",
+    height: int = 800
+) -> go.Figure:
+    """
+    Create a simple flat treemap without country grouping.
+    Fallback for when complex hierarchical treemap doesn't render.
+    """
+    print(f"[SIMPLE_TREEMAP DEBUG] Creating simple treemap for {G.number_of_nodes()} nodes")
+
+    labels = []
+    parents = []
+    values = []
+    colors = []
+    hover_texts = []
+
+    # Simple flat structure - all nodes under root
+    root_nodes = [n for n in G.nodes() if G.in_degree(n) == 0]
+    if not root_nodes:
+        parent_nodes = [n for n, attrs in G.nodes(data=True) if attrs.get('node_type') == 'parent']
+        root_nodes = parent_nodes if parent_nodes else [list(G.nodes())[0]]
+
+    root_node = root_nodes[0]
+
+    # Add root
+    labels.append(root_node)
+    parents.append("")
+    values.append(1)
+    colors.append('#0ea5e9')
+    hover_texts.append(f"<b>{root_node}</b><br>Parent Company")
+
+    # Add all other nodes as direct children of root
+    for node, attrs in G.nodes(data=True):
+        if node == root_node:
+            continue
+
+        labels.append(node)
+        parents.append(root_node)
+        values.append(1)
+
+        is_searched = attrs.get('is_searched_entity', False)
+        if is_searched:
+            colors.append('#ef4444')
+        else:
+            colors.append('#10b981')
+
+        jurisdiction = attrs.get('jurisdiction', 'Unknown')
+        node_type = attrs.get('node_type', 'unknown')
+        hover_text = f"<b>{node}</b><br>Type: {node_type}<br>Jurisdiction: {jurisdiction}"
+        hover_texts.append(hover_text)
+
+    print(f"[SIMPLE_TREEMAP DEBUG] Created {len(labels)} items")
+
+    fig = go.Figure(go.Treemap(
+        labels=labels,
+        parents=parents,
+        values=values,
+        marker=dict(colors=colors, line=dict(width=2, color='#0b1121')),
+        text=labels,
+        hovertext=hover_texts,
+        hoverinfo='text',
+        textposition='middle center',
+        textfont=dict(size=10, color='white')
+    ))
+
+    fig.update_layout(
+        title=dict(text=title, x=0.5, xanchor='center', font=dict(size=20, color='white')),
+        plot_bgcolor='#0b1121',
+        paper_bgcolor='#0b1121',
+        height=height,
+        margin=dict(t=60, l=10, r=10, b=10)
+    )
+
+    return fig
 
 
 def create_treemap_visualization(

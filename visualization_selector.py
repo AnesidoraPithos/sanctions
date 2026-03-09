@@ -158,16 +158,32 @@ def display_treemap(graph, parent_company, key_prefix):
     print(f"[DISPLAY_TREEMAP DEBUG] Graph has {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges")
     print(f"[DISPLAY_TREEMAP DEBUG] Parent company: {parent_company}")
 
+    # Try complex treemap first, fall back to simple if needed
+    use_simple = st.checkbox("Use simplified treemap (if complex version doesn't show)", value=False, key=f"{key_prefix}_use_simple")
+
     # Create treemap
     try:
-        fig = viz_adv.create_treemap_visualization(
-            graph,
-            title=f"Entity Treemap: {parent_company}",
-            height=750
-        )
+        if use_simple:
+            st.info("Using simplified treemap layout (flat structure)")
+            fig = viz_adv.create_simple_treemap(
+                graph,
+                title=f"Entity Treemap (Simple): {parent_company}",
+                height=750
+            )
+        else:
+            fig = viz_adv.create_treemap_visualization(
+                graph,
+                title=f"Entity Treemap: {parent_company}",
+                height=750
+            )
+
         print(f"[DISPLAY_TREEMAP DEBUG] Treemap created successfully")
-        print(f"[DISPLAY_TREEMAP DEBUG] Figure data length: {len(fig.data)}")
-        print(f"[DISPLAY_TREEMAP DEBUG] Figure layout: {fig.layout}")
+        print(f"[DISPLAY_TREEMAP DEBUG] Figure has {len(fig.data)} data traces")
+
+        if len(fig.data) > 0:
+            treemap_data = fig.data[0]
+            print(f"[DISPLAY_TREEMAP DEBUG] Treemap data type: {type(treemap_data)}")
+            print(f"[DISPLAY_TREEMAP DEBUG] Number of labels: {len(treemap_data.labels) if hasattr(treemap_data, 'labels') else 'N/A'}")
 
         # Use config to ensure proper rendering
         config = {
@@ -176,27 +192,43 @@ def display_treemap(graph, parent_company, key_prefix):
             'modeBarButtonsToRemove': ['pan2d', 'lasso2d']
         }
 
-        # Display with explicit key and config
-        st.plotly_chart(
-            fig,
-            use_container_width=True,
-            key=f"{key_prefix}_treemap",
-            config=config
-        )
-        print(f"[DISPLAY_TREEMAP DEBUG] Plotly chart displayed with key: {key_prefix}_treemap")
+        # Try rendering as HTML instead of using st.plotly_chart
+        try:
+            # Method 1: Standard st.plotly_chart
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                key=f"{key_prefix}_treemap_{use_simple}",
+                config=config
+            )
+            print(f"[DISPLAY_TREEMAP DEBUG] Plotly chart displayed via st.plotly_chart")
+        except:
+            # Method 2: Fallback to HTML rendering
+            st.warning("Standard Plotly rendering failed, trying HTML rendering...")
+            html_str = fig.to_html(include_plotlyjs='cdn', config=config)
+            components.html(html_str, height=800, scrolling=True)
+            print(f"[DISPLAY_TREEMAP DEBUG] Plotly chart displayed via components.html")
 
         # Show a simple test to verify Plotly is working
-        if st.checkbox("Debug: Show simple test chart", value=False, key=f"{key_prefix}_debug_test"):
+        if st.checkbox("Debug: Show test bar chart", value=False, key=f"{key_prefix}_debug_test"):
             import plotly.graph_objects as go
             test_fig = go.Figure(go.Bar(x=[1, 2, 3], y=[4, 5, 6]))
-            test_fig.update_layout(title="Test Chart", height=300)
+            test_fig.update_layout(
+                title="Test Bar Chart",
+                height=300,
+                plot_bgcolor='#0b1121',
+                paper_bgcolor='#0b1121',
+                font=dict(color='white')
+            )
             st.plotly_chart(test_fig, use_container_width=True, key=f"{key_prefix}_test_chart")
-            st.info("If you can see the test bar chart above but not the treemap, there's an issue with the treemap data structure.")
+            st.info("✓ If you see this bar chart, Plotly rendering works. If treemap still doesn't show, the issue is with treemap data structure.")
+
     except Exception as e:
         print(f"[DISPLAY_TREEMAP ERROR] {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
         st.error(f"Error creating treemap: {str(e)}")
+        st.warning("Treemap failed to render. Try using a different visualization type from the dropdown above.")
 
     with st.expander("💡 How to Read This Treemap"):
         st.markdown("""
