@@ -1467,16 +1467,50 @@ def display_subsidiary_selection(parent_company, depth):
                     if entity_transactions:
                         all_transactions.extend(entity_transactions)
 
-            parent_info = {'jurisdiction': 'Unknown', 'status': 'Active'}
-            graph = gb.build_entity_graph(
-                company_name=parent_company,
-                subsidiaries=subsidiaries,
-                sisters=sisters,
-                directors=all_directors,
-                shareholders=all_shareholders,
-                transactions=all_transactions,
-                parent_info=parent_info
-            )
+            # Check if this is a reverse search
+            if is_reverse_search and subsidiaries:
+                # For reverse search: subsidiaries[0] is the parent, need to restructure
+                actual_parent_name = subsidiaries[0].get('name', parent_company)
+
+                # Create subsidiaries list: searched entity + all sisters
+                restructured_subsidiaries = []
+
+                # Add the searched entity (Lazada) as a subsidiary
+                restructured_subsidiaries.append({
+                    'name': parent_company,
+                    'jurisdiction': 'Unknown',
+                    'status': 'Active',
+                    'level': 1,
+                    'is_searched_entity': True
+                })
+
+                # Add all sisters as subsidiaries
+                for sister in sisters:
+                    restructured_subsidiaries.append(sister)
+
+                # Build graph with correct structure
+                parent_info = {'jurisdiction': 'Unknown', 'status': 'Active'}
+                graph = gb.build_entity_graph(
+                    company_name=actual_parent_name,  # Alibaba
+                    subsidiaries=restructured_subsidiaries,  # Lazada + sisters
+                    sisters=[],  # Empty - all are subsidiaries now
+                    directors=all_directors,
+                    shareholders=all_shareholders,
+                    transactions=all_transactions,
+                    parent_info=parent_info
+                )
+            else:
+                # Normal conglomerate search
+                parent_info = {'jurisdiction': 'Unknown', 'status': 'Active'}
+                graph = gb.build_entity_graph(
+                    company_name=parent_company,
+                    subsidiaries=subsidiaries,
+                    sisters=sisters,
+                    directors=all_directors,
+                    shareholders=all_shareholders,
+                    transactions=all_transactions,
+                    parent_info=parent_info
+                )
 
         # Get graph statistics
         stats = gb.get_graph_statistics(graph)
