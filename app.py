@@ -807,12 +807,45 @@ def main():
         # Determine if this is a conglomerate search based on stored data
         conglom_data = restored_results.get('conglomerate_data')
         if conglom_data:
-            # Prepare conglomerate context
-            conglomerate_context = {
-                'parent': entity_name,
-                'subsidiaries': conglom_data.get('subsidiaries', []),
-                'sisters': conglom_data.get('sisters', [])
-            }
+            # Check if this is a reverse search
+            is_reverse_search = conglom_data.get('is_reverse_search', False)
+
+            if is_reverse_search:
+                # In reverse search, subsidiaries[0] contains the parent info
+                # Sisters contains the actual sister companies
+                # The searched entity should be treated as a subsidiary along with sisters
+                subsidiaries_data = conglom_data.get('subsidiaries', [])
+                parent_name = subsidiaries_data[0]['name'] if subsidiaries_data else entity_name
+
+                # All companies (searched entity + sisters) should be subsidiaries of parent
+                all_subsidiaries = []
+
+                # Add the searched entity as a subsidiary
+                all_subsidiaries.append({
+                    'name': entity_name,
+                    'jurisdiction': 'Unknown',
+                    'status': 'Active',
+                    'level': 1,
+                    'is_searched_entity': True
+                })
+
+                # Add all sister companies as subsidiaries too
+                for sister in conglom_data.get('sisters', []):
+                    all_subsidiaries.append(sister)
+
+                conglomerate_context = {
+                    'parent': parent_name,
+                    'subsidiaries': all_subsidiaries,
+                    'sisters': []  # Empty since they're all subsidiaries now
+                }
+            else:
+                # Normal conglomerate search
+                conglomerate_context = {
+                    'parent': entity_name,
+                    'subsidiaries': conglom_data.get('subsidiaries', []),
+                    'sisters': conglom_data.get('sisters', [])
+                }
+
             display_entity_results(
                 entity_name,
                 data,
@@ -2781,12 +2814,12 @@ def run_conglomerate_analysis(parent_company, selected_subsidiaries, country_inp
             # Get the actual parent company (e.g., Alibaba)
             actual_parent = conglom_structure.get('parent', parent_company)
 
-            # The searched entity (e.g., Lazada) should be added as a sister
-            # All other entities are also sisters
+            # In reverse search, all entities (Lazada + its sisters) are subsidiaries of the parent
+            # They should all connect to the parent node, not to each other
             for entity in entities_to_search:
                 if entity['type'] == 'PARENT':
-                    # This is actually the searched subsidiary (Lazada), add as sister
-                    sisters_list.append({
+                    # This is actually the searched subsidiary (Lazada), add as subsidiary
+                    subsidiaries_list.append({
                         'name': entity['name'],
                         'jurisdiction': entity.get('jurisdiction', 'Unknown'),
                         'status': 'Active',
@@ -2794,8 +2827,8 @@ def run_conglomerate_analysis(parent_company, selected_subsidiaries, country_inp
                         'is_searched_entity': True
                     })
                 else:
-                    # These are sister companies
-                    sisters_list.append({
+                    # These are sister companies - also subsidiaries of the parent
+                    subsidiaries_list.append({
                         'name': entity['name'],
                         'jurisdiction': entity.get('jurisdiction', 'Unknown'),
                         'status': 'Active',
