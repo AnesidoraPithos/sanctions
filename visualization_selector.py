@@ -33,7 +33,7 @@ def display_visualization_selector(
         st.markdown(
             f"""<div class='alert-box alert-warning'>
             <b>Large Graph Detected ({num_nodes} nodes)</b><br>
-            Using Treemap (Country-Grouped) as default for optimal clarity.
+            Using Treemap as default - shows all entities in space-efficient nested rectangles.
             </div>""",
             unsafe_allow_html=True
         )
@@ -41,7 +41,7 @@ def display_visualization_selector(
         st.markdown(
             f"""<div class='alert-box alert-info'>
             <b>Medium Graph ({num_nodes} nodes)</b><br>
-            Using Treemap (Country-Grouped) for clear country-based visualization.
+            Using Treemap for optimal space efficiency and clarity.
             </div>""",
             unsafe_allow_html=True
         )
@@ -50,9 +50,9 @@ def display_visualization_selector(
     viz_type = st.selectbox(
         "Select Visualization Type",
         options=[
-            "Treemap (Country-Grouped) - DEFAULT",
-            "Collapsible Tree (Best for 100+ nodes)",
+            "Treemap (Space-Efficient) - DEFAULT",
             "Hierarchical Network (Interactive Physics)",
+            "Collapsible Tree (Best for 100+ nodes)",
             "Sunburst Chart (Radial)",
             "Filtered Network (Level Control)"
         ],
@@ -63,14 +63,14 @@ def display_visualization_selector(
     st.markdown("---")
 
     # Display the selected visualization
-    if viz_type == "Treemap (Country-Grouped) - DEFAULT":
+    if viz_type == "Treemap (Space-Efficient) - DEFAULT":
         display_treemap(graph, parent_company, key_prefix)
-
-    elif viz_type == "Collapsible Tree (Best for 100+ nodes)":
-        display_collapsible_tree(graph, parent_company, key_prefix)
 
     elif viz_type == "Hierarchical Network (Interactive Physics)":
         display_hierarchical_network(graph, parent_company, key_prefix)
+
+    elif viz_type == "Collapsible Tree (Best for 100+ nodes)":
+        display_collapsible_tree(graph, parent_company, key_prefix)
 
     elif viz_type == "Sunburst Chart (Radial)":
         display_sunburst(graph, parent_company, key_prefix)
@@ -145,11 +145,11 @@ def display_collapsible_tree(graph, parent_company, key_prefix):
 
 
 def display_treemap(graph, parent_company, key_prefix):
-    """Display treemap visualization with country-first grouping"""
+    """Display treemap visualization (simplified flat structure by default)"""
     st.markdown(
         """<div class='alert-box alert-success'>
-        <b>Treemap View (Country-Grouped)</b> - Entities grouped by country/jurisdiction.
-        Each country is a distinct colored section containing its subsidiaries.
+        <b>Treemap View</b> - Space-efficient visualization showing all entities as nested rectangles.
+        Size represents number of subsidiaries, colors distinguish entity types.
         </div>""",
         unsafe_allow_html=True
     )
@@ -158,20 +158,21 @@ def display_treemap(graph, parent_company, key_prefix):
     print(f"[DISPLAY_TREEMAP DEBUG] Graph has {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges")
     print(f"[DISPLAY_TREEMAP DEBUG] Parent company: {parent_company}")
 
-    # Try complex treemap first, fall back to simple if needed
-    use_simple = st.checkbox("Use simplified treemap (if complex version doesn't show)", value=False, key=f"{key_prefix}_use_simple")
+    # Use simplified treemap by default (complex version has rendering issues)
+    use_simple = st.checkbox("Use country-grouped treemap (experimental - may not render)", value=False, key=f"{key_prefix}_use_complex")
 
     # Create treemap
     try:
-        if use_simple:
-            st.info("Using simplified treemap layout (flat structure)")
-            fig = viz_adv.create_simple_treemap(
+        if use_simple:  # use_simple is now the checkbox for complex/experimental
+            st.info("Using country-grouped treemap (experimental - may have rendering issues)")
+            fig = viz_adv.create_treemap_visualization(
                 graph,
-                title=f"Entity Treemap (Simple): {parent_company}",
+                title=f"Entity Treemap (Country-Grouped): {parent_company}",
                 height=750
             )
         else:
-            fig = viz_adv.create_treemap_visualization(
+            # Default to simple/flat treemap
+            fig = viz_adv.create_simple_treemap(
                 graph,
                 title=f"Entity Treemap: {parent_company}",
                 height=750
@@ -233,29 +234,33 @@ def display_treemap(graph, parent_company, key_prefix):
     with st.expander("💡 How to Read This Treemap"):
         st.markdown("""
         **Structure:**
-        - **Parent Company** (outer border) contains all country groups
-        - **📍 Country Sections** (e.g., "📍 China", "📍 Singapore") are colored by country
-        - **Subsidiaries** sit within their respective country sections
+        - **Parent Company** (outer border) is shown in cyan
+        - **All subsidiaries** are nested rectangles within the parent
+        - Larger boxes = entities with more subsidiaries
 
         **Size Meaning:**
-        - Larger rectangles = More subsidiaries
-        - Country section size = Total number of entities in that country
+        - Rectangle size is proportional to the number of direct subsidiaries
+        - Larger = more complex corporate structure
 
         **Colors:**
-        - 🔵 Cyan = Parent company
-        - 🔴 Red = Main search entity (the one you searched for)
-        - Each country has a unique color (e.g., 🟣 Purple for China, 🟠 Orange for Singapore)
+        - 🔵 Cyan = Parent company (Alibaba Group)
+        - 🔴 Red = Main search entity (the one you searched for, e.g., Lazada)
+        - 🟢 Green = Other subsidiaries
 
         **Interaction:**
-        - **Hover** over any rectangle to see details
+        - **Hover** over any rectangle to see entity details (name, type, jurisdiction)
         - **Click** to zoom into that section
         - **Click the outer border** to zoom back out
 
+        **Advanced Option:**
+        - Check "Use country-grouped treemap" for experimental country-based grouping
+        - Note: Country-grouped view may not render due to Plotly limitations
+
         **Best for:**
-        - Understanding geographic distribution at a glance
-        - Seeing which countries have the most subsidiaries
-        - Identifying clusters of operations in specific regions
-        - Comparing relative sizes of country operations
+        - Seeing all 100+ entities at once without scrolling
+        - Understanding relative complexity of different subsidiaries
+        - Quick visual overview of corporate structure
+        - Efficient use of screen space
         """)
 
     # Show quick stats

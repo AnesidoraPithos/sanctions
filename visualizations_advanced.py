@@ -356,6 +356,7 @@ def create_simple_treemap(
     """
     Create a simple flat treemap without country grouping.
     Fallback for when complex hierarchical treemap doesn't render.
+    Colors entities by jurisdiction for visual distinction.
     """
     print(f"[SIMPLE_TREEMAP DEBUG] Creating simple treemap for {G.number_of_nodes()} nodes")
 
@@ -364,6 +365,28 @@ def create_simple_treemap(
     values = []
     colors = []
     hover_texts = []
+
+    # Color palette for countries (same as complex treemap)
+    COUNTRY_COLORS = {
+        'United States': '#10b981', 'USA': '#10b981',
+        'China': '#a855f7',
+        'Singapore': '#f59e0b',
+        'Hong Kong': '#ec4899',
+        'United Kingdom': '#06b6d4', 'UK': '#06b6d4',
+        'Japan': '#8b5cf6',
+        'Germany': '#14b8a6',
+        'France': '#f97316',
+        'Canada': '#84cc16',
+        'Australia': '#6366f1',
+        'India': '#22c55e',
+        'Netherlands': '#d946ef',
+        'Switzerland': '#fb923c',
+        'Italy': '#facc15',
+        'Spain': '#2dd4bf',
+        'South Korea': '#c084fc',
+        'Brazil': '#4ade80',
+        'Mexico': '#f472b6',
+    }
 
     # Simple flat structure - all nodes under root
     root_nodes = [n for n in G.nodes() if G.in_degree(n) == 0]
@@ -377,7 +400,7 @@ def create_simple_treemap(
     labels.append(root_node)
     parents.append("")
     values.append(1)
-    colors.append('#0ea5e9')
+    colors.append('#0ea5e9')  # Parent always cyan
     hover_texts.append(f"<b>{root_node}</b><br>Parent Company")
 
     # Add all other nodes as direct children of root
@@ -389,15 +412,22 @@ def create_simple_treemap(
         parents.append(root_node)
         values.append(1)
 
+        # Determine color based on special flags or jurisdiction
         is_searched = attrs.get('is_searched_entity', False)
-        if is_searched:
-            colors.append('#ef4444')
-        else:
-            colors.append('#10b981')
-
         jurisdiction = attrs.get('jurisdiction', 'Unknown')
+
+        if is_searched:
+            color = '#ef4444'  # Red for searched entity
+        else:
+            # Use country color if available, otherwise green
+            color = COUNTRY_COLORS.get(jurisdiction, '#10b981')
+
+        colors.append(color)
+
         node_type = attrs.get('node_type', 'unknown')
         hover_text = f"<b>{node}</b><br>Type: {node_type}<br>Jurisdiction: {jurisdiction}"
+        if is_searched:
+            hover_text += "<br>🔍 MAIN SEARCH ENTITY"
         hover_texts.append(hover_text)
 
     print(f"[SIMPLE_TREEMAP DEBUG] Created {len(labels)} items")
