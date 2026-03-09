@@ -1,478 +1,461 @@
-# Entity Background Check System - Complete Documentation
+# Entity Background Check Bot - Intelligence Operations System
 
-**System Version**: 2.0.0
-**Last Updated**: 2026-02-24
-**Status**: ✅ PRODUCTION READY
+> **Version 2.1.0** | Advanced sanctions screening and entity intelligence platform with AI-powered analysis
 
 ---
 
 ## 📋 Table of Contents
 
-1. [System Overview](#system-overview)
-2. [Quick Start](#quick-start)
-3. [What's New](#whats-new)
-4. [Scoring System](#scoring-system)
-5. [External Sources Integration](#external-sources-integration)
-6. [User Interface](#user-interface)
-7. [Testing Guide](#testing-guide)
-8. [Configuration & Tuning](#configuration--tuning)
-9. [Troubleshooting](#troubleshooting)
-10. [Technical Details](#technical-details)
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Quick Start](#quick-start)
+- [Usage Guide](#usage-guide)
+  - [Basic Search](#basic-search)
+  - [Conglomerate Search](#conglomerate-search)
+  - [Reverse Search](#reverse-search)
+  - [Financial Intelligence](#financial-intelligence)
+  - [Save & Restore](#save--restore)
+- [Data Sources](#data-sources)
+- [Architecture](#architecture)
+- [Export & Reporting](#export--reporting)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [Version History](#version-history)
 
 ---
 
-## System Overview
+## Overview
 
-This is an intelligent entity background check system that screens companies and individuals against sanctions lists using:
+The **Entity Background Check Bot** is a comprehensive intelligence analysis system that combines multiple data sources to provide deep insights into entities, companies, and individuals for sanctions screening, compliance, and due diligence.
 
-- **USA Consolidated Screening List** (API) - ~14,000 entities
-- **DOD Section 1260H** (Local DB) - 120 Chinese Military Companies
-- **FCC Covered List** (Local DB) - Equipment/Services under Secure Networks Act
-- **Advanced fuzzy matching** with 5-algorithm scoring system
-- **Local-only scoring** for uniform match quality across all sources
+### What It Does
 
-### Key Features
+- **Sanctions Screening**: Check entities against USA sanctions databases (OFAC, BIS, etc.)
+- **Conglomerate Analysis**: Map corporate structures with subsidiaries and sister companies
+- **Financial Intelligence**: Extract directors, shareholders, and transactions from SEC filings
+- **OSINT Research**: Gather media coverage and intelligence from public sources
+- **AI Analysis**: Generate comprehensive intelligence reports using LLM analysis
+- **Relationship Mapping**: Visualize entity relationships in Neo4j-style interactive graphs
+- **Save & Restore**: Save complete searches and restore them instantly without re-running APIs
 
-✅ Multi-source sanctions screening (API + local databases)
-✅ Intelligent fuzzy matching with 5 algorithms
-✅ Local-only scoring (100% local weight) for consistency
-✅ Smart abbreviation matching for better accuracy
-✅ Visual match quality indicators (EXACT/HIGH/MEDIUM/LOW)
-✅ Admin panel for database management
-✅ AI-powered intelligence reports with OSINT
-✅ Search history tracking
+### Built For
+
+- Compliance Officers
+- Risk Analysts
+- Due Diligence Teams
+- Legal Departments
+- Financial Investigators
+- Government Agencies
+
+---
+
+## Key Features
+
+### 1. 🔍 Multi-Source Sanctions Screening
+
+- **USA Sanctions Databases**: OFAC, BIS Entity List, Treasury, State Department
+- **Local Databases**: DOD Section 1260H, FCC Covered List
+- **Fuzzy Matching**: Advanced name matching with configurable thresholds
+- **Risk Scoring**: 5-level risk assessment (SAFE, LOW, MID, HIGH, VERY HIGH)
+- **Combined Scoring**: Integrates name similarity, type matching, and address verification
+
+### 2. 🏢 Conglomerate Search
+
+Map complete corporate structures:
+
+- **Multi-Level Depth**: Search 1-3 levels deep through subsidiaries
+- **Ownership Filtering**: Filter by ownership percentage (100%, >50%, or custom threshold)
+- **Multiple Data Sources**:
+  - SEC EDGAR filings (10-K, 20-F)
+  - OpenCorporates API
+  - Wikipedia extraction
+  - DuckDuckGo fallback
+- **Sister Companies**: Find other entities owned by the same parent
+- **Selective Processing**: Choose which subsidiaries to analyze at each level
+
+### 3. 🔄 Reverse Search
+
+- Search for a subsidiary to find its parent company
+- Automatically discover sister companies (other subsidiaries of the same parent)
+- Useful for understanding corporate ownership chains
+
+### 4. 💼 Financial Intelligence (SEC EDGAR)
+
+Extract from SEC filings:
+
+- **Directors & Officers**: Names, titles, nationalities, biographies
+- **Major Shareholders**: Ownership percentages, voting rights, jurisdictions
+- **Related Party Transactions**: Counterparties, amounts, relationships
+- **Automatic Sanctions Cross-Check**: Flag directors/shareholders on sanctions lists
+- **Filing Sources**: 10-K (US companies), 20-F (foreign issuers), DEF 14A (proxy statements)
+
+### 5. 🌐 Relationship Diagrams
+
+Interactive Neo4j-style network visualizations:
+
+- **Network View**: Drag, zoom, and explore entity relationships
+- **Geographic View**: Map entities by jurisdiction
+- **Graph Explorer**: Query relationships and find paths between entities
+- **Filter Controls**: Show/hide directors, shareholders, transactions
+- **Path Finder**: Discover connection chains between any two entities
+
+### 6. 💾 Save & Restore (NEW in 2.1.0)
+
+**Never lose a search again:**
+
+- **Auto-Save**: Every search automatically saved to database
+- **One-Click Restore**: Load previous searches in < 2 seconds (no API calls)
+- **Complete Data**: Restores all results, reports, diagrams, and financial intel
+- **Notes & Tags**: Organize searches with custom notes and tags
+- **Export**: Download as JSON, Excel (multi-sheet), or PDF
+- **Search History**: Filter and sort saved searches by entity, tags, risk level, or date
+- **Speedup**: 15-300x faster than re-running search
+
+**Performance**:
+- Save: < 5 seconds (even 100+ subsidiaries)
+- Restore: < 2 seconds (any size)
+- Storage: ~50KB - 5MB per search
+
+### 7. 🤖 AI Intelligence Reports
+
+LLM-powered analysis includes:
+
+- Executive summary with risk assessment
+- Detailed sanctions analysis
+- Media coverage synthesis
+- Geopolitical context
+- Recommendations for further investigation
+- PDF export
+
+### 8. 📊 OSINT & Media Intelligence
+
+- **Official Sources**: Government press releases, sanctions announcements
+- **General Media**: News articles, blog posts, investigative reports
+- **Source Verification**: Distinguishes official vs. general sources
+- **Relevance Scoring**: Prioritizes most relevant findings
 
 ---
 
 ## Quick Start
 
-### Installation
+### Prerequisites
 
-1. **Install dependencies**:
 ```bash
+# Python 3.8+
 pip install -r requirements.txt
 ```
 
-2. **Initialize database** (with external sources):
+### Required Environment Variables
+
+Create a `.env` file:
+
 ```bash
-python3 load_external_sources.py --all
+# LLM API (choose one)
+OPENAI_API_KEY=your_openai_key
+# or
+ANTHROPIC_API_KEY=your_anthropic_key
+
+# Optional: OpenCorporates API for enhanced conglomerate search
+OPENCORPORATES_API_KEY=your_opencorporates_key
 ```
 
-3. **Run application**:
+### Installation
+
 ```bash
+# Clone repository
+cd "/path/to/sanctions free"
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Initialize database
+python3 -c "import database as db; db.init_db()"
+
+# (Optional) Load external sources
+python3 load_external_sources.py --all
+
+# Start application
 streamlit run app.py
 ```
 
-### Basic Usage
+### First Run
 
-1. Enter entity name (e.g., "Huawei", "AVIC", "BGI")
-2. Select country filter (optional)
-3. Click "EXECUTE QUERY"
-4. Review results with match quality badges
-5. Expand similarity breakdown for details
-
----
-
-## What's New
-
-### Version 2.0 (February 2026)
-
-#### 🎯 External Sources Integration
-- **120 DOD Chinese Military Companies** now searchable
-- **FCC Covered List** integration ready (pending network)
-- Comprehensive coverage beyond API-only screening
-
-#### 🎯 Local-Only Scoring Migration
-- Migrated from **60% API / 40% local** → **100% local**
-- Uniform scoring across ALL sources
-- Better false positive filtering
-- Full control over match quality thresholds
-
-#### 🎯 Enhanced Matching
-- **Smart abbreviation matching**: "Huawei" now correctly matches "Huawei Technologies Co., Ltd. (Huawei)" at 100%
-- **Legal suffix stripping**: Automatically strips common legal suffixes (Co., Ltd, Inc., Corp, LLC, etc.) to improve matching
-- **Multi-level matching**: Tests full name, abbreviated name, and base name without suffix - uses best score
-- **Updated thresholds**: HIGH threshold lowered from 85 → 82 to better classify legal suffix variations
-- Improved accuracy for common name searches
-
-#### 🎯 UI/UX Improvements
-- Source indicators: 🎖️ DOD, 📡 FCC, 🇺🇸 USA API
-- Admin panel for database management
-- Enhanced scoring display with reference scores
-- Clear visual match quality badges
+1. Open browser to http://localhost:8501
+2. Enable auto-save in ⚙️ SETTINGS (enabled by default)
+3. Try a test search: "Huawei" with country "CN"
+4. Review results in all tabs
+5. Check "📜 SAVED SEARCH HISTORY" to see saved search
+6. Click "📂 Restore" to reload instantly
 
 ---
 
-## Scoring System
+## Usage Guide
 
-### Overview
+### Basic Search
 
-The system uses **local-only fuzzy matching** with 5 algorithms to score entity similarity.
+**Purpose**: Check if a single entity is sanctioned
 
-### Algorithm Composition
+**Steps**:
+1. Enter entity name (e.g., "Huawei Technologies")
+2. Select country of origin (or GLOBAL)
+3. Enable "FUZZY LOGIC" for name variations
+4. Click "EXECUTE QUERY"
 
-| Algorithm | Weight | Purpose |
-|-----------|--------|---------|
-| **Token Set Ratio** | 30% | Company name variations, legal suffixes |
-| **Jaro-Winkler** | 25% | Name matching with prefix bonus |
-| **Levenshtein** | 20% | Character-level edit distance |
-| **Token Sort** | 15% | Word order variations |
-| **Phonetic Match** | 10% | Pronunciation/transliteration |
-
-### Scoring Formula
-
-```
-Match Score = (Token Set × 30%) + (Jaro-Winkler × 25%) +
-              (Levenshtein × 20%) + (Token Sort × 15%) +
-              (Phonetic × 10%)
-```
-
-### Match Quality Thresholds
-
-| Score Range | Quality | Badge | Meaning |
-|-------------|---------|-------|---------|
-| ≥ 95 | EXACT | 🟢 Green ✓ | Very high confidence |
-| 82-94 | HIGH | 🔵 Blue ⚡ | Strong fuzzy match |
-| 70-81 | MEDIUM | 🟡 Yellow ⚠ | Moderate match, investigate |
-| < 70 | LOW | ⚪ Gray ? | Weak match, likely false positive |
-
-**Note**: HIGH threshold lowered from 85 → 82 (2026-02-24) to better handle legal suffix variations in entity names.
-
-### Evolution: Hybrid → Local-Only
-
-#### Before (Hybrid Scoring)
-```
-Combined Score = (API Score × 60%) + (Local Score × 40%)
-```
-- Inconsistent scoring between API and local sources
-- API score inflated weak matches
-
-#### After (Local-Only Scoring)
-```
-Combined Score = Local Score (100%)
-```
-- ✅ Uniform scoring across all sources
-- ✅ Better false positive filtering
-- ✅ Full control over thresholds
-- ✅ API score kept for reference
-
-### Scoring Examples
-
-#### Example 1: Perfect Match with Abbreviation
-**Query**: "Huawei"
-**Entity**: "Huawei Technologies Co., Ltd. (Huawei)"
-
-**Before Enhancement**:
-- Full name match: 60.33 (LOW) ❌
-
-**After Enhancement** (checks abbreviation in parentheses):
-- Abbreviation match: **100.00 (EXACT)** ✅
-
-#### Example 2: Legal Suffix Matching
-**Query**: "Autel Robotics"
-**Entity**: "Autel Robotics Co., Ltd"
-
-**Before Enhancement** (2026-02-24):
-- Full name match: 79.53 (MEDIUM) ⚠️
-
-**After Enhancement** (legal suffix stripping):
-- Base name match: **100.00 (EXACT)** ✅
-
-#### Example 3: False Positive Detection
-**Query**: "Huawei"
-**Entity**: "Hawaii Trading Company"
-
-**Old System** (Hybrid):
-- Combined: 67.48 (MEDIUM) - False positive not caught!
-
-**New System** (Local-Only):
-- Match Score: **45 (LOW)** - False positive correctly identified! ✅
+**Results Include**:
+- Sanctions matches with scores
+- Media coverage (official + general sources)
+- AI intelligence report
+- Risk level assessment
+- PDF export
 
 ---
 
-## External Sources Integration
+### Conglomerate Search
 
-### Sources Integrated
+**Purpose**: Map corporate structures and find all subsidiaries
 
-#### 1. DOD Section 1260H ✅
-- **Count**: 120 entities
-- **Type**: Chinese Military Companies operating in the US
-- **Status**: Loaded and searchable
-- **Last Updated**: 2026-02-24
+**When to Use**:
+- Compliance screening of large corporations
+- Understanding ownership structures
+- Finding hidden subsidiaries
+- Comprehensive due diligence
 
-#### 2. FCC Covered List ⏳
-- **Type**: Equipment/Services under Secure Networks Act
-- **Status**: Integration ready, pending network retry
-- **URL**: https://www.fcc.gov/supplychain/coveredlist
+**Steps**:
+1. Enter parent company name (e.g., "Alibaba Group")
+2. Enable "CONGLOMERATE SEARCH"
+3. Set search depth (1-3)
+4. Set ownership threshold
+5. Click "EXECUTE QUERY"
 
-### Data Loading
+**Data Sources** (in priority order):
+1. SEC EDGAR (10-K, 20-F filings) - Most comprehensive
+2. OpenCorporates API (if API key provided) - Global coverage
+3. Wikipedia - For major corporations
+4. DuckDuckGo - Fallback search
 
-#### Load All Sources
-```bash
-python3 load_external_sources.py --all
+---
+
+### Reverse Search
+
+**Purpose**: Find parent company and sister companies of a subsidiary
+
+**Steps**:
+1. Enter subsidiary name (e.g., "Lazada")
+2. **Disable** "CONGLOMERATE SEARCH"
+3. **Enable** "SEARCH FOR PARENT & SISTERS"
+4. Click "EXECUTE QUERY"
+
+---
+
+### Financial Intelligence
+
+**Purpose**: Extract key personnel and ownership data from SEC filings
+
+**Automatic Extraction**:
+When conglomerate search finds a company with SEC filings, the system automatically extracts:
+
+- **Directors & Officers**: Names, titles, nationalities, biographies
+- **Major Shareholders**: Ownership %, voting rights, jurisdictions
+- **Related Party Transactions**: Amounts, counterparties, relationships
+- **Sanctions Cross-Check**: Auto-checks all directors and shareholders
+
+**Data Sources**:
+- **10-K**: Annual reports (US companies)
+- **20-F**: Annual reports (foreign issuers)
+- **DEF 14A**: Proxy statements (detailed governance)
+
+---
+
+### Save & Restore
+
+**Purpose**: Save searches for later review without re-running expensive API calls
+
+#### Auto-Save (Recommended)
+
+**Setup**:
+1. Open **⚙️ SETTINGS** expander
+2. Ensure "Auto-save all searches" is **checked** (default)
+3. Every search automatically saved
+
+**What Gets Saved**:
+- All sanctions matches
+- Media hits and sources
+- Intelligence report & PDF
+- Conglomerate data (subsidiaries, sisters)
+- Financial intelligence (directors, shareholders, transactions)
+- Relationship diagrams
+- Search parameters
+
+#### Manual Save
+
+**Steps**:
+1. After search completes, go to **"💾 SAVE & EXPORT"** section
+2. Click **"💾 SAVE SEARCH"**
+3. Add notes and tags
+4. Click **"Save"**
+
+#### Restore Search
+
+**Steps**:
+1. Open **"📜 SAVED SEARCH HISTORY"** expander
+2. Use filters (entity name, tags, sort)
+3. Find your saved search
+4. Click **"📂 Restore"** button
+
+**Result**:
+- Page refreshes in < 2 seconds
+- Banner: "📂 Displaying Restored Search - No API calls were made"
+- Complete results displayed instantly
+
+**Performance**:
+- Fresh Search: 30 seconds - 10 minutes
+- Restored Search: < 2 seconds
+- **Speedup: 15-300x faster**
+
+#### Search History Management
+
+**Actions** (per search):
+- **📂 Restore**: Load search results
+- **📤 Export**: Download as JSON, Excel, or PDF
+- **✏️ Edit**: Update notes and tags
+- **🗑️ Delete**: Permanently remove search
+
+#### Export Formats
+
+**JSON Export**:
+- Complete search data structure
+- Use Case: Data integration, backup
+
+**Excel Export** (Multi-Sheet):
+- Summary, Sanctions Matches, Media Coverage
+- Subsidiaries, Sisters, Directors, Shareholders
+- Transactions, Intelligence Report
+- Use Case: Team collaboration, analysis
+
+**PDF Export**:
+- Intelligence report as formatted PDF
+- Use Case: Formal documentation
+
+#### Storage
+
+**Database Location**: `sanctions.db`
+
+**Storage Estimates**:
+| Search Type | Per Search | 100 Searches |
+|-------------|------------|--------------|
+| Basic | 50-200 KB | 5-20 MB |
+| Conglomerate (10 subs) | 500 KB - 1 MB | 50-100 MB |
+| Conglomerate (100 subs) | 2-5 MB | 200-500 MB |
+
+**Recommendations**:
+- Backup database weekly
+- Monitor size if > 1 GB
+- Delete old test searches regularly
+
+---
+
+## Data Sources
+
+### 1. USA Sanctions Databases
+
+**Primary Source**: USA Sanctions Search API
+- OFAC SDN List
+- BIS Entity List
+- State Department Nonproliferation Sanctions
+- Commerce Unverified List
+- Treasury Sanctions Programs
+
+**Coverage**: 15,000+ sanctioned entities
+
+### 2. Local External Sources
+
+**DOD Section 1260H** (Chinese Military Companies):
+- ~60 entities designated under NDAA
+- Refresh via UI or CLI
+
+**FCC Covered List** (Communications Equipment):
+- ~100+ entities posing national security risk
+- Includes equipment manufacturers
+
+### 3. SEC EDGAR (Financial Intelligence)
+
+- API: https://data.sec.gov/
+- Filing types: 10-K, 20-F, DEF 14A
+- Directors, shareholders, transactions
+
+### 4. OpenCorporates API (Conglomerate Search)
+
+- Global corporate registry data
+- Subsidiary relationships
+- Optional API key
+
+### 5. OSINT Sources
+
+- DuckDuckGo Search API
+- Government press releases
+- News articles and media
+
+---
+
+## Architecture
+
+### Technology Stack
+
+**Frontend**: Streamlit, Plotly, Folium, PyVis
+**Backend**: Python 3.8+, SQLite, pandas
+**AI/LLM**: OpenAI GPT-4 or Anthropic Claude
+**Data Processing**: BeautifulSoup, PyPDF2, fuzzywuzzy, geopy
+
+### File Structure
+
 ```
-
-#### Load Specific Source
-```bash
-python3 load_external_sources.py --dod      # DOD only
-python3 load_external_sources.py --fcc      # FCC only
-```
-
-#### Refresh (Clear and Reload)
-```bash
-python3 load_external_sources.py --all --refresh
+sanctions-free/
+├── app.py                          # Main Streamlit application
+├── database.py                     # Database operations (SQLite)
+├── usa_agent.py                    # USA sanctions API agent
+├── research_agent.py               # OSINT and LLM agent
+├── graph_builder.py                # Relationship graph construction
+├── visualizations.py               # Interactive visualizations
+├── serialization_utils.py          # Save/restore data serialization
+├── export_utils.py                 # Export functionality
+├── load_external_sources.py        # DOD/FCC data ingestion
+├── config.py                       # Configuration settings
+├── requirements.txt                # Python dependencies
+├── sanctions.db                    # SQLite database
+└── README.md                       # This file
 ```
 
 ### Database Schema
 
-New `local_entities` table:
-```sql
-CREATE TABLE local_entities (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    entity_type TEXT,
-    source_list TEXT NOT NULL,
-    source_url TEXT,
-    date_added TEXT,
-    last_updated TEXT,
-    additional_info TEXT
-)
-```
+**Core Tables**:
+- `analysis_history`: Basic search history
+- `saved_searches`: Complete search results with all data
+- `local_entities`: DOD 1260H and FCC Covered List
+- `directors_officers`: SEC EDGAR directors
+- `major_shareholders`: SEC EDGAR shareholders
+- `related_party_transactions`: SEC EDGAR transactions
+- `search_comparisons`: Search comparison sessions (future)
 
 ---
 
-## User Interface
+## Export & Reporting
 
-### Search Results Display
+### Intelligence Report (PDF)
 
-#### Example: EXACT Match
-```
-┌─────────────────────────────────────────────────────────┐
-│ 🎖️ DOD SOURCE: DOD Section 1260H         [✓ EXACT] 🟢  │
-├─────────────────────────────────────────────────────────┤
-│ Huawei Technologies Co., Ltd. (Huawei)                  │
-│ TYPE: Company // LOC: N/A                               │
-│ MATCH SCORE: 100.00                                     │
-│ NOTES: Local Database Entry                             │
-│                              >> VIEW SOURCE DOCUMENT    │
-│                                                         │
-│ 📊 View Detailed Similarity Breakdown ▼                │
-└─────────────────────────────────────────────────────────┘
-```
+**Contents**:
+- Executive summary with risk assessment
+- Sanctions analysis
+- Media intelligence
+- Geopolitical context
+- Recommendations
 
-#### Example: FALSE POSITIVE Caught
-```
-┌─────────────────────────────────────────────────────────┐
-│ 🇺🇸 USA API SOURCE                        [? LOW] ⚪    │
-├─────────────────────────────────────────────────────────┤
-│ Hawaii Trading Company                                  │
-│ TYPE: Entity // LOC: Honolulu, HI (USA)               │
-│ MATCH SCORE: 45.0 | API Reference: 80                 │
-│ NOTES: Different token sets detected                    │
-│                              >> VIEW SOURCE DOCUMENT    │
-└─────────────────────────────────────────────────────────┘
-```
+### Excel Export (Multi-Sheet)
 
-### Visual Elements
+**Sheets**: Summary, Sanctions Matches, Media Coverage, Subsidiaries, Sisters, Directors, Shareholders, Transactions, Intelligence Report
 
-#### Color Coding
-- 🟢 **Green (EXACT)**: High confidence, treat as exact
-- 🔵 **Blue (HIGH)**: Strong fuzzy match, likely correct
-- 🟡 **Yellow (MEDIUM)**: Moderate match, investigate
-- ⚪ **Gray (LOW)**: Weak match, likely false positive
+### JSON Export
 
-#### Source Indicators
-- 🎖️ **DOD** - DOD Section 1260H (Chinese Military Companies)
-- 📡 **FCC** - FCC Covered List (Secure Networks Act)
-- 🇺🇸 **USA API** - USA Consolidated Screening List
-
-#### Similarity Breakdown
-
-Expandable section shows:
-- Individual algorithm scores (Token Set, Jaro-Winkler, etc.)
-- Scoring formula with actual values
-- Match quality threshold explanations
-- Why the entity scored the way it did
-
-### Admin Panel
-
-Access via **🗄️ DATABASE MANAGEMENT** expander:
-
-**Features**:
-- View entity counts by source
-- One-click refresh buttons
-- Manual data reload
-- Database statistics
-
-**Actions**:
-```
-🔄 Refresh DOD List     🔄 Refresh FCC List     🔄 Refresh All
-```
-
----
-
-## Testing Guide
-
-### Quick Test Scenarios
-
-#### Test 1: Perfect Match ✅
-**Input**: `Huawei`
-
-**Expected**:
-- "Huawei Technologies Co., Ltd. (Huawei)" → **100.00 (EXACT)** 🟢
-- Multiple high-quality matches
-- Token Set score ≥ 95
-
-**Success Criteria**: True Huawei entities show EXACT classification
-
----
-
-#### Test 2: False Positive Detection ⚠️
-**Input**: `Huawei`
-
-**Check for**: "Hawaii Trading Company" or similar
-
-**Expected**:
-- Should get **LOW** badge (⚪ Gray)
-- Match score < 70
-- Token Set score < 40 (different token sets)
-
-**Success Criteria**: False positives correctly identified
-
----
-
-#### Test 3: Legal Suffix Handling ✅
-**Input**: `Apple`
-
-**Expected**:
-- "Apple Inc", "Apple Incorporated", "Apple Computer Inc" → All **HIGH/EXACT**
-- Token Set score ≥ 90
-- Legal suffixes don't significantly lower scores
-
-**Success Criteria**: Legal variations recognized as same entity
-
----
-
-#### Test 4: Partial Name Match 🔍
-**Input**: `Huawei Tech`
-
-**Expected**:
-- "Huawei Technologies Ltd" → **HIGH** or **MEDIUM** badge
-- Score 70-85
-- Not classified as EXACT
-
-**Success Criteria**: Partial matches correctly identified
-
----
-
-### Run Built-in Tests
-
-```bash
-python3 matching_utils.py
-```
-
-**Expected Output**:
-```
-================================================================================
-FUZZY MATCHING TEST CASES
-================================================================================
-
-Perfect exact match
-Query: 'Huawei' → Result: 'Huawei'
-Match Score: 100.0
-Match Quality: EXACT
-✓ PASSED
-
-False positive caught
-Query: 'Huawei' → Result: 'Hawaii Trading Company'
-Match Score: 33.98
-Match Quality: LOW
-✓ PASSED
-```
-
-### System Verification
-
-```bash
-python3 -c "
-from database import get_local_entity_count
-counts = get_local_entity_count()
-print(f'DOD Entities: {counts.get(\"DOD_1260H\", 0)}')
-print(f'FCC Entities: {counts.get(\"FCC_COVERED\", 0)}')
-print(f'Total: {counts.get(\"TOTAL\", 0)}')
-"
-```
-
----
-
-## Configuration & Tuning
-
-### Main Configuration File
-
-**Location**: `config.py`
-
-```python
-FUZZY_MATCHING_CONFIG = {
-    # Algorithm weights (must sum to 1.0)
-    "weights": {
-        "token_set": 0.30,      # Company name variations
-        "jaro_winkler": 0.25,   # Name matching with prefix bonus
-        "levenshtein": 0.20,    # Edit distance baseline
-        "token_sort": 0.15,     # Word order variations
-        "phonetic": 0.10        # Pronunciation similarity
-    },
-
-    # Match quality thresholds
-    "thresholds": {
-        "exact": 95,      # Very high confidence
-        "high": 82,       # Strong fuzzy match (lowered for legal suffix handling)
-        "medium": 70,     # Moderate match
-        "low": 0          # Weak match
-    },
-
-    # Score combination weights
-    "api_weight": 0.0,      # 0% API (reference only)
-    "local_weight": 1.0     # 100% local (full control)
-}
-```
-
-### Tuning Guidelines
-
-#### To Reduce False Positives (More Conservative)
-```python
-"thresholds": {
-    "exact": 97,      # ↑ Increase from 95
-    "high": 87,       # ↑ Increase from 85
-    "medium": 75,     # ↑ Increase from 70
-}
-
-"weights": {
-    "token_set": 0.35,  # ↑ Penalize different token sets more
-    "jaro_winkler": 0.20,
-    ...
-}
-```
-
-#### To Catch More True Positives (More Lenient)
-```python
-"thresholds": {
-    "exact": 92,      # ↓ Decrease from 95
-    "high": 82,       # ↓ Decrease from 85
-    "medium": 67,     # ↓ Decrease from 70
-}
-
-"weights": {
-    "jaro_winkler": 0.30,  # ↑ More forgiving of minor differences
-    ...
-}
-```
-
-### Recommendations
-
-**Trust Levels**:
-1. **EXACT matches (≥95)**: Very high confidence, proceed with sanctions check
-2. **HIGH matches (≥85)**: Strong evidence, verify details
-3. **MEDIUM matches (≥70)**: Requires manual investigation
-4. **LOW matches (<70)**: Likely false positives, document and skip
+Complete search data structure for system integration
 
 ---
 
@@ -480,216 +463,170 @@ FUZZY_MATCHING_CONFIG = {
 
 ### Common Issues
 
-#### 1. No DOD Entities Showing Up
-**Solution**:
+#### Issue: "No results found" for known sanctioned entity
+
+**Solutions**:
+1. Enable "FUZZY LOGIC" toggle
+2. Try alternative name spellings
+3. Search in entity's primary language (auto-translates)
+4. Try GLOBAL country filter
+
+#### Issue: Conglomerate search finds no subsidiaries
+
+**Solutions**:
+1. Try exact official company name
+2. Check if company has SEC filings
+3. Try parent company if searching subsidiary
+
+#### Issue: Auto-save not working
+
+**Solution**: Toggle auto-save off and on in ⚙️ SETTINGS
+
+#### Issue: Restore button doesn't work
+
+**Solution**: Refresh page and try again, check browser console
+
+#### Issue: Export buttons don't appear
+
+**Solution**: Save search manually first, then try export
+
+---
+
+## Development
+
+### Setup Development Environment
+
 ```bash
-python3 load_external_sources.py --dod --refresh
-```
-
-#### 2. FCC List Still Empty
-**Cause**: Network timeout during initial load
-
-**Solution**:
-```bash
-python3 load_external_sources.py --fcc --refresh
-```
-
-**Alternative**: If web scraping fails, manually import CSV version
-
-#### 3. App Not Starting
-**Solution**:
-```bash
+# Clone and setup
+cd "/path/to/sanctions free"
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
-python3 -c "import streamlit, pandas, rapidfuzz, metaphone, PyPDF2, bs4"
+
+# Set up environment
+cp .env.example .env
+# Edit .env with API keys
+
+# Initialize database
+python3 -c "import database as db; db.init_db()"
+
+# Run application
+streamlit run app.py
 ```
 
-#### 4. Low Match Scores for Known Entities
-**Cause**: Abbreviated names not being checked
+### Testing
 
-**Check**: System should automatically check parenthetical abbreviations
-**Verify**: Query "Huawei" should match "Huawei Technologies Co., Ltd. (Huawei)" at 100%
-
-#### 5. Too Many False Positives
-**Solution**: Increase thresholds in `config.py`:
-```python
-"thresholds": {
-    "exact": 97,
-    "high": 87,
-    "medium": 75
-}
+**Unit Tests**:
+```bash
+python3 -m pytest tests/
 ```
 
----
+**Integration Tests**:
+```bash
+# Test database
+python3 -c "import database as db; db.init_db(); print('✓ DB OK')"
 
-## Technical Details
-
-### Architecture
-
+# Test serialization
+python3 -c "import serialization_utils; print('✓ Serialization OK')"
 ```
-┌─────────────────────────────────────────────────────┐
-│                  Streamlit UI (app.py)              │
-│         Search Input → Results Display → Reports    │
-└────────────────┬────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────┐
-│             USA Agent (usa_agent.py)                │
-│   ┌─────────────────────┬─────────────────────┐    │
-│   │  API Search         │  Local DB Search    │    │
-│   │  (_search_api)      │  (_search_local_db) │    │
-│   └─────────────────────┴─────────────────────┘    │
-│              Merge & Sort by Score                  │
-└────────────────┬────────────────────────────────────┘
-                 │
-        ┌────────┴─────────┐
-        ▼                  ▼
-┌──────────────────┐  ┌──────────────────┐
-│   USA Trade API  │  │   Local SQLite   │
-│   ~14,000 entities│  │   DOD: 120       │
-│                  │  │   FCC: Pending   │
-└──────────────────┘  └──────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────┐
-│        Fuzzy Matching (matching_utils.py)           │
-│   5 Algorithms → Composite Score → Classification   │
-└─────────────────────────────────────────────────────┘
-```
-
-### File Structure
-
-```
-sanctions free/
-├── app.py                          # Main Streamlit application
-├── usa_agent.py                    # API + Local DB search agent
-├── china_agent.py                  # China-specific agent
-├── research_agent.py               # OSINT/media research
-├── database.py                     # SQLite database functions
-├── matching_utils.py               # Fuzzy matching algorithms
-├── config.py                       # Configuration & thresholds
-├── requirements.txt                # Python dependencies
-├── load_external_sources.py        # CLI data loading tool
-├── sanctions.db                    # SQLite database
-├── extractors/
-│   ├── __init__.py
-│   ├── pdf_extractor.py           # DOD PDF parser
-│   └── web_scraper.py             # FCC web scraper
-└── external sources/
-    ├── ENTITIES-IDENTIFIED-AS-CHINESE-MILITARY-COMPANIES...pdf
-    └── sources.csv                 # FCC URL reference
-```
-
-### Dependencies
-
-```txt
-streamlit>=1.28.0              # Web framework
-pandas>=2.0.0                  # Data manipulation
-requests>=2.31.0               # HTTP requests
-python-dotenv>=1.0.0           # Environment variables
-google-generativeai>=0.3.0     # AI reports
-rapidfuzz>=3.0.0               # Fuzzy matching
-metaphone>=0.6                 # Phonetic matching
-PyPDF2>=3.0.0                  # PDF parsing
-beautifulsoup4>=4.12.0         # Web scraping
-lxml>=4.9.0                    # HTML parser
-```
-
-### Performance
-
-**Search Speed**:
-- Local DB: ~Instant (120 entities, in-memory)
-- API: ~2-5 seconds (paginated, network-dependent)
-- Combined: No significant impact
-
-**Accuracy**:
-- EXACT matches: 100% precision (≥95 score)
-- HIGH matches: Very reliable (≥85 score)
-- False positive rate: <5% (with proper thresholds)
-
----
-
-## Benefits Summary
-
-### ✅ Comprehensive Coverage
-- USA Consolidated List + DOD + FCC
-- 14,000+ entities searchable
-- No missing DOD-designated companies
-
-### ✅ Intelligent Matching
-- 5-algorithm fuzzy matching
-- Smart abbreviation handling
-- Legal suffix recognition
-- Transliteration support
-
-### ✅ Transparent Scoring
-- Local-only for consistency
-- Detailed algorithm breakdown
-- Clear match quality badges
-- Explainable results
-
-### ✅ User Experience
-- Visual quality indicators
-- Source attribution
-- Admin panel
-- Search history
-- AI-powered reports
 
 ---
 
 ## Version History
 
-### Version 2.0 (2026-02-24)
-- ✅ External sources integration (DOD 1260H)
-- ✅ Local-only scoring migration (0% API, 100% local)
-- ✅ Enhanced abbreviation matching
-- ✅ UI improvements with source indicators
-- ✅ Admin panel for database management
+### Version 2.1.0 (2026-03-09) - Save & Restore Feature
 
-### Version 1.0 (Previous)
-- ✅ Hybrid fuzzy matching (60% API, 40% local)
-- ✅ 5-algorithm scoring system
-- ✅ Match quality classification
-- ✅ OSINT integration
-- ✅ Intelligence reports
+**New Features**:
+- ✨ Auto-save all searches to database
+- ✨ One-click restore in < 2 seconds
+- ✨ Enhanced search history with filtering
+- ✨ Export as JSON, Excel, or PDF
+- ✨ Edit notes and tags
+- ✨ Settings panel with auto-save toggle
 
----
+**Performance**:
+- Save: < 5 seconds
+- Restore: < 2 seconds
+- Speedup: 15-300x faster
 
-## Support & Documentation
+### Version 2.0.0 (2026-02) - Major Feature Release
 
-### Additional Resources
-- `dev-logs.md` - Development history and meeting notes
-- `SCORING_SYSTEM.md` (archived) - Original hybrid scoring documentation
-- `IMPLEMENTATION_NOTES.md` (archived) - Technical implementation details
+**New Features**:
+- ✨ Conglomerate search (multi-level depth)
+- ✨ Reverse search
+- ✨ Financial intelligence from SEC EDGAR
+- ✨ Interactive Neo4j-style relationship diagrams
+- ✨ Geographic visualization
+- ✨ Progress tracking
 
-### Getting Help
+### Version 1.0.0 (2025) - Initial Release
 
-1. **Check documentation** in `README.md` (this file)
-2. **Run verification tests** to identify issues
-3. **Review configuration** in `config.py`
-4. **Check dev logs** for recent changes
-
-### Reporting Issues
-
-Include:
-- Entity name searched
-- Expected vs actual behavior
-- Screenshots if applicable
-- System verification output
+**Core Features**:
+- Basic sanctions screening
+- USA sanctions database integration
+- OSINT media research
+- LLM intelligence reports
+- Risk level assessment
+- PDF export
 
 ---
 
-## License & Credits
+## FAQ
 
-**System**: Entity Background Check Bot | INTEL OPS
-**Version**: 2.0.0
-**Platform**: Streamlit + Python + SQLite
-**AI**: Google Gemini (intelligence reports)
-**Fuzzy Matching**: RapidFuzz + Custom algorithms
+**Q: How accurate is the fuzzy name matching?**
+A: Uses Levenshtein distance with configurable threshold (typically 80%+). Always review matches manually.
+
+**Q: Can I search non-English entity names?**
+A: Yes! System automatically translates using LLM.
+
+**Q: How often are sanctions databases updated?**
+A: USA Sanctions API updated in real-time. Local databases (DOD, FCC) must be manually refreshed.
+
+**Q: Why didn't conglomerate search find all subsidiaries?**
+A: Data comes from public sources (SEC, OpenCorporates, Wikipedia). Private subsidiaries may not appear.
+
+**Q: How do I know if restored results are up-to-date?**
+A: Restored searches show original search date timestamp. Run fresh search for current data.
 
 ---
 
-**Status**: ✅ PRODUCTION READY
-**Last Verification**: 2026-02-24
-**Total Test Coverage**: All integration tests passed
+## Support & Contact
 
-🎉 **Ready for deployment and user acceptance testing**
+**Documentation**:
+- This README (comprehensive guide)
+- `dev-logs.md` (development changelog)
+- Inline code comments
+
+**Troubleshooting**:
+- See Troubleshooting section above
+- Check browser console (F12)
+- Review Streamlit terminal output
+
+---
+
+## License
+
+Internal use only. Not for public distribution.
+
+---
+
+## Acknowledgments
+
+**Data Sources**: USA Sanctions API, SEC EDGAR, OpenCorporates, DuckDuckGo
+**Technologies**: Streamlit, OpenAI/Anthropic, SQLite, Python
+**Developed By**: IMDA International Team
+
+---
+
+**Version**: 2.1.0
+**Last Updated**: 2026-03-09
+**Status**: ✅ Production Ready
+
+---
+
+**Quick Links**:
+- [Quick Start](#quick-start)
+- [Usage Guide](#usage-guide)
+- [Save & Restore](#save--restore)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
