@@ -214,24 +214,52 @@ def create_interactive_network(
     # Add a default color for unknown jurisdictions
     country_to_color['Unknown'] = '#64748b'  # Gray
 
-    # Create initial positions for country-based spatial clustering
-    # Assign each country to a position in a circular/grid layout
+    # Create hierarchical layout positions based on node depth/level
+    # Group nodes by their level in the hierarchy
     import math
+    import random
 
-    country_list = sorted(countries)
-    num_countries = len(country_list)
-    country_positions = {}
+    nodes_by_level = {}
+    max_level = 0
 
-    # Arrange countries in a circle with large radius for spatial separation
-    radius = 500  # Large radius for good separation
-    for idx, country in enumerate(country_list):
-        angle = (2 * math.pi * idx) / max(num_countries, 1)
-        x = radius * math.cos(angle)
-        y = radius * math.sin(angle)
-        country_positions[country] = (x, y)
+    for node, attrs in G.nodes(data=True):
+        # Get level from node attributes (default to 0 for parent, 1 for others)
+        level = attrs.get('level', 0)
+        node_type = attrs.get('node_type', 'unknown')
 
-    # Add position for Unknown jurisdiction at center
-    country_positions['Unknown'] = (0, 0)
+        # Parent nodes should be at level 0
+        if node_type == 'parent':
+            level = 0
+        # Directors and shareholders at a separate level
+        elif node_type in ['director', 'shareholder']:
+            level = max_level + 1  # Place at bottom
+
+        if level not in nodes_by_level:
+            nodes_by_level[level] = []
+
+        nodes_by_level[level].append(node)
+        max_level = max(max_level, level)
+
+    # Calculate positions for hierarchical layout
+    node_positions = {}
+    vertical_spacing = 300  # Vertical distance between levels
+    horizontal_spacing = 200  # Horizontal spacing between nodes at same level
+
+    for level, nodes in nodes_by_level.items():
+        num_nodes = len(nodes)
+        # Calculate total width needed for this level
+        total_width = (num_nodes - 1) * horizontal_spacing if num_nodes > 1 else 0
+
+        # Center this level horizontally
+        start_x = -total_width / 2
+
+        # Y position based on level (top to bottom)
+        y = -level * vertical_spacing
+
+        # Position each node at this level
+        for idx, node in enumerate(sorted(nodes)):  # Sort for consistency
+            x = start_x + (idx * horizontal_spacing)
+            node_positions[node] = (x, y)
 
     # Create PyVis network
     net = Network(
@@ -242,26 +270,43 @@ def create_interactive_network(
         directed=True
     )
 
-    # Configure physics for clustering with spatial separation
+    # Configure physics for hierarchical layout with dynamics
+    # Use hierarchical repulsion to maintain vertical structure
     net.set_options("""
     {
         "physics": {
             "enabled": true,
-            "forceAtlas2Based": {
-                "gravitationalConstant": -80,
-                "centralGravity": 0.005,
-                "springLength": 200,
-                "springConstant": 0.05,
-                "avoidOverlap": 0.8
+            "hierarchicalRepulsion": {
+                "centralGravity": 0.0,
+                "springLength": 150,
+                "springConstant": 0.01,
+                "nodeDistance": 180,
+                "damping": 0.09,
+                "avoidOverlap": 1
             },
             "maxVelocity": 50,
             "minVelocity": 0.1,
-            "solver": "forceAtlas2Based",
+            "solver": "hierarchicalRepulsion",
             "timestep": 0.35,
             "stabilization": {
                 "enabled": true,
-                "iterations": 300,
-                "updateInterval": 25
+                "iterations": 250,
+                "updateInterval": 25,
+                "onlyDynamicEdges": false,
+                "fit": true
+            }
+        },
+        "layout": {
+            "hierarchical": {
+                "enabled": false,
+                "levelSeparation": 300,
+                "nodeSpacing": 200,
+                "treeSpacing": 250,
+                "blockShifting": true,
+                "edgeMinimization": true,
+                "parentCentralization": true,
+                "direction": "UD",
+                "sortMethod": "directed"
             }
         },
         "interaction": {
@@ -272,7 +317,8 @@ def create_interactive_network(
             "navigationButtons": true,
             "keyboard": {
                 "enabled": true
-            }
+            },
+            "tooltipDelay": 200
         },
         "nodes": {
             "font": {
@@ -296,14 +342,13 @@ def create_interactive_network(
             },
             "smooth": {
                 "enabled": true,
-                "type": "continuous"
+                "type": "cubicBezier",
+                "forceDirection": "vertical",
+                "roundness": 0.4
             },
             "shadow": {
                 "enabled": false
             }
-        },
-        "groups": {
-            "useDefaultGroups": true
         }
     }
     """)
@@ -346,16 +391,21 @@ def create_interactive_network(
         if is_searched_entity:
             title_text += f"<br>🔍 MAIN SEARCH ENTITY<br>"
 
-        # Get initial position for this country cluster
-        base_x, base_y = country_positions.get(jurisdiction, (0, 0))
+        # Get hierarchical position for this node
+        base_x, base_y = node_positions.get(node, (0, 0))
 
-        # Add small random offset within cluster to avoid exact overlap
-        import random
-        offset_x = random.uniform(-50, 50)
-        offset_y = random.uniform(-50, 50)
+        # Add small random offset to prevent exact overlap of nodes at same level
+        offset_x = random.uniform(-30, 30)
+        offset_y = random.uniform(-20, 20)
 
-        # Add node with PyVis using country as group for clustering
-        # and initial position for spatial separation
+        # Get level for display in tooltip
+        level = attrs.get('level', 0)
+        if node_type == 'parent':
+            level = 0
+        if level > 0:
+            title_text += f"Depth Level: {level}<br>"
+
+        # Add node with PyVis using hierarchical positioning
         net.add_node(
             node,
             label=node,
@@ -364,10 +414,10 @@ def create_interactive_network(
             title=title_text,
             borderWidth=2,
             borderWidthSelected=4,
-            group=jurisdiction,  # Group by country for visual clustering
+            level=level,  # Set level for hierarchical layout
             x=base_x + offset_x,  # Initial x position
             y=base_y + offset_y,  # Initial y position
-            physics=True  # Allow physics to refine position
+            physics=True  # Allow physics to refine position while maintaining structure
         )
 
     # Add edges with styling
@@ -395,10 +445,18 @@ def create_interactive_network(
     # Generate HTML
     html = net.generate_html()
 
-    # Create legend HTML with country colors
+    # Create legend HTML with country colors and hierarchy info
     legend_items = []
 
+    # Add hierarchy information
+    legend_items.append('<div style="margin-bottom: 12px; font-weight: bold; color: #3b82f6;">📊 Hierarchical View</div>')
+    legend_items.append('<div style="margin-bottom: 8px; font-size: 11px; color: #94a3b8;">Top to Bottom: Parent → Subsidiaries by Depth</div>')
+
+    # Add separator
+    legend_items.append('<hr style="border-color: #475569; margin: 10px 0;">')
+
     # Add special entity types first
+    legend_items.append('<div style="margin-bottom: 8px; font-weight: bold;">Special Entities:</div>')
     legend_items.append(f'<div style="margin-bottom: 8px;"><span style="display: inline-block; width: 12px; height: 12px; background-color: {SEARCHED_ENTITY_COLOR}; border-radius: 50%; margin-right: 8px;"></span><b>Main Search Entity</b></div>')
     legend_items.append(f'<div style="margin-bottom: 8px;"><span style="display: inline-block; width: 12px; height: 12px; background-color: {PARENT_COMPANY_COLOR}; border-radius: 50%; margin-right: 8px;"></span><b>Parent Company</b></div>')
 
@@ -410,6 +468,16 @@ def create_interactive_network(
     for country in sorted(countries):
         color = country_to_color[country]
         legend_items.append(f'<div style="margin-bottom: 6px; font-size: 12px;"><span style="display: inline-block; width: 10px; height: 10px; background-color: {color}; border-radius: 50%; margin-right: 6px;"></span>{country}</div>')
+
+    # Add level information
+    if max_level > 0:
+        legend_items.append('<hr style="border-color: #475569; margin: 10px 0;">')
+        legend_items.append('<div style="margin-bottom: 8px; font-weight: bold;">Depth Levels:</div>')
+        for level in range(0, max_level + 1):
+            if level in nodes_by_level:
+                count = len(nodes_by_level[level])
+                level_name = "Parent" if level == 0 else f"Level {level}"
+                legend_items.append(f'<div style="margin-bottom: 4px; font-size: 11px;">▸ {level_name}: {count} node(s)</div>')
 
     legend_html = '\n'.join(legend_items)
 
