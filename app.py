@@ -1543,8 +1543,18 @@ def display_subsidiary_selection(parent_company, depth):
         with viz_tab2:
             st.markdown("<div class='alert-box alert-info'>Geographic distribution of entities showing jurisdictions and cross-border relationships</div>", unsafe_allow_html=True)
 
+            # Filter controls for geographic view
+            col1, col2 = st.columns(2)
+            with col1:
+                show_directors_geo = st.checkbox("Show Directors", value=True, key="show_directors_sub_geo")
+            with col2:
+                show_shareholders_geo = st.checkbox("Show Shareholders", value=True, key="show_shareholders_sub_geo")
+
+            # Filter graph for geographic view
+            filtered_graph_geo = gb.filter_graph(graph, show_directors_geo, show_shareholders_geo, True)
+
             # Create and display geographic map
-            geo_map = viz.create_geographic_map(filtered_graph, title=f"Geographic Distribution: {parent_company}")
+            geo_map = viz.create_geographic_map(filtered_graph_geo, title=f"Geographic Distribution: {parent_company}")
             components.html(geo_map._repr_html_(), height=650)
 
         # Graph Explorer
@@ -1572,13 +1582,13 @@ def display_subsidiary_selection(parent_company, depth):
             st.markdown("### Relationship Explorer")
 
             # Entity selector
-            node_list = list(filtered_graph.nodes())
+            node_list = list(graph.nodes())
             if node_list:
                 selected_entity = st.selectbox("Select Entity to Explore", node_list, key="entity_explorer_sub")
 
                 if selected_entity:
                     # Get neighbors
-                    neighbors = gb.get_neighbors_table(filtered_graph, selected_entity)
+                    neighbors = gb.get_neighbors_table(graph, selected_entity)
 
                     if neighbors:
                         st.markdown(f"**Showing {len(neighbors)} relationships for {selected_entity}:**")
@@ -2214,8 +2224,20 @@ def run_analysis(name_input, country_input, fuzzy):
                 )
 
             with viz_tab2_single:
+                st.markdown("<div class='alert-box alert-info'>Geographic distribution of entities showing jurisdictions and cross-border relationships</div>", unsafe_allow_html=True)
+
+                # Filter controls for geographic view
+                col1, col2 = st.columns(2)
+                with col1:
+                    show_directors_single_geo = st.checkbox("Show Directors", value=True, key="show_directors_single_geo")
+                with col2:
+                    show_shareholders_single_geo = st.checkbox("Show Shareholders", value=True, key="show_shareholders_single_geo")
+
+                # Filter graph for geographic view
+                filtered_graph_single_geo = gb.filter_graph(graph_single, show_directors_single_geo, show_shareholders_single_geo, True)
+
                 # Create and display geographic map
-                geo_map_single = viz.create_geographic_map(filtered_graph_single, title=f"Geographic Distribution: {final_query_name}")
+                geo_map_single = viz.create_geographic_map(filtered_graph_single_geo, title=f"Geographic Distribution: {final_query_name}")
                 components.html(geo_map_single._repr_html_(), height=650)
 
             # Graph Explorer
@@ -2243,13 +2265,13 @@ def run_analysis(name_input, country_input, fuzzy):
                 st.markdown("### Relationship Explorer")
 
                 # Entity selector
-                node_list_single = list(filtered_graph_single.nodes())
+                node_list_single = list(graph_single.nodes())
                 if node_list_single:
                     selected_entity_single = st.selectbox("Select Entity to Explore", node_list_single, key="entity_explorer_single")
 
                     if selected_entity_single:
                         # Get neighbors
-                        neighbors_single = gb.get_neighbors_table(filtered_graph_single, selected_entity_single)
+                        neighbors_single = gb.get_neighbors_table(graph_single, selected_entity_single)
 
                         if neighbors_single:
                             st.markdown(f"**Showing {len(neighbors_single)} relationships for {selected_entity_single}:**")
@@ -2909,8 +2931,28 @@ def run_conglomerate_analysis(parent_company, selected_subsidiaries, country_inp
     with viz_tab2:
         st.markdown("<div class='alert-box alert-info'>Geographic distribution showing entity locations and cross-border relationships</div>", unsafe_allow_html=True)
 
+        # Filter controls for geographic view
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            show_directors_cong_geo = st.checkbox("Show Directors", value=True, key="show_directors_cong_geo")
+        with col2:
+            show_shareholders_cong_geo = st.checkbox("Show Shareholders", value=True, key="show_shareholders_cong_geo")
+        with col3:
+            # Country filter
+            all_countries = ['All'] + stats['countries']
+            country_filter_geo = st.selectbox("Filter by Country", all_countries, key="country_filter_cong_geo")
+
+        # Filter graph for geographic view
+        filtered_graph_cong_geo = gb.filter_graph(
+            graph,
+            show_directors_cong_geo,
+            show_shareholders_cong_geo,
+            True,
+            country_filter_geo if country_filter_geo != 'All' else None
+        )
+
         # Create and display geographic map
-        geo_map_cong = viz.create_geographic_map(filtered_graph_cong, title=f"Geographic Distribution: {parent_company} Conglomerate")
+        geo_map_cong = viz.create_geographic_map(filtered_graph_cong_geo, title=f"Geographic Distribution: {parent_company} Conglomerate")
         components.html(geo_map_cong._repr_html_(), height=650)
 
     # Graph Explorer
@@ -2938,13 +2980,13 @@ def run_conglomerate_analysis(parent_company, selected_subsidiaries, country_inp
         st.markdown("### Relationship Explorer")
 
         # Entity selector
-        node_list_cong = list(filtered_graph_cong.nodes())
+        node_list_cong = list(graph.nodes())
         if node_list_cong:
             selected_entity_cong = st.selectbox("Select Entity to Explore", node_list_cong, key="entity_explorer_cong")
 
             if selected_entity_cong:
                 # Get neighbors
-                neighbors_cong = gb.get_neighbors_table(filtered_graph_cong, selected_entity_cong)
+                neighbors_cong = gb.get_neighbors_table(graph, selected_entity_cong)
 
                 if neighbors_cong:
                     st.markdown(f"**Showing {len(neighbors_cong)} relationships for {selected_entity_cong}:**")
