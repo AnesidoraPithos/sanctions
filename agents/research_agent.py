@@ -301,7 +301,11 @@ REPORT REQUIREMENTS:
 3. **Structure** (with detailed requirements for each section):
 
    **Executive Summary** (2-3 paragraphs)
-   - Provide a high-level risk assessment with overall threat level (High/Medium/Low)
+   - **CRITICAL REQUIREMENT:** Start with explicit threat classification on the first line:
+     Format: "Threat Level: [High/Medium/Low]" or "Risk Level: [High/Medium/Low]"
+     Example: "Threat Level: High"
+     Do not bury this information in prose - state it clearly at the very beginning.
+   - Follow with a high-level risk assessment explaining the threat level determination
    - Summarize key findings across all categories (regulatory, political, business)
    - Highlight the most critical risk factors and red flags
    - Conclude with an overall recommendation or assessment

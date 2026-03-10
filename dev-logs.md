@@ -2221,3 +2221,85 @@ Reverse search fully implemented with:
 - ✅ Progress tracking
 - ✅ Integration with existing selection interface
 
+
+
+risk alert not a threat/
+BAAI
+luxuriate your life
+huawei-subsidary-pick something that is not obviously a subsidary.
+organise a demo with tim chin & mddi
+
+financial flows is good to have
+
+show baseline product that is ready to go
+to scale it to mddi and mti we need a server, we need to host it
+virtually/hybrid
+
+1. show tim, likely in the room. we need to tell him this is the baseline modelt hat exists on my laptop.
+2. how to scale it so that other govt staff can use it (IMDA)
+3. how does MTI and MDDI use this (need cloud access) + money budgets
+4. in order for them to use this what do we need, steps we need, how much we need, approvals we need?
+5. here are more advanced features we can build in, minimum basements
+6. if you give me budget + serious workstream + i can improve it how...
+7. timeline 
+8. flag how much time i took to build this, realistically how much time + improve what.
+9. comfortably + stretch goal, give a range. project timeline
+10. this month (TIM, MDDI, MTI) 
+11. think through what they need to know and the core essentials.
+12. leave some space for Q&A
+13. limitations with adding china (with more money)
+
+14. get answers by this week from cloud team.
+
+
+ministries 12 total (MDDI, MTI, MFA)
+IMDA 4 total
+cost of additional person using this
+
+**summary of 9 march discussions**
+1. meeting with tim + mddi + mti + others happening in March (hybrid)
+    a. tell them how much time it took for me to build this
+    b. the features + all free + locally-hosted model for no traceability
+    c. if given $X, I can improve it by ABC
+    d. tell them the core essentials of what they need to know about the product
+    e. demo examples: luxuriate your life, a low key huawei subsidary company and BAAI
+    f. have space for Q&A
+2. find out from Frank how to scale this solution up so that different minsitries can use this
+    a. what do we need?
+    b. what steps are there?
+    c. how much we need?
+    d. what approvals we need?
+
+** todo list from 9 march discussions till big presentation occurs**
+1. demo uses: luxuriate your life, hidden huawei subsidary and BAAI. ensure that no bugs occur for these examples.
+2. after entering the entity name into the field, when you click ENTER, they should search
+3. sometimes when you do a basic search for the entity, no logs appear
+4. sometimes when you do a search on the entity (conglomerate) or (parents & sisters) it runs forever with logs showing success.
+5. improve the UIUX of the web application, right now there is a mixed use of toggles and check boxes.
+
+(0) Ask Seok Min for her opinion
+
+(0.5) Migrate to gitlab, someone has to create a new project for me
+
+(1) Wei Kong - quality assurance, assign someone to check through the code
+    - safety & security
+    - functionality is another
+    - software that checks + manual checks
+    - come up with test cases (generative)
+    - another LLM that runs through the tests and validates it
+    - request for a happy flow test case, most uses will go through (best case scenario what happens) during the generative process
+    - unhappy flow (random things user does)
+
+(2) Frank - how to deploy this to gcc (all stat boards, ministries)
+    - usage rates, service size 
+
+(3) Seok Min - Go through IDSC, IT security of internal IMDA products because this is going to be used by external agencies
+
+(4) upload to gcc, ready for use
+
+
+----- alt -----
+
+(1) Ask ITD - they have their own process to host on gcc
+
+

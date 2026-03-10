@@ -9,7 +9,13 @@ import visualizations_advanced as viz_adv
 import visualization_selector as viz_selector
 import streamlit.components.v1 as components
 import serialization_utils as serializer
-import export_utils as exporter 
+import export_utils as exporter
+
+# --- ANALYSIS CONFIGURATION CONSTANTS ---
+THREAT_SUMMARY_SCAN_LENGTH = 3000  # Characters to scan for AI threat level
+LOG_PREVIEW_LENGTH = 500  # Characters to log in debug preview
+OFFICIAL_SOURCE_HIGH_THRESHOLD = 3  # Official sources threshold for VERY HIGH risk
+LOW_MEDIA_THRESHOLD = 1  # Media count threshold for MID vs HIGH risk
 
 # --- CONFIGURATION ---
 st.set_page_config(
@@ -518,6 +524,9 @@ def restore_search(search_id):
     if results.get('conglomerate_data'):
         st.session_state.related_companies_found = results['conglomerate_data']
 
+    # Clear search history view flag so restored search displays
+    st.session_state.show_history = False
+
     st.success(f"✓ Restored search for: {saved_search['entity_name']}")
     st.rerun()
 
@@ -661,7 +670,7 @@ def main():
     st.markdown("---")
 
     # --- CONTROL PANEL ---
-    st.subheader("01 // SEARCH PARAMS")
+    st.subheader("01 // SEARCH PARAMETERS")
     
     # Use a container with a custom border look
     with st.container():
@@ -783,6 +792,15 @@ def main():
                 print(f"[DEBUG] Reverse search enabled for: {name_input}")
         else:
             st.session_state.analysis_complete = True
+
+    # Check if user wants to view search history
+    if st.session_state.get('show_history', False):
+        display_search_history()
+        # Add button to exit search history view
+        if st.button("← Back to Search"):
+            st.session_state.show_history = False
+            st.rerun()
+        st.stop()  # Stop execution here to only show search history
 
     # Check if we're displaying a restored search
     if st.session_state.get('showing_restored_search', False):
@@ -1875,6 +1893,157 @@ def display_subsidiary_selection(parent_company, depth):
                 del st.session_state.related_companies_found
             st.rerun()
 
+# --- HELPER FUNCTIONS ---
+
+def get_session_relationship_data():
+    """Extract subsidiary and sister company data from session state"""
+    related = st.session_state.get('related_companies_found', {})
+    return {
+        'subsidiaries': related.get('subsidiaries', []),
+        'sisters': related.get('sisters', [])
+    }
+
+def safe_db_operation(operation_name, operation_func, *args, show_traceback=False, **kwargs):
+    """
+    Wrapper for database operations with consistent error handling.
+
+    Args:
+        operation_name: Display name for the operation (e.g., "Auto-save", "Search save")
+        operation_func: Function to execute
+        *args: Positional arguments for the function
+        show_traceback: If True, show full traceback on error (default: False)
+        **kwargs: Keyword arguments for the function
+
+    Returns:
+        Result of the operation, or None if failed
+    """
+    try:
+        result = operation_func(*args, **kwargs)
+        if not result:
+            st.warning(f"{operation_name} failed: Database returned failure status")
+        return result
+    except Exception as e:
+        st.error(f"{operation_name} error: {str(e)}")
+        if show_traceback or st.session_state.get('debug_mode'):
+            import traceback
+            st.error(f"Traceback: {traceback.format_exc()}")
+        return None
+
+def extract_ai_threat_level(report_text):
+    """
+    Extract threat level from AI-generated report.
+
+    Args:
+        report_text: Full report text from AI agent
+
+    Returns:
+        str: 'HIGH', 'MEDIUM', 'LOW', or None if not found
+    """
+    import re
+
+    if not report_text:
+        return None
+
+    # Search expanded summary section
+    summary = report_text[:THREAT_SUMMARY_SCAN_LENGTH].lower()
+
+    # Consolidated pattern groups ordered by specificity
+    THREAT_PATTERNS = {
+        'explicit': [  # Direct threat/risk statements
+            r'(?:threat|risk|overall|assessment|severity)\s*(?:level)?[:\s]+(high|medium|low)',
+            r'classified as[:\s]+(high|medium|low)',
+            r'rated[:\s]+(high|medium|low)',
+        ],
+        'descriptive': [  # Contextual statements
+            r'(?:assessed as|represents|poses|presents|indicates)[:\s]+(high|medium|low)\s+(?:risk|threat)',
+            r'(high|medium|low)\s+(?:risk|threat|level|rating|score)',
+            r'(?:risk|threat)\s+level\s+is\s+(high|medium|low)',
+        ]
+    }
+
+    # Try patterns in order of specificity
+    for category in ['explicit', 'descriptive']:
+        for pattern in THREAT_PATTERNS[category]:
+            match = re.search(pattern, summary)
+            if match:
+                level = match.group(1).upper()
+                return level  # Returns 'HIGH', 'MEDIUM', or 'LOW'
+
+    # Simple keyword fallback
+    KEYWORD_MAP = {
+        'HIGH': ['high risk', 'high threat'],
+        'MEDIUM': ['medium risk', 'medium threat', 'moderate risk'],
+        'LOW': ['low risk', 'low threat', 'minimal risk']
+    }
+
+    for level, keywords in KEYWORD_MAP.items():
+        if any(kw in summary for kw in keywords):
+            return level
+
+    return None
+
+def calculate_risk_with_ai_elevation(ai_threat, media_count, official_count, match_type):
+    """
+    Calculate final risk level with AI threat elevation.
+
+    Args:
+        ai_threat: AI-extracted threat level ('HIGH', 'MEDIUM', 'LOW', None)
+        media_count: Number of media sources
+        official_count: Number of official sources
+        match_type: Type of match ('exact', 'high', 'low', 'none')
+
+    Returns:
+        tuple: (risk_level, risk_class) e.g., ('HIGH', 'high')
+    """
+    # Determine base risk from match quality and source counts
+    if media_count <= LOW_MEDIA_THRESHOLD:
+        base_risk = "MID"
+    elif official_count > OFFICIAL_SOURCE_HIGH_THRESHOLD:
+        base_risk = "VERY HIGH"
+    else:
+        base_risk = "HIGH"
+
+    # Apply AI elevation rules
+    if ai_threat == 'HIGH' and base_risk == "MID":
+        log(f"AI ASSESSMENT: Elevated from MID to HIGH (AI threat: HIGH, {match_type} match)", "WARN")
+        return "HIGH", "high"
+    elif ai_threat == 'MEDIUM' and base_risk == "LOW":
+        log(f"AI ASSESSMENT: Elevated to MID (AI threat: MEDIUM, {match_type} match)", "WARN")
+        return "MID", "mid"
+
+    # Return base risk
+    risk_class = "very-high" if base_risk == "VERY HIGH" else base_risk.lower()
+    return base_risk, risk_class
+
+def render_graph_explorer_content(filtered_graph, entity_name):
+    """
+    Render graph explorer UI elements (reusable for both expander and direct contexts).
+
+    Args:
+        filtered_graph: NetworkX graph to explore
+        entity_name: Name of the entity being explored
+    """
+    st.markdown("### Relationship Explorer")
+
+    node_list = list(filtered_graph.nodes())
+    if node_list:
+        selected = st.selectbox(
+            "Select Entity to Explore",
+            node_list,
+            key=f"entity_explorer_{entity_name}"
+        )
+
+        if selected:
+            neighbors = gb.get_neighbors_table(filtered_graph, selected)
+            if neighbors:
+                st.markdown(f"**Showing {len(neighbors)} relationships for {selected}:**")
+                df = pd.DataFrame(neighbors)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+            else:
+                st.info(f"No relationships found for {selected}")
+
+# --- END HELPER FUNCTIONS ---
+
 def run_analysis(name_input, country_input, fuzzy):
     """Display analysis results - fetches from cache if available"""
     # Fetch data (cached - won't re-fetch on button clicks)
@@ -1920,34 +2089,16 @@ def run_analysis(name_input, country_input, fuzzy):
         "INFO" if media_count > 0 else "WARN")
 
     # --- EXTRACT AI THREAT ASSESSMENT FROM REPORT ---
-    def extract_ai_threat_level(report_text):
-        """Extract threat level from AI intelligence report (Executive Summary)"""
-        import re
-        if not report_text:
-            return None
-
-        # Search first 1000 chars (Executive Summary section)
-        summary = report_text[:1000].lower()
-
-        # Look for threat/risk level patterns
-        patterns = [
-            r'threat level[:\s]+(high|medium|low)',
-            r'risk level[:\s]+(high|medium|low)',
-            r'overall risk[:\s]+(high|medium|low)',
-            r'assessed as[:\s]+(high|medium|low)\s+(risk|threat)',
-            r'represents a[:\s]+(high|medium|low)\s+risk',
-            r'poses a[:\s]+(high|medium|low)\s+risk',
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, summary)
-            if match:
-                level = match.group(1).upper()
-                return 'HIGH' if level == 'HIGH' else 'MEDIUM' if level == 'MEDIUM' else 'LOW'
-
-        return None
-
     ai_threat = extract_ai_threat_level(report)
+
+    # Debug logging for threat extraction
+    if ai_threat:
+        log(f"AI THREAT EXTRACTED: {ai_threat} from Due Diligence Report", "INFO")
+    else:
+        log("AI THREAT EXTRACTION: No threat level found in report (will default to SAFE if no DB match)", "WARN")
+        # Optionally log first N chars of report for debugging
+        if report:
+            log(f"Report preview: {report[:LOG_PREVIEW_LENGTH]}", "DEBUG")
 
     # --- THREAT CALCULATION ---
     # Use combined_score instead of API score for more granular threat assessment
@@ -1978,6 +2129,8 @@ def run_analysis(name_input, country_input, fuzzy):
             risk_class = "low"
             log("AI ASSESSMENT: LOW RISK (No database match)", "INFO")
         else:
+            # No DB match, no clear AI threat identified
+            log("No database match and no AI threat level extracted - defaulting to SAFE (verify Due Diligence Report)", "WARN")
             risk_level = "SAFE"  # No DB match, no clear AI threat identified
             risk_class = "safe"
     elif has_low_match:
@@ -2001,27 +2154,15 @@ def run_analysis(name_input, country_input, fuzzy):
             risk_level = "LOW"
             risk_class = "low"
     elif has_high_match:
-        # Strong fuzzy match
-        if media_count <= 1:
-            risk_level = "MID"
-            risk_class = "mid"
-        elif official_count > 3:
-            risk_level = "VERY HIGH"
-            risk_class = "very-high"
-        else:
-            risk_level = "HIGH"
-            risk_class = "high"
+        # Strong fuzzy match - use helper function
+        risk_level, risk_class = calculate_risk_with_ai_elevation(
+            ai_threat, media_count, official_count, "high fuzzy"
+        )
     elif has_exact_match:
-        # High confidence exact match
-        if media_count <= 1:
-            risk_level = "MID"
-            risk_class = "mid"
-        elif official_count > 3:
-            risk_level = "VERY HIGH"
-            risk_class = "very-high"
-        else:
-            risk_level = "HIGH"
-            risk_class = "high"
+        # High confidence exact match - use helper function
+        risk_level, risk_class = calculate_risk_with_ai_elevation(
+            ai_threat, media_count, official_count, "exact"
+        )
     else:
         # Fallback (shouldn't happen)
         risk_level = "LOW"
@@ -2295,17 +2436,30 @@ def run_analysis(name_input, country_input, fuzzy):
         shareholders_single = db.get_shareholders(company_name=final_query_name)
         transactions_single = db.get_transactions(company_name=final_query_name)
 
+        # Get subsidiary/sister company data from session state (if from conglomerate search)
+        relationship_data = get_session_relationship_data()
+        subsidiaries_from_session = relationship_data['subsidiaries']
+        sisters_from_session = relationship_data['sisters']
+
         # Check if we have any relationship data
-        if not directors_single and not shareholders_single and not transactions_single:
-            st.info("No relationship data available for this entity. Relationship diagrams require corporate structure data from SEC filings or other sources.")
+        has_financial_data = directors_single or shareholders_single or transactions_single
+        has_conglomerate_data = subsidiaries_from_session or sisters_from_session
+
+        if not has_financial_data and not has_conglomerate_data:
+            st.info("No relationship data available for this entity. Relationship diagrams require corporate structure data from SEC filings, conglomerate searches, or other sources.")
         else:
             # Build graph from available data
             with st.spinner("Building relationship network..."):
                 parent_info_single = {'jurisdiction': 'Unknown', 'status': 'Active'}
+
+                # Use subsidiary/sister data from session state if available
+                subsidiaries_for_graph = subsidiaries_from_session if subsidiaries_from_session else []
+                sisters_for_graph = sisters_from_session if sisters_from_session else []
+
                 graph_single = gb.build_entity_graph(
                     company_name=final_query_name,
-                    subsidiaries=[],
-                    sisters=[],
+                    subsidiaries=subsidiaries_for_graph,
+                    sisters=sisters_for_graph,
                     directors=directors_single,
                     shareholders=shareholders_single,
                     transactions=transactions_single,
@@ -2448,29 +2602,36 @@ def run_analysis(name_input, country_input, fuzzy):
 
     # Auto-save functionality
     if st.session_state.auto_save_enabled and not st.session_state.get(f'auto_saved_{analysis_id}', False):
-        # Generate search ID
-        search_id = serializer.generate_search_id()
+        try:
+            # Generate search ID
+            search_id = serializer.generate_search_id()
 
-        # Serialize parameters and results
-        serialized_params = serializer.serialize_search_params(search_data_to_save['search_params'])
-        serialized_results = serializer.serialize_search_results(search_data_to_save['results'])
-        summary_metrics = serializer.calculate_summary_metrics(search_data_to_save['results'])
+            # Serialize parameters and results
+            serialized_params = serializer.serialize_search_params(search_data_to_save['search_params'])
+            serialized_results = serializer.serialize_search_results(search_data_to_save['results'])
+            summary_metrics = serializer.calculate_summary_metrics(search_data_to_save['results'])
 
-        # Save to database
-        success = db.save_search_results(
-            search_id=search_id,
-            entity_name=final_query_name,
-            translated_name=search_data_to_save['translated_name'],
-            search_params=serialized_params,
-            results_data=serialized_results,
-            summary_metrics=summary_metrics,
-            user_metadata={'notes': '', 'tags': '[]', 'is_auto_saved': 1}
-        )
+            # Save to database
+            success = db.save_search_results(
+                search_id=search_id,
+                entity_name=final_query_name,
+                translated_name=search_data_to_save['translated_name'],
+                search_params=serialized_params,
+                results_data=serialized_results,
+                summary_metrics=summary_metrics,
+                user_metadata={'notes': '', 'tags': '[]', 'is_auto_saved': 1}
+            )
 
-        if success:
-            st.session_state[f'auto_saved_{analysis_id}'] = True
-            st.session_state.current_search_id = search_id
-            st.toast(f"✓ Search auto-saved (ID: {search_id[:12]}...)")
+            if success:
+                st.session_state[f'auto_saved_{analysis_id}'] = True
+                st.session_state.current_search_id = search_id
+                st.toast(f"✓ Search auto-saved (ID: {search_id[:12]}...)")
+            else:
+                st.warning("Auto-save failed: Database returned failure status")
+        except Exception as e:
+            st.error(f"Auto-save error: {str(e)}")
+            import traceback
+            st.error(f"Traceback: {traceback.format_exc()}")
 
     # Manual save and export buttons
     col_save1, col_save2, col_save3, col_save4 = st.columns(4)
@@ -2586,7 +2747,7 @@ def run_analysis(name_input, country_input, fuzzy):
     st.markdown("### 📜 Saved Search History")
     display_search_history()
 
-def display_entity_results(entity_name, data, country_input, fuzzy, conglomerate_context=None):
+def display_entity_results(entity_name, data, country_input, fuzzy, conglomerate_context=None, skip_expanders=False):
     """
     Display results for a single entity (reusable for both single and conglomerate searches).
     This is extracted from run_analysis() for code reuse.
@@ -2598,6 +2759,7 @@ def display_entity_results(entity_name, data, country_input, fuzzy, conglomerate
         fuzzy: Fuzzy search flag
         conglomerate_context: Optional dict with {'parent': str, 'subsidiaries': list, 'sisters': list}
                             for relationship diagram in conglomerate mode
+        skip_expanders: If True, skip creating expanders (used when already inside an expander)
     """
     final_query_name = data['final_query_name']
     us_results = data['us_results']
@@ -2776,17 +2938,31 @@ def display_entity_results(entity_name, data, country_input, fuzzy, conglomerate
                 )
 
         # Check if we have any relationship data for single entity mode
-        elif not directors_display and not shareholders_display and not transactions_display:
-            st.info("No relationship data available for this entity. Relationship diagrams require corporate structure data from SEC filings or other sources.")
         else:
-            # Build graph from available data (single entity mode)
-            with st.spinner("Building relationship network..."):
-                parent_info_display = {'jurisdiction': 'Unknown', 'status': 'Active'}
-                graph_display = gb.build_entity_graph(
-                    company_name=final_query_name,
-                    subsidiaries=[],
-                    sisters=[],
-                    directors=directors_display,
+            # Get subsidiary/sister data from session state if available
+            relationship_data_display = get_session_relationship_data()
+            subsidiaries_display_session = relationship_data_display['subsidiaries']
+            sisters_display_session = relationship_data_display['sisters']
+
+            has_financial_data_display = directors_display or shareholders_display or transactions_display
+            has_conglomerate_data_display = subsidiaries_display_session or sisters_display_session
+
+            if not has_financial_data_display and not has_conglomerate_data_display:
+                st.info("No relationship data available for this entity. Relationship diagrams require corporate structure data from SEC filings, conglomerate searches, or other sources.")
+            else:
+                # Build graph from available data (single entity mode)
+                with st.spinner("Building relationship network..."):
+                    parent_info_display = {'jurisdiction': 'Unknown', 'status': 'Active'}
+
+                    # Use session state data if available
+                    subsidiaries_for_display = subsidiaries_display_session if subsidiaries_display_session else []
+                    sisters_for_display = sisters_display_session if sisters_display_session else []
+
+                    graph_display = gb.build_entity_graph(
+                        company_name=final_query_name,
+                        subsidiaries=subsidiaries_for_display,
+                        sisters=sisters_for_display,
+                        directors=directors_display,
                     shareholders=shareholders_display,
                     transactions=transactions_display,
                     parent_info=parent_info_display
@@ -2842,26 +3018,13 @@ def display_entity_results(entity_name, data, country_input, fuzzy, conglomerate
                 components.html(geo_map_display._repr_html_(), height=650)
 
             # Graph Explorer (simplified for individual entity view)
-            with st.expander("📊 EXPLORE GRAPH DATABASE"):
-                st.markdown("### Relationship Explorer")
-
-                # Entity selector
-                node_list_display = list(filtered_graph_display.nodes())
-                if node_list_display:
-                    selected_entity_display = st.selectbox("Select Entity to Explore", node_list_display, key=f"entity_explorer_display_{final_query_name}")
-
-                    if selected_entity_display:
-                        # Get neighbors
-                        neighbors_display = gb.get_neighbors_table(filtered_graph_display, selected_entity_display)
-
-                        if neighbors_display:
-                            st.markdown(f"**Showing {len(neighbors_display)} relationships for {selected_entity_display}:**")
-
-                            # Convert to DataFrame for display
-                            df_neighbors_display = pd.DataFrame(neighbors_display)
-                            st.dataframe(df_neighbors_display, use_container_width=True, hide_index=True)
-                        else:
-                            st.info(f"No relationships found for {selected_entity_display}")
+            # Skip expander if already inside one (nested context)
+            if not skip_expanders:
+                with st.expander("📊 EXPLORE GRAPH DATABASE"):
+                    render_graph_explorer_content(filtered_graph_display, final_query_name)
+            else:
+                # In nested context, render without expander
+                render_graph_explorer_content(filtered_graph_display, final_query_name)
 
 def run_conglomerate_analysis(parent_company, selected_subsidiaries, country_input, fuzzy):
     """
@@ -3170,7 +3333,8 @@ def run_conglomerate_analysis(parent_company, selected_subsidiaries, country_inp
                 'subsidiaries': subsidiaries_list,
                 'sisters': sisters_list
             }
-            display_entity_results(entity['name'], data, country_input, fuzzy, conglomerate_context=conglomerate_ctx)
+            # Skip expanders since we're already inside one
+            display_entity_results(entity['name'], data, country_input, fuzzy, conglomerate_context=conglomerate_ctx, skip_expanders=True)
 
     # Log to database
     db.log_analysis_run(
