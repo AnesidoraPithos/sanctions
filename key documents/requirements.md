@@ -31,21 +31,97 @@ Currently, staff must conduct time-consuming manual research across 10+ scattere
 
 ### Solution Summary
 
-The **Entity Background Research Agent** is an AI-powered intelligence operations system that automates multi-source research across 10+ databases, visualizes entity relationships, and generates comprehensive risk assessments in minutes rather than hours. The system integrates all data sources into a single interface with:
+The **Entity Background Research Agent** is an AI-powered intelligence operations system with a modern **React/Next.js frontend** and **REST API backend** that automates multi-source research across 10+ databases, visualizes entity relationships, and generates comprehensive risk assessments in minutes rather than hours. The system features a **three-tiered research system** allowing users to balance speed, cost, and depth based on decision importance.
 
-- Multi-source sanctions screening (OFAC, BIS, Treasury, State, DOD, FCC)
-- Conglomerate search with configurable depth (1-3 levels) and ownership filtering
-- Automated SEC EDGAR extraction (directors, shareholders, transactions)
-- Fuzzy name matching with configurable thresholds
-- Interactive relationship visualizations (Neo4j-style network graphs)
+### Research Tiers
+
+The system provides three research depth levels to balance speed, cost, and comprehensiveness:
+
+**Base Research** (~30-60 seconds)
+- Sanctions database screening (10+ USA databases: OFAC, BIS, Treasury, State, DOD, FCC)
+- AI-generated intelligence report with executive summary and risk assessment
+- Media source citations (official government sources + general media via DuckDuckGo)
+- Risk level assessment (SAFE/LOW/MID/HIGH/VERY HIGH)
+- PDF/Excel/JSON export capabilities
+- **Use case**: Quick compliance check before routine engagements, vendor screening, preliminary risk assessment
+
+**Network Research** (~2-5 minutes)
+- Everything in Base tier
+- Corporate structure mapping (subsidiaries, parent companies, sister companies)
+- Multi-source conglomerate search (SEC EDGAR 10-K Exhibit 21.1, OpenCorporates API, Wikipedia)
+- Director and shareholder extraction (SEC EDGAR DEF 14A, proxy statements)
+- Board member and stakeholder identification from SEC filings
+- Cross-entity sanctions screening (selected entities from corporate network)
+- Relationship network visualization (interactive D3.js/Cytoscape graphs)
+- Multi-sheet Excel export with corporate structure data
+- **Use case**: Due diligence for partnerships, M&A target screening, investment decisions, high-value contracts
+
+**Deep Research** (~5-15 minutes)
+- Everything in Network tier
+- Financial flow mapping (SEC related party transactions, trade data analysis)
+- Trade data integration (Bills of Lading via ImportYeti - planned)
+- Procurement networks (USAspending.gov subcontractor relationships - planned)
+- Criminal history checks for key personnel (multi-jurisdiction - planned)
+- Beneficial ownership tracing (offshore entities, UBOs via OCCRP Aleph, Open Ownership - planned)
+- Director/officer background checks across discovered personnel
+- Comprehensive multi-sheet export with all data layers (financial, personnel, ownership)
+- **Use case**: High-stakes engagements, regulatory compliance investigations, litigation support, government contract decisions
+
+**Architecture**:
+- Modern React/Next.js frontend with research tier slider interface
+- REST API backend (Flask/FastAPI) with tier-specific endpoints
+- Real-time progress updates via WebSocket for network/deep searches
 - Save/restore functionality providing 15-300x faster results (< 2 seconds vs 30 seconds - 10 minutes)
-- LLM-generated intelligence reports with export capabilities (JSON, Excel, PDF)
+- API-first design enabling future integrations and automation workflows
 
 ---
 
 # 2. User Journeys
 
+## Journey 0 — Selecting Research Tier
+
+**Purpose**: Allow user to choose research depth based on decision importance and time/budget constraints.
+
+**Steps**:
+1. User opens React web application (homepage)
+2. User sees research tier slider with three discrete positions:
+   - **Left**: "Base Research" - Fast compliance check (30-60 sec)
+   - **Center**: "Network Research" - Detailed corporate structure (2-5 min)
+   - **Right**: "Deep Research" - Comprehensive investigation (5-15 min)
+3. User drags slider to desired tier or clicks tier name/position
+4. UI displays for selected tier:
+   - Tier name (bold, color-coded: Base=green, Network=blue, Deep=red)
+   - Estimated time range
+   - What's included (expandable feature list with checkmarks)
+   - Cost indication (e.g., "Low API usage" / "Medium" / "High") - if applicable
+5. User reviews tier features by expanding feature list
+6. User confirms tier selection (slider position persists, tier highlighted)
+7. User enters entity name in search form
+8. User enters country (optional but recommended)
+9. User enables/disables fuzzy matching toggle
+10. User clicks "EXECUTE SEARCH" button
+11. System validates inputs and displays tier confirmation modal: "Execute Network Research (~2-5 min)?"
+12. User confirms execution
+13. System sends request to appropriate tier endpoint: `POST /api/search/{tier}`
+14. System runs research at selected tier level
+15. For network/deep tiers: Progress tracker displays via WebSocket (e.g., "Searching corporate structure... 45% complete")
+16. Results display with tier indicator badge (e.g., "NETWORK RESEARCH" badge at top of results)
+17. Results page shows what was analyzed based on tier (with tier-specific tabs visible)
+18. User can optionally upgrade to higher tier via "Upgrade to Deep Research" button
+
+**Outcome**: User has clear expectations about search scope, duration, and cost before execution. System executes only the features included in selected tier, preventing over/under-investigation.
+
+**Edge Cases**:
+- **Default Tier**: System defaults to Network tier (center position) as recommended starting point
+- **Tier Persistence**: Last selected tier saved in browser localStorage/user settings for session continuity
+- **Mid-Search Cancellation**: User can cancel long-running network/deep searches via "Cancel" button
+- **Post-Search Upgrade**: User can upgrade from base→network or network→deep after reviewing initial results (system re-runs with upgraded tier)
+
+---
+
 ## Journey 1 – Basic Sanctions Screening
+
+**Research Tier**: Base Research (~30-60 seconds)
 
 **Purpose**: Quickly determine if a single entity poses sanctions risk for a stakeholder engagement decision.
 
@@ -67,6 +143,8 @@ The **Entity Background Research Agent** is an AI-powered intelligence operation
 ---
 
 ## Journey 2 – Conglomerate Investigation
+
+**Research Tier**: Network Research (~2-5 minutes for Phases 1-7)
 
 **Purpose**: Map complete corporate network of a conglomerate by querying official registries, leveraging director/officer networks, analyzing digital infrastructure, cross-referencing offshore leaks, and identifying beneficial ownership - providing a multi-dimensional view of corporate control beyond what companies officially disclose.
 
@@ -211,6 +289,8 @@ The **Entity Background Research Agent** is an AI-powered intelligence operation
 
 ## Journey 3 – Reverse Search (Parent & Sister Company Discovery)
 
+**Research Tier**: Network Research (~2-5 minutes)
+
 **Purpose**: Starting from a subsidiary, discover its parent company and identify sister companies using official registries, director networks, infrastructure correlation, and offshore leak databases - providing comprehensive ownership context beyond what the subsidiary officially discloses.
 
 **Enhanced Steps**:
@@ -343,6 +423,8 @@ The **Entity Background Research Agent** is an AI-powered intelligence operation
 ---
 
 ## Journey 4 – Comprehensive Financial Flow Mapping and Intelligence Extraction
+
+**Research Tier**: Network Research (Phases 1-3: SEC EDGAR) + Deep Research (Phases 2-8: Trade data, procurement, criminal checks)
 
 **Purpose**: Map complete financial ecosystem of an entity by extracting SEC regulatory data, tracing operational capital outflows through trade data, identifying B2B vendor networks through procurement records, analyzing marketing expenditures, and uncovering hidden offshore structures - providing a 360-degree view of where money flows.
 
@@ -589,12 +671,102 @@ The **Entity Background Research Agent** is an AI-powered intelligence operation
 
 User stories organized by functional category, with implementation status marked as:
 - ✅ **Implemented** in v2.1.0
-- 📋 **Planned** for future releases
+- 📋 **Planned** for future releases (v3.0.0 with React frontend and tiered research)
 - ❌ **Out of Scope** (Won't Have)
 
 ---
 
-## Category 1: Core Sanctions Screening
+## Category 0: Research Tier Selection
+
+### US-0.1: Research Tier Slider UI
+
+**Type**: Functional
+**Priority**: Must Have
+**Status**: 📋 Planned for v3.0.0
+
+**User Story**
+
+As an international relations staff member
+I want to select my research depth via a slider before starting a search
+So that I can balance time and cost against thoroughness based on the decision's importance.
+
+**Acceptance Criteria**
+
+- UI displays horizontal slider with three discrete positions: Base (left), Network (center), Deep (right)
+- Each position displays tier name, estimated time, and included features (expandable list)
+- Slider is touch-friendly for tablet/mobile use (minimum 44x44px tap targets)
+- Clicking tier name or position directly selects that tier (not just dragging)
+- Visual indication of selected tier (highlighted, color-coded: Base=green, Network=blue, Deep=red)
+- Feature list expands on click to show full details of what's included in tier
+- Feature list uses checkmarks (✓) for included items, X or grayed-out for excluded items
+- Slider position persists across sessions (saved in localStorage or user preferences)
+- Default tier is Network (center position) if no previous selection exists
+- Mobile-responsive design: slider stacks vertically on small screens (<640px)
+- Tier selection is required before search execution (search button disabled until tier selected)
+- Cost indication displayed if applicable (e.g., "Low", "Medium", "High" or API call estimates)
+- Comparison table accessible via "Compare Tiers" link showing side-by-side feature comparison
+
+### US-0.2: Tier-Based Search Execution
+
+**Type**: Functional
+**Priority**: Must Have
+**Status**: 📋 Planned for v3.0.0
+
+**User Story**
+
+As a compliance officer
+I want the system to execute only the features included in my selected tier
+So that I get appropriate results without paying for unnecessary depth or waiting for unneeded analysis.
+
+**Acceptance Criteria**
+
+- **Base tier execution**: Runs only sanctions screening (10+ databases), OSINT media search, risk scoring, LLM report generation
+- **Network tier execution**: Runs base features + conglomerate search + SEC EDGAR personnel extraction + cross-entity screening + network graph
+- **Deep tier execution**: Runs network features + financial flow mapping + trade data + criminal history checks (planned) + beneficial ownership tracing (planned)
+- Results page displays tier badge (BASE/NETWORK/DEEP) prominently at top of results
+- Results tabs are tier-aware: base tier shows only 3 tabs (sanctions, media, report), network adds 4 tabs (subsidiaries, directors, shareholders, graph), deep adds 3 tabs (financial flows, criminal history, ownership)
+- System sends request to correct API endpoint: `/api/search/base`, `/api/search/network`, or `/api/search/deep`
+- Progress tracker shows tier-appropriate steps (base: 3 steps, network: 8 steps, deep: 12 steps)
+- Search history records tier used for each search (displayed in history list)
+- Upgrade option available after results: "Upgrade to Network Research" button (base→network) or "Upgrade to Deep Research" button (network→deep)
+- Upgrade button triggers new search at higher tier, preserving original search entity/parameters
+- Downgrade not available (cannot go from network→base or deep→network after execution)
+- Export format respects tier: base tier exports 1-sheet Excel, network exports 5-sheet, deep exports 8-sheet
+- API response includes tier metadata: `{ "tier": "network", "features_executed": ["sanctions", "conglomerate", "personnel"], ... }`
+
+### US-0.3: Post-Search Tier Upgrade
+
+**Type**: Functional
+**Priority**: Should Have
+**Status**: 📋 Planned for v3.0.0
+
+**User Story**
+
+As a risk analyst
+I want to upgrade my search from base to network or network to deep after reviewing initial results
+So that I can start fast and dive deeper only when initial findings warrant further investigation.
+
+**Acceptance Criteria**
+
+- Results page displays "Upgrade" button if current tier is not Deep
+- Button text context-aware: "Upgrade to Network Research (adds corporate structure)" or "Upgrade to Deep Research (adds financial flows)"
+- Clicking upgrade button shows confirmation modal with:
+  - Current tier and what was analyzed
+  - Target tier and what will be added
+  - Estimated additional time (e.g., "This will take an additional 2-5 minutes")
+  - Cost indication if applicable
+- User confirms upgrade, system re-executes search at higher tier
+- Upgraded search reuses entity name, country, and fuzzy settings from original search
+- System preserves original base/network results and appends new data (no re-query of already completed steps)
+- Results page updates to show upgraded tier badge
+- Search history shows both original and upgraded searches as separate entries (with "Upgraded from" reference)
+- Upgrade button disabled during search execution (cannot upgrade mid-search)
+- Upgrade available for saved searches: user can restore old base search and upgrade to network/deep
+- System tracks upgrade path in metadata: `{ "original_tier": "base", "upgraded_to": "network", "upgrade_timestamp": "..." }`
+
+---
+
+## Category 1: Core Sanctions Screening (Base Tier)
 
 ### US-1.1: Multi-Source Sanctions Database Screening
 
@@ -3061,6 +3233,217 @@ So that a single user cannot overwhelm the system with excessive requests.
 - Integration test: Verify rate limit headers present in response
 - Manual verification: Test `Retry-After` header value matches expected reset time
 - Load test: Multiple users should have independent rate limit counters
+
+---
+
+### US-9.9: Modern React/Next.js Application
+
+**Type**: Non-Functional
+**Priority**: Must Have
+**Status**: 📋 Planned for v3.0.0
+
+**User Story**
+
+As a user
+I want a fast, responsive web interface built with modern React
+So that I have smooth interactions, real-time updates, and an excellent user experience.
+
+**Acceptance Criteria**
+
+- Built with **Next.js 14+** using App Router (not Pages Router) and **TypeScript 5+**
+- Client-side routing for instant page transitions without full page reloads
+- Responsive design working on desktop (1920x1080), tablet (768x1024), and mobile (375x667)
+- Dark theme matching existing Streamlit design (navy/black cyber aesthetic with neon accents)
+- Loading states with skeleton screens (no blank pages during data fetching)
+- Error boundaries with user-friendly error messages (avoid technical stack traces)
+- Progressive Web App (PWA) support:
+  - Service worker for offline access to saved searches
+  - Manifest file for "Add to Home Screen"
+  - Offline indicator when network unavailable
+- Accessibility compliance:
+  - WCAG 2.1 AA standards
+  - Keyboard navigation support (Tab, Enter, Esc)
+  - Screen reader compatible (ARIA labels, semantic HTML)
+  - Focus indicators visible
+- Performance targets (Lighthouse scores):
+  - Performance: > 90
+  - Accessibility: > 95
+  - Best Practices: > 95
+  - SEO: > 90
+- Code quality:
+  - ESLint configured with recommended rules
+  - Prettier for code formatting
+  - TypeScript strict mode enabled
+  - No `any` types (use proper TypeScript types)
+
+**Verification**
+
+- Lighthouse audit: Verify scores meet thresholds
+- Manual testing: Test on Chrome, Firefox, Safari, Edge (latest versions)
+- Responsive testing: Use browser dev tools device emulation for tablet/mobile
+- Accessibility audit: Use axe DevTools to scan for WCAG violations
+- Manual keyboard navigation: Tab through entire app without mouse
+- PWA testing: Install as app on desktop and mobile, test offline mode
+
+---
+
+### US-9.10: Real-Time Search Progress Updates
+
+**Type**: Functional
+**Priority**: Should Have
+**Status**: 📋 Planned for v3.0.0
+
+**User Story**
+
+As a user waiting for network/deep research results
+I want to see real-time progress updates
+So that I know the system is working and can estimate remaining time.
+
+**Acceptance Criteria**
+
+- **WebSocket connection** established when network/deep search initiated:
+  - Connect to `WebSocket /ws/progress/{search_id}`
+  - Automatic reconnection with exponential backoff on disconnect
+  - Heartbeat/ping-pong to keep connection alive
+- **Progress bar** shows completion percentage (0-100%)
+- **Current step indicator** displays text (e.g., "Searching SEC EDGAR...", "Screening subsidiaries 5/12")
+- **Estimated time remaining** updates dynamically based on actual progress rate
+- **Cancel button** allows user to abort long-running searches:
+  - Sends cancellation request to backend via WebSocket
+  - Backend gracefully stops search and returns partial results
+  - UI displays "Search cancelled" message
+- **Progress state persistence**: If user navigates away and returns, progress reconnects and resumes display
+- **Fallback to HTTP polling** if WebSocket connection fails:
+  - Poll `GET /api/results/{search_id}` every 2 seconds
+  - Display warning: "Real-time updates unavailable, using polling mode"
+- **Progress messages** include:
+  - Stage name (e.g., "Corporate Structure Search", "Personnel Screening")
+  - Sub-step details (e.g., "Found 12 subsidiaries", "Screening director 3 of 7")
+  - Warnings if external API slow or unavailable
+- **Time estimates**:
+  - Base tier: Show progress bar only (too fast for detailed steps)
+  - Network tier: 5-8 progress steps with time estimates
+  - Deep tier: 10-15 progress steps with time estimates
+
+**Verification**
+
+- Integration test: Start network search, verify WebSocket receives progress messages
+- Manual test: Start deep search, observe progress bar and step updates
+- Manual test: Click cancel button mid-search, verify search stops
+- Manual test: Start search, navigate to history page, return to results, verify progress resumed
+- Manual test: Disable WebSocket in browser, verify fallback to HTTP polling
+- Load test: 10 concurrent searches should all receive independent progress updates
+
+---
+
+### US-9.11: Tier-Based REST API Endpoints
+
+**Type**: System
+**Priority**: Must Have
+**Status**: 📋 Planned for v3.0.0
+
+**Technical Requirements**
+
+**Framework**: Flask or FastAPI with Python 3.10+
+
+**API Design**:
+- RESTful API design following OpenAPI 3.0 specification
+- JWT authentication for user sessions
+- Rate limiting: 100 requests/hour per user (base tier), 500/hour (premium tier)
+- CORS configuration for frontend domain
+- Request/response validation with Pydantic models
+- Async support for long-running operations
+
+**Core Endpoints**:
+
+1. **Authentication**
+   - `POST /api/auth/login` - User authentication
+     - Request: `{ "username": "string", "password": "string" }`
+     - Response: `{ "token": "jwt_token", "expires_in": 3600 }`
+
+2. **Tier-Specific Search**
+   - `POST /api/search/base` - Base tier search (30-60 sec)
+     - Request:
+       ```json
+       {
+         "entity_name": "Huawei Technologies",
+         "country": "China",
+         "fuzzy_matching": true,
+         "fuzzy_threshold": 80
+       }
+       ```
+     - Response:
+       ```json
+       {
+         "search_id": "abc123",
+         "tier": "base",
+         "status": "completed",
+         "risk_level": "VERY HIGH",
+         "results": {
+           "sanctions_matches": [...],
+           "media_sources": [...],
+           "intelligence_report": "...",
+           "risk_score": 95
+         },
+         "timestamp": "2026-03-12T15:30:00Z",
+         "duration_seconds": 45
+       }
+       ```
+   - `POST /api/search/network` - Network tier search (2-5 min)
+     - Request: Same as base + optional `conglomerate_depth`, `ownership_threshold`
+     - Response: Includes `subsidiaries`, `directors`, `shareholders`, `relationship_graph`
+   - `POST /api/search/deep` - Deep tier search (5-15 min)
+     - Request: Same as network
+     - Response: Includes `financial_flows`, `criminal_history`, `beneficial_ownership`
+
+3. **Results Management**
+   - `GET /api/results/{search_id}` - Retrieve search results
+   - `GET /api/history` - List user's saved searches
+     - Query params: `?limit=50&offset=0&risk_level=HIGH&sort=timestamp_desc`
+   - `DELETE /api/history/{search_id}` - Delete saved search
+
+4. **Export**
+   - `POST /api/export/{search_id}` - Export results
+     - Request: `{ "format": "pdf|excel|json" }`
+     - Response: Binary file download or `{ "download_url": "..." }`
+
+5. **Settings**
+   - `GET /api/settings` - Get user settings
+   - `PUT /api/settings` - Update user settings
+
+6. **Real-Time Progress (WebSocket)**
+   - `WebSocket /ws/progress/{search_id}` - Real-time progress updates
+     - Messages:
+       ```json
+       {
+         "search_id": "abc123",
+         "status": "in_progress",
+         "current_step": "Searching corporate structure...",
+         "progress_percent": 45,
+         "estimated_remaining_seconds": 120
+       }
+       ```
+
+**Error Handling**:
+- `400 Bad Request` - Invalid request parameters
+- `401 Unauthorized` - Missing or invalid JWT token
+- `404 Not Found` - Search ID not found
+- `429 Too Many Requests` - Rate limit exceeded
+- `500 Internal Server Error` - Server-side error
+
+**API Documentation**:
+- OpenAPI 3.0 specification auto-generated via FastAPI or Flasgger
+- Swagger UI available at `/docs`
+- ReDoc available at `/redoc`
+- JSON schema downloadable at `/openapi.json`
+
+**Verification**
+
+- Integration test: Call each tier endpoint and verify response structure
+- Integration test: Verify JWT authentication rejects unauthorized requests
+- Integration test: Test rate limiting returns 429 after threshold
+- Manual test: Review Swagger UI documentation
+- Load test: 50 concurrent base searches complete within 120 seconds
 
 ---
 
