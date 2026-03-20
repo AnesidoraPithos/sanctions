@@ -109,22 +109,30 @@ export const api = {
 
   /**
    * Network tier search (Phase 2)
+   * Note: Network tier can take 2-10 minutes depending on depth
    */
   searchNetwork: async (request: SearchRequest): Promise<SearchResponse> => {
     const response = await apiClient.post<SearchResponse>(
       '/api/search/network',
-      request
+      request,
+      {
+        timeout: 600000, // 10 minutes timeout for network tier
+      }
     );
     return response.data;
   },
 
   /**
    * Deep tier search (Phase 3)
+   * Note: Deep tier can take 5-15 minutes
    */
   searchDeep: async (request: SearchRequest): Promise<SearchResponse> => {
     const response = await apiClient.post<SearchResponse>(
       '/api/search/deep',
-      request
+      request,
+      {
+        timeout: 900000, // 15 minutes timeout for deep tier
+      }
     );
     return response.data;
   },

@@ -25,11 +25,26 @@ export interface SearchRequest {
   country?: string;
   fuzzy_threshold?: number;
   tier: ResearchTier;
+  // Network tier parameters (Phase 2)
+  network_depth?: number; // 1-3 levels
+  ownership_threshold?: number; // 0-100%
+  include_sisters?: boolean;
+  // Network tier: Configurable search limits (Phase 2 enhancement)
+  max_level_2_searches?: number; // 5-50, default: 20
+  max_level_3_searches?: number; // 5-30, default: 10
 }
 
 /**
  * API Response Types
  */
+
+export interface RiskExplanation {
+  sanctions_signal: string;
+  intelligence_signal: string;
+  intelligence_score: number | null;
+  intelligence_breakdown: string | null;
+  final_reasoning: string;
+}
 
 export interface SanctionsHit {
   name: string;
@@ -56,12 +71,161 @@ export interface MediaHit {
   relevance?: string;
 }
 
+/**
+ * Network Tier Types (Phase 2)
+ */
+
+export interface Warning {
+  source: string;
+  message: string;
+  severity: "info" | "warning" | "error";
+}
+
+export interface NetworkNode {
+  data: {
+    id: string;
+    label: string;
+    node_type: "parent" | "subsidiary" | "sister" | "director" | "shareholder";
+    entity_type: "company" | "person";
+    size?: number;
+    color?: string;
+    jurisdiction?: string;
+    status?: string;
+    ownership_pct?: number;
+    title?: string;
+    nationality?: string;
+    sanctions_hit?: number;
+    [key: string]: unknown;
+  };
+}
+
+export interface NetworkEdge {
+  data: {
+    id: string;
+    source: string;
+    target: string;
+    relationship: "owns" | "director_of" | "shareholder_of" | "transacted_with" | "sibling_of";
+    ownership_pct?: number;
+    edge_color?: string;
+    edge_width?: number;
+    [key: string]: unknown;
+  };
+}
+
+export interface NetworkData {
+  nodes: NetworkNode[];
+  edges: NetworkEdge[];
+  statistics: {
+    total_nodes: number;
+    total_edges: number;
+    companies: number;
+    people: number;
+    num_countries?: number;
+    countries?: string[];
+    most_connected?: string;
+    most_connected_degree?: number;
+    // Level breakdown for subsidiaries
+    level_1_count?: number;
+    level_2_count?: number;
+    level_3_count?: number;
+  };
+  parent_info?: ParentInfo;
+  subsidiaries?: Subsidiary[];
+  sisters?: Subsidiary[];
+}
+
+export interface Subsidiary {
+  name: string;
+  jurisdiction?: string;
+  status?: string;
+  ownership_percentage?: number;
+  level?: number;
+  relationship?: string;
+  sanctions_hits?: number;
+  sanctions_data?: SanctionsHit[];
+  source?: string;              // Data source: 'sec_edgar', 'opencorporates_api', 'wikipedia', 'duckduckgo'
+  reference_url?: string;       // URL to source document
+}
+
+export interface ParentInfo {
+  name: string;
+  jurisdiction?: string;
+  relationship: 'parent';
+  confidence?: 'high' | 'medium' | 'low';
+  source?: string;
+  reference_url?: string;
+}
+
+export interface Director {
+  id: number;
+  company_name: string;
+  cik?: string;
+  name: string;
+  title?: string;
+  nationality?: string;
+  biography?: string;
+  other_positions?: string;
+  filing_type?: string;
+  filing_date?: string;
+  source_url?: string;
+  sanctions_hit?: number;
+  sanctions_hits?: number;
+  sanctions_data?: SanctionsHit[];
+  date_added?: string;
+  last_updated?: string;
+}
+
+export interface Shareholder {
+  id: number;
+  company_name: string;
+  cik?: string;
+  name: string;
+  type?: string;
+  ownership_percentage?: number;
+  voting_rights?: number;
+  jurisdiction?: string;
+  filing_type?: string;
+  filing_date?: string;
+  source_url?: string;
+  sanctions_hit?: number;
+  sanctions_hits?: number;
+  sanctions_data?: SanctionsHit[];
+  date_added?: string;
+  last_updated?: string;
+}
+
+export interface Transaction {
+  id: number;
+  company_name: string;
+  cik?: string;
+  transaction_type?: string;
+  counterparty?: string;
+  relationship?: string;
+  amount?: number;
+  currency?: string;
+  transaction_date?: string;
+  purpose?: string;
+  terms?: string;
+  filing_type?: string;
+  filing_date?: string;
+  source_url?: string;
+  date_added?: string;
+  last_updated?: string;
+}
+
+export interface FinancialIntelligence {
+  directors: Director[];
+  shareholders: Shareholder[];
+  transactions: Transaction[];
+}
+
 export interface SearchResponse {
   search_id: string;
   status: SearchStatus;
   tier: ResearchTier;
   entity_name: string;
   risk_level: RiskLevel;
+  risk_explanation?: RiskExplanation;
   sanctions_hits: number;
   media_hits: number;
   intelligence_report?: string;
@@ -69,6 +233,12 @@ export interface SearchResponse {
   sanctions_data?: SanctionsHit[];
   media_data?: MediaHit[];
   metadata?: Record<string, unknown>;
+  // Network tier fields (Phase 2)
+  network_data?: NetworkData;
+  financial_intelligence?: FinancialIntelligence;
+  subsidiaries?: Subsidiary[];
+  warnings?: Warning[];
+  data_sources_used?: string[];
 }
 
 export interface ResultsResponse {
@@ -76,6 +246,7 @@ export interface ResultsResponse {
   entity_name: string;
   tier: ResearchTier;
   risk_level: RiskLevel;
+  risk_explanation?: RiskExplanation;
   sanctions_hits: number;
   sanctions_data: SanctionsHit[];
   research_data: {
@@ -89,6 +260,12 @@ export interface ResultsResponse {
   intelligence_report?: string;
   timestamp: string;
   metadata?: Record<string, unknown>;
+  // Network tier fields (Phase 2)
+  network_data?: NetworkData | Record<string, unknown>;
+  financial_intelligence?: FinancialIntelligence | Record<string, unknown>;
+  subsidiaries?: Subsidiary[];
+  warnings?: Warning[];
+  data_sources_used?: string[];
 }
 
 export interface HistoryEntry {
@@ -124,9 +301,45 @@ export interface SearchFormProps {
 export interface RiskBadgeProps {
   level: RiskLevel;
   size?: "sm" | "md" | "lg";
+  explanation?: RiskExplanation;
 }
 
 export interface TierBadgeProps {
   tier: ResearchTier;
   size?: "sm" | "md";
+}
+
+/**
+ * Network Tier Component Props (Phase 2)
+ */
+
+export interface TierSelectorProps {
+  selectedTier: ResearchTier;
+  onTierChange: (tier: ResearchTier) => void;
+  networkDepth?: number;
+  onNetworkDepthChange?: (depth: number) => void;
+  ownershipThreshold?: number;
+  onOwnershipThresholdChange?: (threshold: number) => void;
+  includeSisters?: boolean;
+  onIncludeSistersChange?: (include: boolean) => void;
+  // Search limit controls (Phase 2 enhancement)
+  maxLevel2Searches?: number;
+  onMaxLevel2SearchesChange?: (max: number) => void;
+  maxLevel3Searches?: number;
+  onMaxLevel3SearchesChange?: (max: number) => void;
+}
+
+export interface NetworkGraphProps {
+  networkData: NetworkData;
+  height?: number;
+  onNodeClick?: (nodeId: string) => void;
+}
+
+export interface FinancialIntelligenceProps {
+  financial_intelligence: FinancialIntelligence;
+}
+
+export interface SubsidiariesListProps {
+  subsidiaries: Subsidiary[];
+  onSubsidiaryClick?: (subsidiary: Subsidiary) => void;
 }

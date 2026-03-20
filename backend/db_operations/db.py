@@ -151,6 +151,9 @@ def get_search_results(search_id: str) -> Optional[Dict[str, Any]]:
         # Parse JSON results
         results_data = json.loads(results_json) if results_json else {}
 
+        # Extract network tier fields (Phase 2)
+        network_data = results_data.get('network', {})
+
         return {
             "search_id": analysis_id,
             "entity_name": query_term,
@@ -159,7 +162,11 @@ def get_search_results(search_id: str) -> Optional[Dict[str, Any]]:
             "sanctions_hits": match_count,
             "sanctions_data": results_data.get('sanctions', []),
             "research_data": results_data.get('research', {}),
-            "network_data": results_data.get('network', {}),
+            "network_data": network_data.get('graph', {}) if network_data else {},
+            "financial_intelligence": network_data.get('financial_intelligence', {}) if network_data else {},
+            "subsidiaries": network_data.get('subsidiaries', []) if network_data else [],
+            "warnings": network_data.get('warnings', []) if network_data else [],
+            "data_sources_used": network_data.get('data_sources_used', []) if network_data else [],
             "intelligence_report": intelligence_report,
             "timestamp": timestamp,
             "metadata": results_data.get('metadata', {})

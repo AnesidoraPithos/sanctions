@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     # API Keys
     USA_TRADE_GOV_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
+    OPENCORPORATES_API_KEY: str = ""  # Optional - Phase 2 (network tier)
 
     # Database
     DATABASE_PATH: str = "../sanctions.db"  # Relative to backend/
@@ -70,10 +71,16 @@ class Settings(BaseSettings):
     # Research Configuration
     FUZZY_THRESHOLD_DEFAULT: int = 80
     MAX_SEARCH_RESULTS: int = 100
-    REQUEST_TIMEOUT: int = 30  # seconds
+    REQUEST_TIMEOUT: int = 60  # seconds - increased for parallel searches (was 30)
+    MAX_LEVEL_2_SEARCHES: int = 20  # Maximum subsidiaries to search for level 2
+    MAX_LEVEL_3_SEARCHES: int = 10  # Maximum subsidiaries to search for level 3
+
+    # Parallelization Configuration
+    MAX_PARALLEL_SUBSIDIARY_SEARCHES: int = 10  # Max concurrent subsidiary API searches
+    MAX_PARALLEL_SANCTIONS_SCREENING: int = 20  # Max concurrent sanctions screenings
 
     # Feature Flags
-    ENABLE_NETWORK_TIER: bool = False  # Phase 2
+    ENABLE_NETWORK_TIER: bool = True   # Phase 2 - IMPLEMENTED ✅
     ENABLE_DEEP_TIER: bool = False     # Phase 3
 
     model_config = SettingsConfigDict(

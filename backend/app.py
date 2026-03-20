@@ -96,5 +96,8 @@ if __name__ == "__main__":
         "app:app",
         host=settings.HOST,
         port=settings.PORT,
-        reload=settings.DEBUG
+        reload=settings.DEBUG,
+        timeout_keep_alive=120,  # Keep connections alive for 2 minutes
+        limit_concurrency=50,    # Allow up to 50 concurrent connections
+        limit_max_requests=None  # No request limit
     )

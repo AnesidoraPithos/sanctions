@@ -2,6 +2,8 @@ import os
 import time
 import re
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
 from openai import OpenAI
 from fpdf import FPDF
 
@@ -10,6 +12,20 @@ try:
     from ddgs import DDGS
 except ImportError:
     from duckduckgo_search import DDGS
+
+# Import backend config for limits
+import sys
+backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'backend')
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+try:
+    from config import settings
+    MAX_LEVEL_2_SEARCHES = settings.MAX_LEVEL_2_SEARCHES
+    MAX_LEVEL_3_SEARCHES = settings.MAX_LEVEL_3_SEARCHES
+except ImportError:
+    # Fallback if config not available
+    MAX_LEVEL_2_SEARCHES = 20
+    MAX_LEVEL_3_SEARCHES = 10
 
 class SanctionsResearchAgent:
     def __init__(self):
@@ -301,14 +317,54 @@ REPORT REQUIREMENTS:
 3. **Structure** (with detailed requirements for each section):
 
    **Executive Summary** (2-3 paragraphs)
-   - **CRITICAL REQUIREMENT:** Start with explicit threat classification on the first line:
-     Format: "Threat Level: [High/Medium/Low]" or "Risk Level: [High/Medium/Low]"
-     Example: "Threat Level: High"
-     Do not bury this information in prose - state it clearly at the very beginning.
-   - Follow with a high-level risk assessment explaining the threat level determination
-   - Summarize key findings across all categories (regulatory, political, business)
-   - Highlight the most critical risk factors and red flags
-   - Conclude with an overall recommendation or assessment
+   - **CRITICAL REQUIREMENT:** Start with explicit risk classification using this scoring rubric:
+
+     **Risk Assessment Framework - Calculate total score (0-100):**
+
+     1. **Regulatory & Legal Indicators (0-40 points)**:
+        - Active sanctions listings: 40 points
+        - Criminal investigations/charges: 30 points
+        - Civil enforcement actions: 20 points
+        - Regulatory violations/fines: 15 points
+        - Pending investigations: 10 points
+        - Past resolved issues (>3 years): 5 points
+
+     2. **Media Signal Strength (0-25 points)**:
+        - Official government sources (treasury.gov, justice.gov, state.gov): 10 points each (max 25)
+        - Major credible news (Reuters, Bloomberg, WSJ, AP): 3 points each (max 15)
+        - General media/blogs: 1 point each (max 5)
+
+     3. **Severity Factors (0-30 points)**:
+        - National security concerns: 30 points
+        - Financial crimes (money laundering, fraud): 15 points
+        - Export control violations: 15 points
+        - Corruption/bribery: 12 points
+        - Environmental/labor violations: 8 points
+        - Civil disputes: 5 points
+
+     4. **Temporal Relevance (0-15 points)**:
+        - Issues within last 6 months: 15 points
+        - Issues within last 1 year: 10 points
+        - Issues within last 3 years: 5 points
+        - Older than 3 years: 2 points
+
+     **Risk Level Thresholds:**
+     - **Low (0-35 points)**: Limited concerns, minor historical issues, sparse media coverage
+     - **Medium (36-65 points)**: Moderate regulatory concerns, ongoing investigations, notable media attention
+     - **High (66-100 points)**: Active sanctions/enforcement, serious violations, extensive official documentation
+
+     **Required Output Format:**
+     Line 1: "Risk Level: [High/Medium/Low] (Score: XX/100)"
+     Line 2: "Scoring Breakdown: [Component 1: X pts] | [Component 2: Y pts] | [Component 3: Z pts]"
+
+     Example:
+     "Risk Level: High (Score: 78/100)
+     Scoring Breakdown: Criminal investigation (30 pts) | 8 official sources (25 pts) | National security (30 pts) | Recent activity (15 pts)"
+
+   - Follow with 2-3 paragraphs explaining:
+     * Summary of most significant findings
+     * Nature and severity of key risk factors
+     * Overall assessment and business implications
 
    **Regulatory & Legal Status** (2-4 paragraphs)
    - Detail any investigations, lawsuits, sanctions, or regulatory actions (US focus)
@@ -2198,9 +2254,180 @@ Be conservative - only extract entities clearly identified as sister companies w
             self._log(f"Error searching sister companies via DuckDuckGo: {e}", "ERROR")
             return []
 
+    def _search_parent_company(self, company_name):
+        """
+        Search for parent company using DuckDuckGo + LLM extraction.
+
+        Search queries:
+        - "{company_name}" parent company
+        - "{company_name}" owned by
+        - "{company_name}" subsidiary of
+        - site:wikipedia.org "{company_name}" parent company
+
+        Args:
+            company_name (str): Company name to search
+
+        Returns:
+            dict: {
+                'name': str,
+                'relationship': 'parent',
+                'source': str (URL where found),
+                'confidence': str ('high'/'medium'/'low')
+            } or None if not found
+        """
+        self._log(f"Searching for parent company of '{company_name}'...", "INFO")
+
+        # Try multiple search strategies
+        queries = [
+            f'site:wikipedia.org "{company_name}" "parent company" OR "owned by" OR "subsidiary of"',
+            f'site:opencorporates.com "{company_name}" "parent company" OR "owned by"',
+            f'"{company_name}" "parent company" OR "owned by" OR "subsidiary of" OR "holding company"'
+        ]
+
+        all_results = []
+        for query in queries:
+            try:
+                results = self.ddgs.text(query, max_results=10)
+                if results:
+                    all_results.extend(results)
+            except Exception as e:
+                self._log(f"Search query failed: {e}", "WARN")
+                continue
+
+        if not all_results:
+            self._log("No search results found for parent company", "INFO")
+            return None
+
+        # Aggregate search result text
+        text_data = ""
+        for r in all_results[:20]:  # Limit to top 20 results
+            text_data += f"Title: {r.get('title', '')}\n"
+            text_data += f"URL: {r.get('href', '')}\n"
+            text_data += f"Snippet: {r.get('body', '')}\n\n"
+
+        # Use LLM to extract parent company
+        prompt = f"""
+Analyze the following search results about "{company_name}".
+
+Identify the PARENT COMPANY that OWNS "{company_name}".
+
+CRITICAL RULES:
+1. Extract ONLY the actual legal company name of the parent/owner (e.g., "Company A Holdings Inc.")
+2. DO NOT include "{company_name}" itself - we want the company that OWNS "{company_name}"
+3. DO NOT include subsidiaries of "{company_name}" - we want the company ABOVE it in the hierarchy
+4. DO NOT include sister companies - we want the direct parent/owner
+5. If multiple ownership levels exist, extract the DIRECT parent (not the ultimate parent)
+6. Be conservative - only extract if clearly stated that company X OWNS or is the PARENT of "{company_name}"
+
+Search Results:
+{text_data}
+
+Output format (single line):
+PARENT_COMPANY_NAME | JURISDICTION | CONFIDENCE | SOURCE_URL
+
+Where CONFIDENCE is one of: high, medium, low
+- high: explicitly stated as parent/owner with clear evidence
+- medium: likely parent based on context
+- low: possible parent but uncertain
+
+If NO CLEAR PARENT COMPANY is found, respond with exactly: "NO_PARENT_FOUND"
+
+Example good output:
+Huawei Investment & Holding Co., Ltd | China | high | https://en.wikipedia.org/wiki/Huawei
+"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_id,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=300
+            )
+
+            content = response.choices[0].message.content.strip()
+
+            if "NO_PARENT_FOUND" in content:
+                self._log("No parent company identified", "INFO")
+                return None
+
+            # Parse LLM response
+            if '|' in content:
+                parts = [p.strip() for p in content.split('|')]
+                if len(parts) >= 3:
+                    parent_name = parts[0]
+
+                    # Filter out placeholder text
+                    invalid_placeholders = [
+                        'PARENT_COMPANY_NAME',
+                        'NO_PARENT_FOUND',
+                        'COMPANY_NAME',
+                        'EXAMPLE'
+                    ]
+
+                    if any(placeholder.lower() in parent_name.lower() for placeholder in invalid_placeholders):
+                        self._log(f"Filtered out placeholder: '{parent_name}'", "INFO")
+                        return None
+
+                    # Validate that it's different from the search company
+                    if parent_name.lower() == company_name.lower():
+                        self._log(f"Parent name matches search company - skipping", "INFO")
+                        return None
+
+                    # Validate that it looks like a company name
+                    if self._validate_company_name(parent_name):
+                        source_url = None
+                        if len(parts) >= 4:
+                            url = parts[3].strip()
+                            if url and url.startswith('http'):
+                                source_url = url
+
+                        parent_info = {
+                            'name': parent_name,
+                            'jurisdiction': parts[1],
+                            'relationship': 'parent',
+                            'confidence': parts[2],
+                            'source': 'duckduckgo',
+                            'reference_url': source_url
+                        }
+
+                        self._log(f"✓ Found parent company: {parent_name} (confidence: {parts[2]})", "SUCCESS")
+                        return parent_info
+                    else:
+                        self._log(f"Filtered out invalid parent name: '{parent_name}'", "INFO")
+
+            return None
+
+        except Exception as e:
+            self._log(f"Error extracting parent company: {e}", "ERROR")
+            return None
+
+    def _generate_subsidiary_queries(self, company_name):
+        """
+        Generate multiple search query variations for finding subsidiaries.
+        Using different phrasings increases recall significantly.
+
+        Args:
+            company_name (str): Company name
+
+        Returns:
+            list: List of search query strings
+        """
+        queries = [
+            f'"subsidiaries of {company_name}"',  # User's preferred format
+            f'"{company_name} subsidiaries list"',
+            f'"{company_name}" wholly owned companies',
+            f'"{company_name}" business units divisions',
+            f'"{company_name}" operating companies',
+            f'"{company_name}" brands divisions',
+            f'"companies owned by {company_name}"',
+            f'"{company_name}" corporate structure subsidiaries'
+        ]
+        return queries
+
     def _search_subsidiaries_duckduckgo(self, company_name):
         """
-        Search for subsidiaries using DuckDuckGo (fallback method).
+        Search for subsidiaries using DuckDuckGo with multiple query variations.
+        Uses 8 different query patterns to maximize recall.
 
         Args:
             company_name (str): Company name
@@ -2208,20 +2435,49 @@ Be conservative - only extract entities clearly identified as sister companies w
         Returns:
             list: List of subsidiary dictionaries
         """
-        # Enhanced search query for subsidiaries
-        query = f'"{company_name}" subsidiaries list OR "wholly owned" OR "majority owned" OR "owned by {company_name}"'
+        # Generate multiple query variations (8 different phrasings)
+        queries = self._generate_subsidiary_queries(company_name)
 
-        try:
-            results = self.ddgs.text(query, max_results=15)
-            if not results:
-                return []
+        all_results = []
+        seen_urls = set()
 
-            # Aggregate search result text
-            text_data = ""
-            for r in results:
-                text_data += f"Title: {r.get('title', '')}\n"
-                text_data += f"URL: {r.get('href', '')}\n"
-                text_data += f"Snippet: {r.get('body', '')}\n\n"
+        # Search with each query variation
+        for idx, query in enumerate(queries, 1):
+            self._log(f"DuckDuckGo query {idx}/{len(queries)}: {query[:80]}...", "INFO")
+            try:
+                # Increased from 15 to 100 results per query
+                results = self.ddgs.text(query, max_results=100)
+
+                if results:
+                    # Deduplicate by URL
+                    for r in results:
+                        url = r.get('href', '')
+                        if url and url not in seen_urls:
+                            all_results.append(r)
+                            seen_urls.add(url)
+
+                    self._log(f"  Found {len(results)} results (unique: {len(all_results)} total so far)", "INFO")
+
+                # Rate limiting - small delay between queries
+                if idx < len(queries):
+                    time.sleep(0.5)
+
+            except Exception as e:
+                self._log(f"Error with query {idx}: {e}", "WARN")
+                continue
+
+        if not all_results:
+            self._log("No DuckDuckGo results found across all query variations", "WARN")
+            return []
+
+        self._log(f"✓ Collected {len(all_results)} unique search results from {len(queries)} query variations", "SUCCESS")
+
+        # Aggregate search result text from all queries
+        text_data = ""
+        for r in all_results:
+            text_data += f"Title: {r.get('title', '')}\n"
+            text_data += f"URL: {r.get('href', '')}\n"
+            text_data += f"Snippet: {r.get('body', '')}\n\n"
 
             # Use LLM to extract subsidiaries
             prompt = f"""
@@ -2282,7 +2538,7 @@ Be conservative - only extract entities clearly identified as subsidiaries with 
                 model=self.model_id,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
-                max_tokens=800
+                max_tokens=2000  # Increased from 800 to handle more results
             )
 
             content = response.choices[0].message.content.strip()
@@ -2453,7 +2709,8 @@ Be conservative - only extract entities clearly identified as subsidiaries with 
                 return {'subsidiaries': [], 'sisters': []}
 
             # Limit content size (Wikipedia pages can be very long)
-            max_chars = 30000
+            # Increased from 30000 to 100000 to capture more subsidiary information
+            max_chars = 100000
             if len(page_content) > max_chars:
                 self._log(f"Wikipedia page is long ({len(page_content)} chars), using first {max_chars} chars", "INFO")
                 page_content = page_content[:max_chars]
@@ -2508,7 +2765,7 @@ Extract ALL entities with clear names.
                 model=self.model_id,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
-                max_tokens=2000
+                max_tokens=3000  # Increased from 2000 to handle more Wikipedia content
             )
 
             content = response.choices[0].message.content.strip()
@@ -2956,7 +3213,7 @@ NONE
             'searched_company': subsidiary_name
         }
 
-    def find_subsidiaries(self, parent_company_name, depth=1, include_sisters=True, progress_callback=None, ownership_threshold=0, depth_search_subsidiaries=None):
+    def find_subsidiaries(self, parent_company_name, depth=1, include_sisters=True, progress_callback=None, ownership_threshold=0, depth_search_subsidiaries=None, max_level_2_searches=20, max_level_3_searches=10):
         """
         Search for subsidiaries and optionally sister companies.
         Tries OpenCorporates API first, then SEC EDGAR, then Wikipedia + DuckDuckGo.
@@ -2968,6 +3225,8 @@ NONE
             progress_callback (callable): Optional callback for progress updates
             ownership_threshold (int): Minimum ownership percentage (0-100). 0 = all subsidiaries, 100 = wholly-owned only
             depth_search_subsidiaries (list): Optional list of subsidiary names to search at depth 2/3. If None, searches all subsidiaries
+            max_level_2_searches (int): Maximum subsidiaries to search for level 2 (default: 20, range: 5-50)
+            max_level_3_searches (int): Maximum subsidiaries to search for level 3 (default: 10, range: 5-30)
 
         Returns:
             dict: {
@@ -2980,8 +3239,12 @@ NONE
         # Set callback for this search
         self.progress_callback = progress_callback
 
+        # Track all data sources tried (for transparency)
+        data_sources_tried = []
+
         # Method 1: Try OpenCorporates API (preferred - fastest & most accurate for international companies)
         if self.opencorporates_api_key:
+            data_sources_tried.append('opencorporates_api')
             self._log(f"Trying OpenCorporates API for {parent_company_name}...", "SEARCH")
             api_results = self.find_related_companies_api(parent_company_name)
 
@@ -3006,45 +3269,150 @@ NONE
                         level_1_subs_to_search = [sub for sub in level_1_subs if sub['name'] in depth_search_subsidiaries]
                         self._log(f"Searching level 2 for {len(level_1_subs_to_search)} selected subsidiaries (out of {len(level_1_subs)} total)", "INFO")
                     else:
-                        level_1_subs_to_search = level_1_subs
-                        self._log(f"Searching for level 2 subsidiaries (processing all {len(level_1_subs_to_search)} entities)...", "INFO")
+                        # Sort by ownership percentage (highest first) and limit to prevent timeouts
+                        sorted_level_1 = sorted(
+                            level_1_subs,
+                            key=lambda x: x.get('ownership_percentage', 0) or 0,
+                            reverse=True
+                        )
+
+                        if len(sorted_level_1) > max_level_2_searches:
+                            level_1_subs_to_search = sorted_level_1[:max_level_2_searches]
+                            api_results.setdefault('warnings', []).append({
+                                'source': 'level_2_search',
+                                'message': f'Limited level 2 search to top {max_level_2_searches} subsidiaries by ownership (out of {len(level_1_subs)} total) to prevent timeout',
+                                'severity': 'info'
+                            })
+                            self._log(f"⚠️  Limiting level 2 search to top {max_level_2_searches} subsidiaries by ownership (out of {len(level_1_subs)} total)", "WARN")
+                        else:
+                            level_1_subs_to_search = sorted_level_1
+
+                        self._log(f"Searching for level 2 subsidiaries (processing {len(level_1_subs_to_search)} entities)...", "INFO")
 
                     seen_names = set(sub['name'].lower() for sub in api_results['subsidiaries'])
+                    seen_names_lock = Lock()
 
-                    for idx, sub in enumerate(level_1_subs_to_search, 1):
-                        # Progress indicator
-                        self._log(f"[{idx}/{len(level_1_subs_to_search)}] Searching level 2 for: {sub['name']}", "INFO")
+                    # Define wrapper function for parallel level 2 searches
+                    def search_level_2_subsidiary(sub, idx, total):
+                        """Wrapper function for parallel level 2 subsidiary search"""
+                        try:
+                            self._log(f"[{idx}/{total}] Searching level 2 for: {sub['name']}", "INFO")
+                            level_2_results = self.find_related_companies_api(sub['name'])
+                            return (sub, level_2_results, None)  # (input, results, error)
+                        except Exception as e:
+                            self._log(f"Error searching level 2 for {sub['name']}: {str(e)}", "ERROR")
+                            return (sub, {'subsidiaries': [], 'sisters': [], 'parent': None}, str(e))
 
-                        # Search for subsidiaries of this subsidiary
-                        level_2_results = self.find_related_companies_api(sub['name'])
-                        if level_2_results['subsidiaries']:
-                            for sub2 in level_2_results['subsidiaries']:
-                                if sub2['name'].lower() not in seen_names:
-                                    sub2['level'] = 2
-                                    sub2['relationship'] = 'subsidiary'
-                                    api_results['subsidiaries'].append(sub2)
-                                    seen_names.add(sub2['name'].lower())
+                    # Parallel execution with ThreadPoolExecutor
+                    try:
+                        max_parallel_searches = settings.MAX_PARALLEL_SUBSIDIARY_SEARCHES
+                    except (NameError, AttributeError):
+                        max_parallel_searches = 10  # Fallback if settings not available
 
+                    max_workers = min(len(level_1_subs_to_search), max_parallel_searches)
+                    self._log(f"Searching for level 2 subsidiaries (processing {len(level_1_subs_to_search)} entities with {max_workers} parallel workers)...", "INFO")
+
+                    level_2_start_time = time.time()
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        # Submit all tasks
+                        future_to_sub = {
+                            executor.submit(search_level_2_subsidiary, sub, idx, len(level_1_subs_to_search)): sub
+                            for idx, sub in enumerate(level_1_subs_to_search, 1)
+                        }
+
+                        # Process results as they complete
+                        for future in as_completed(future_to_sub):
+                            sub_input, level_2_results, error = future.result()
+
+                            if error:
+                                self._log(f"Failed to search {sub_input['name']}: {error}", "WARN")
+                                continue
+
+                            if level_2_results['subsidiaries']:
+                                for sub2 in level_2_results['subsidiaries']:
+                                    # Thread-safe deduplication
+                                    with seen_names_lock:
+                                        if sub2['name'].lower() not in seen_names:
+                                            sub2['level'] = 2
+                                            sub2['relationship'] = 'subsidiary'
+                                            api_results['subsidiaries'].append(sub2)
+                                            seen_names.add(sub2['name'].lower())
+
+                    level_2_duration = time.time() - level_2_start_time
                     self._log(f"✓ Found {len(api_results['subsidiaries']) - len(level_1_subs)} level 2 subsidiaries", "SUCCESS")
+                    self._log(f"⏱️  Level 2 search completed in {level_2_duration:.2f} seconds (parallel execution with {max_workers} workers)", "INFO")
 
                 if depth >= 3:
-                    self._log(f"Searching for level 3 subsidiaries (subsidiaries of level 2)...", "INFO")
                     level_2_subs = [s for s in api_results['subsidiaries'] if s.get('level') == 2]
+
+                    # Sort by ownership percentage and limit to prevent timeouts
+                    sorted_level_2 = sorted(
+                        level_2_subs,
+                        key=lambda x: x.get('ownership_percentage', 0) or 0,
+                        reverse=True
+                    )
+
+                    if len(sorted_level_2) > max_level_3_searches:
+                        level_2_subs_to_search = sorted_level_2[:max_level_3_searches]
+                        api_results.setdefault('warnings', []).append({
+                            'source': 'level_3_search',
+                            'message': f'Limited level 3 search to top {max_level_3_searches} level 2 subsidiaries by ownership (out of {len(level_2_subs)} total) to prevent timeout',
+                            'severity': 'info'
+                        })
+                        self._log(f"⚠️  Limiting level 3 search to top {max_level_3_searches} level 2 subsidiaries by ownership (out of {len(level_2_subs)} total)", "WARN")
+                    else:
+                        level_2_subs_to_search = sorted_level_2
+
+                    self._log(f"Searching for level 3 subsidiaries (processing {len(level_2_subs_to_search)} level 2 entities)...", "INFO")
                     seen_names = set(sub['name'].lower() for sub in api_results['subsidiaries'])
+                    seen_names_lock = Lock()
                     original_count = len(api_results['subsidiaries'])
 
-                    for sub in level_2_subs:
-                        # Search for subsidiaries of this level 2 subsidiary
-                        level_3_results = self.find_related_companies_api(sub['name'])
-                        if level_3_results['subsidiaries']:
-                            for sub3 in level_3_results['subsidiaries']:
-                                if sub3['name'].lower() not in seen_names:
-                                    sub3['level'] = 3
-                                    sub3['relationship'] = 'subsidiary'
-                                    api_results['subsidiaries'].append(sub3)
-                                    seen_names.add(sub3['name'].lower())
+                    # Define wrapper function for parallel level 3 searches
+                    def search_level_3_subsidiary(sub):
+                        """Wrapper function for parallel level 3 subsidiary search"""
+                        try:
+                            level_3_results = self.find_related_companies_api(sub['name'])
+                            return (sub, level_3_results, None)
+                        except Exception as e:
+                            self._log(f"Error searching level 3 for {sub['name']}: {str(e)}", "ERROR")
+                            return (sub, {'subsidiaries': [], 'sisters': [], 'parent': None}, str(e))
 
+                    # Parallel execution for level 3
+                    try:
+                        max_parallel_searches = settings.MAX_PARALLEL_SUBSIDIARY_SEARCHES
+                    except (NameError, AttributeError):
+                        max_parallel_searches = 10  # Fallback
+
+                    max_workers = min(len(level_2_subs_to_search), max_parallel_searches)
+
+                    level_3_start_time = time.time()
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        future_to_sub = {
+                            executor.submit(search_level_3_subsidiary, sub): sub
+                            for sub in level_2_subs_to_search
+                        }
+
+                        for future in as_completed(future_to_sub):
+                            sub_input, level_3_results, error = future.result()
+
+                            if error:
+                                self._log(f"Failed to search level 3 for {sub_input['name']}: {error}", "WARN")
+                                continue
+
+                            if level_3_results['subsidiaries']:
+                                for sub3 in level_3_results['subsidiaries']:
+                                    # Thread-safe deduplication
+                                    with seen_names_lock:
+                                        if sub3['name'].lower() not in seen_names:
+                                            sub3['level'] = 3
+                                            sub3['relationship'] = 'subsidiary'
+                                            api_results['subsidiaries'].append(sub3)
+                                            seen_names.add(sub3['name'].lower())
+
+                    level_3_duration = time.time() - level_3_start_time
                     self._log(f"✓ Found {len(api_results['subsidiaries']) - original_count} level 3 subsidiaries", "SUCCESS")
+                    self._log(f"⏱️  Level 3 search completed in {level_3_duration:.2f} seconds (parallel execution with {max_workers} workers)", "INFO")
 
                 # Apply ownership filtering again after depth search
                 if ownership_threshold > 0 and depth > 1:
@@ -3055,6 +3423,7 @@ NONE
                         self._log(f"Filtered out {filtered_count} level 2/3 subsidiaries not meeting {ownership_threshold}% ownership threshold", "INFO")
 
                 self._log(f"✓ Total: {len(api_results['subsidiaries'])} subsidiaries across {depth} level(s)", "SUCCESS")
+                api_results['data_sources_tried'] = data_sources_tried
                 return api_results
             else:
                 self._log("API returned no results or hit rate limit", "WARN")
@@ -3062,6 +3431,7 @@ NONE
             self._log("No OpenCorporates API key configured", "INFO")
 
         # Method 2: Try SEC EDGAR (best for US public companies)
+        data_sources_tried.append('sec_edgar')
         self._log(f"Trying SEC EDGAR for {parent_company_name}...", "SEARCH")
         try:
             sec_results = self.find_subsidiaries_sec_edgar(parent_company_name)
@@ -3158,7 +3528,17 @@ NONE
                         # Preserve the filing type in the method name
                         sec_results['method'] = f"{sec_results['method']}+duckduckgo"
 
+                # Search for parent company (SEC doesn't provide this, use web search)
+                self._log("SEC doesn't provide parent companies, searching with DuckDuckGo...", "INFO")
+                parent_company = self._search_parent_company(parent_company_name)
+                if parent_company:
+                    self._log(f"✓ Found parent company: {parent_company['name']}", "SUCCESS")
+                    sec_results['parent'] = parent_company
+                else:
+                    self._log("No parent company found", "INFO")
+
                 self._log(f"✓ Total: {len(sec_results['subsidiaries'])} subsidiaries across {depth} level(s)", "SUCCESS")
+                sec_results['data_sources_tried'] = data_sources_tried
                 return sec_results
             else:
                 self._log("SEC EDGAR returned no results", "WARN")
@@ -3166,6 +3546,7 @@ NONE
             self._log(f"SEC EDGAR failed: {str(e)}", "ERROR")
 
         # Method 3: Try Wikipedia (good for well-known companies)
+        data_sources_tried.extend(['wikipedia', 'duckduckgo'])
         self._log(f"Trying Wikipedia for {parent_company_name}...", "SEARCH")
         wiki_results = self._search_wikipedia_subsidiaries(parent_company_name)
         wiki_subsidiaries = wiki_results.get('subsidiaries', [])
@@ -3269,6 +3650,14 @@ NONE
             if filtered_count > 0:
                 self._log(f"Filtered out {filtered_count} subsidiaries not meeting {ownership_threshold}% ownership threshold", "INFO")
 
+        # Search for parent company
+        self._log("Searching for parent company...", "INFO")
+        parent_company = self._search_parent_company(parent_company_name)
+        if parent_company:
+            self._log(f"✓ Found parent company: {parent_company['name']}", "SUCCESS")
+        else:
+            self._log("No parent company found", "INFO")
+
         # Determine method label based on what found results
         if wiki_subsidiaries or wiki_sisters:
             method_label = 'wikipedia+duckduckgo'
@@ -3278,10 +3667,11 @@ NONE
         return {
             'subsidiaries': subsidiaries,
             'sisters': sisters,
-            'parent': None,
+            'parent': parent_company,
             'method': method_label,
             'source_url': None,  # Web search doesn't have a single source document
-            'filing_date': None
+            'filing_date': None,
+            'data_sources_tried': data_sources_tried
         }
 
     def _search_subsidiaries_level(self, company_name, level):

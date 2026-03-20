@@ -22,8 +22,28 @@ export default function Home() {
     setError(null);
 
     try {
-      // Call base tier search API
-      const response = await api.searchBase(request);
+      // Call the appropriate API endpoint based on the selected tier
+      let response;
+
+      switch (request.tier) {
+        case 'network':
+          console.log('[Search] Calling network tier API with params:', {
+            depth: request.network_depth,
+            ownership_threshold: request.ownership_threshold,
+            include_sisters: request.include_sisters
+          });
+          response = await api.searchNetwork(request);
+          break;
+        case 'deep':
+          console.log('[Search] Calling deep tier API');
+          response = await api.searchDeep(request);
+          break;
+        case 'base':
+        default:
+          console.log('[Search] Calling base tier API');
+          response = await api.searchBase(request);
+          break;
+      }
 
       // Redirect to results page
       router.push(`/results/${response.search_id}`);

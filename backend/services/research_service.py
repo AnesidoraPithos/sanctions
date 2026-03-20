@@ -8,17 +8,21 @@ Provides OSINT media intelligence and LLM-powered intelligence reports.
 import os
 import sys
 from typing import List, Dict, Any, Optional
+import importlib.util
 
-# Add parent directories to path
-project_root = os.path.join(os.path.dirname(__file__), '../..')
-sys.path.insert(0, project_root)
-sys.path.insert(0, os.path.join(project_root, 'core'))  # For database
-sys.path.insert(0, os.path.join(project_root, 'agents'))  # For agents
+# Path setup is done in services/__init__.py
+# This ensures project_root is in sys.path before imports
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Import the existing SanctionsResearchAgent (reuse existing logic)
+# NOW import the existing SanctionsResearchAgent (after path is set up)
 from agents.research_agent import SanctionsResearchAgent
 
-from config import settings
+# Import backend config explicitly to avoid confusion with root config.py
+config_path = os.path.join(backend_dir, 'config.py')
+spec = importlib.util.spec_from_file_location("backend_config", config_path)
+backend_config = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(backend_config)
+settings = backend_config.settings
 
 
 class ResearchService:

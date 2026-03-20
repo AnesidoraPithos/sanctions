@@ -42,6 +42,48 @@ class MediaHit(BaseModel):
     relevance_score: Optional[float] = Field(None, description="Relevance score")
 
 
+class Warning(BaseModel):
+    """Warning message for API key limitations or errors"""
+
+    source: str = Field(..., description="Source of the warning (opencorporates, sec_edgar, etc.)")
+    message: str = Field(..., description="Warning message")
+    severity: Literal["info", "warning", "error"] = Field(..., description="Severity level")
+
+
+class NetworkNode(BaseModel):
+    """Node in network graph"""
+
+    id: str = Field(..., description="Node ID")
+    label: str = Field(..., description="Node label")
+    node_type: str = Field(..., description="Node type: parent|subsidiary|sister|director|shareholder")
+    entity_type: str = Field(..., description="Entity type: company|person")
+
+
+class NetworkEdge(BaseModel):
+    """Edge in network graph"""
+
+    id: str = Field(..., description="Edge ID")
+    source: str = Field(..., description="Source node ID")
+    target: str = Field(..., description="Target node ID")
+    relationship: str = Field(..., description="Relationship type: owns|director_of|shareholder_of|transacted_with")
+
+
+class NetworkData(BaseModel):
+    """Network graph data for visualization"""
+
+    nodes: List[Dict[str, Any]] = Field(..., description="Graph nodes")
+    edges: List[Dict[str, Any]] = Field(..., description="Graph edges")
+    statistics: Dict[str, Any] = Field(..., description="Graph statistics")
+
+
+class FinancialIntelligence(BaseModel):
+    """Financial intelligence data (directors, shareholders, transactions)"""
+
+    directors: List[Dict[str, Any]] = Field(default_factory=list, description="Directors and officers")
+    shareholders: List[Dict[str, Any]] = Field(default_factory=list, description="Major shareholders")
+    transactions: List[Dict[str, Any]] = Field(default_factory=list, description="Related party transactions")
+
+
 class SearchResponse(BaseModel):
     """Response model for entity search"""
 
@@ -62,6 +104,20 @@ class SearchResponse(BaseModel):
     risk_level: Literal["SAFE", "LOW", "MID", "HIGH", "VERY_HIGH"] = Field(
         ...,
         description="Calculated risk level"
+    )
+
+    risk_explanation: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Detailed explanation of how risk level was determined",
+        json_schema_extra={
+            "example": {
+                "sanctions_signal": "3 sanctions hit(s) → HIGH",
+                "intelligence_signal": "AI assessment: HIGH (78/100)",
+                "intelligence_score": 78,
+                "intelligence_breakdown": "Criminal investigation (30 pts) | 8 official sources (25 pts) | National security (30 pts)",
+                "final_reasoning": "Strong sanctions match (HIGH) | AI assessment confirms high risk"
+            }
+        }
     )
 
     sanctions_hits: int = Field(..., description="Number of sanctions matches found")
@@ -91,6 +147,32 @@ class SearchResponse(BaseModel):
         description="Additional metadata (search parameters, timing, etc.)"
     )
 
+    # Network tier fields (Phase 2)
+    network_data: Optional[NetworkData] = Field(
+        None,
+        description="Network graph data (network tier only)"
+    )
+
+    financial_intelligence: Optional[FinancialIntelligence] = Field(
+        None,
+        description="Directors, shareholders, transactions (network tier only)"
+    )
+
+    subsidiaries: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="List of discovered subsidiaries (network tier only)"
+    )
+
+    warnings: Optional[List[Warning]] = Field(
+        None,
+        description="Warnings about missing API keys or data source limitations"
+    )
+
+    data_sources_used: Optional[List[str]] = Field(
+        None,
+        description="List of data sources successfully used (sec_edgar, opencorporates, wikipedia, etc.)"
+    )
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -114,12 +196,20 @@ class ResultsResponse(BaseModel):
     entity_name: str = Field(..., description="Entity name")
     tier: str = Field(..., description="Research tier")
     risk_level: str = Field(..., description="Risk level")
+    risk_explanation: Optional[Dict[str, Any]] = Field(None, description="Risk explanation")
     sanctions_hits: int = Field(..., description="Number of sanctions hits")
     sanctions_data: List[Dict[str, Any]] = Field(..., description="Sanctions data")
     research_data: Dict[str, Any] = Field(..., description="Research/media data")
     intelligence_report: Optional[str] = Field(None, description="Intelligence report")
     timestamp: str = Field(..., description="Search timestamp")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Metadata")
+
+    # Network tier fields (Phase 2)
+    network_data: Optional[Dict[str, Any]] = Field(None, description="Network graph data")
+    financial_intelligence: Optional[Dict[str, Any]] = Field(None, description="Financial intelligence")
+    subsidiaries: Optional[List[Dict[str, Any]]] = Field(None, description="Subsidiaries list")
+    warnings: Optional[List[Dict[str, Any]]] = Field(None, description="Warnings")
+    data_sources_used: Optional[List[str]] = Field(None, description="Data sources used")
 
     class Config:
         json_schema_extra = {

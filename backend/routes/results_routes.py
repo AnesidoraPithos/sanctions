@@ -64,17 +64,28 @@ async def get_results(
 
         logger.info(f"Successfully retrieved results for: {search_id}")
 
+        # Extract risk_explanation from metadata
+        metadata = results.get('metadata', {})
+        risk_explanation = metadata.get('risk_explanation')
+
         return ResultsResponse(
             search_id=results['search_id'],
             entity_name=results['entity_name'],
             tier=results['tier'],
             risk_level=results['risk_level'],
+            risk_explanation=risk_explanation,  # Include risk explanation
             sanctions_hits=results['sanctions_hits'],
             sanctions_data=results['sanctions_data'],
             research_data=results['research_data'],
             intelligence_report=results.get('intelligence_report'),
             timestamp=results['timestamp'],
-            metadata=results.get('metadata', {})
+            metadata=metadata,
+            # Network tier fields (Phase 2)
+            network_data=results.get('network_data'),
+            financial_intelligence=results.get('financial_intelligence'),
+            subsidiaries=results.get('subsidiaries', []),
+            warnings=results.get('warnings', []),
+            data_sources_used=results.get('data_sources_used', [])
         )
 
     except HTTPException:

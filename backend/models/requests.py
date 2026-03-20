@@ -36,7 +36,42 @@ class SearchRequest(BaseModel):
 
     tier: Literal["base", "network", "deep"] = Field(
         default="base",
-        description="Research tier - currently only 'base' is supported"
+        description="Research tier: base (30-60s), network (2-10min), deep (5-15min)"
+    )
+
+    # Network tier parameters (Phase 2)
+    network_depth: int = Field(
+        default=1,
+        ge=1,
+        le=3,
+        description="Network tier: Search depth for subsidiaries (1-3 levels)"
+    )
+
+    ownership_threshold: int = Field(
+        default=0,
+        ge=0,
+        le=100,
+        description="Network tier: Minimum ownership percentage to include (0-100)"
+    )
+
+    include_sisters: bool = Field(
+        default=True,
+        description="Network tier: Whether to include sister companies"
+    )
+
+    # Network tier: Search limits (Phase 2 enhancement)
+    max_level_2_searches: int = Field(
+        default=20,
+        ge=5,
+        le=50,
+        description="Network tier: Max subsidiaries to search for level 2 (prevents timeout)"
+    )
+
+    max_level_3_searches: int = Field(
+        default=10,
+        ge=5,
+        le=30,
+        description="Network tier: Max subsidiaries to search for level 3 (prevents timeout)"
     )
 
     @field_validator('entity_name')
@@ -69,19 +104,32 @@ class SearchRequest(BaseModel):
     @classmethod
     def validate_tier(cls, v: str) -> str:
         """Validate tier is supported"""
-        # Currently only base tier is implemented (Phase 1)
-        if v != "base":
-            raise ValueError("Only 'base' tier is currently supported")
+        # Phase 1: base tier
+        # Phase 2: network tier
+        # Phase 3: deep tier (not yet implemented)
+        if v == "deep":
+            raise ValueError("Deep tier is not yet implemented (Phase 3 feature)")
         return v
 
     class Config:
         json_schema_extra = {
-            "example": {
-                "entity_name": "Huawei Technologies",
-                "country": "China",
-                "fuzzy_threshold": 80,
-                "tier": "base"
-            }
+            "examples": [
+                {
+                    "entity_name": "Huawei Technologies",
+                    "country": "China",
+                    "fuzzy_threshold": 80,
+                    "tier": "base"
+                },
+                {
+                    "entity_name": "Apple Inc.",
+                    "country": "USA",
+                    "fuzzy_threshold": 80,
+                    "tier": "network",
+                    "network_depth": 2,
+                    "ownership_threshold": 50,
+                    "include_sisters": True
+                }
+            ]
         }
 
 
