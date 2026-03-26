@@ -122,7 +122,7 @@ export default function Home() {
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-[#0d1425] border border-gray-800 rounded-lg p-4">
             <div className="text-blue-400 font-semibold text-sm mb-2">
-              📋 Sanctions Screening
+              Sanctions Screening
             </div>
             <p className="text-xs text-gray-400">
               Check against 10+ global sanctions databases including OFAC, BIS Entity List, and more.
@@ -130,7 +130,7 @@ export default function Home() {
           </div>
           <div className="bg-[#0d1425] border border-gray-800 rounded-lg p-4">
             <div className="text-blue-400 font-semibold text-sm mb-2">
-              🔍 OSINT Intelligence
+              OSINT Intelligence
             </div>
             <p className="text-xs text-gray-400">
               Gather open-source intelligence from official government sources and media outlets.
@@ -138,7 +138,7 @@ export default function Home() {
           </div>
           <div className="bg-[#0d1425] border border-gray-800 rounded-lg p-4">
             <div className="text-blue-400 font-semibold text-sm mb-2">
-              🤖 AI Analysis
+              AI Analysis
             </div>
             <p className="text-xs text-gray-400">
               Generate comprehensive intelligence reports with AI-powered analysis and risk assessment.

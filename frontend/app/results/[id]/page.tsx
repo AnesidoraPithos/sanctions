@@ -794,7 +794,6 @@ export default function ResultsPage({ params }: PageProps) {
                     {/* Display parent company first */}
                     <div className="bg-purple-900/20 border border-purple-700 rounded-lg p-5">
                       <div className="flex items-start gap-3">
-                        <span className="text-purple-400 text-2xl">⬆️</span>
                         <div className="flex-1">
                           <h3 className="text-lg font-semibold text-purple-400 mb-3">
                             Parent Company Discovered
@@ -829,21 +828,30 @@ export default function ResultsPage({ params }: PageProps) {
                                   </span>
                                 </div>
                               )}
-                              {(results.network_data.parent_info as any).reference_url && (
+                              {((results.network_data.parent_info as any).reference_url ||
+                                (results.network_data.parent_info as any).source) && (
                                 <div className="col-span-2">
                                   <span className="text-gray-400">Source:</span>
-                                  <a
-                                    href={(results.network_data.parent_info as any).reference_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="ml-2 text-blue-400 hover:underline text-sm"
-                                  >
-                                    {(results.network_data.parent_info as any).source === 'sec_edgar' ? 'SEC EDGAR' :
-                                     (results.network_data.parent_info as any).source === 'opencorporates_api' ? 'OpenCorporates' :
-                                     (results.network_data.parent_info as any).source === 'wikipedia' ? 'Wikipedia' :
-                                     (results.network_data.parent_info as any).source === 'duckduckgo' ? 'DuckDuckGo' :
-                                     (results.network_data.parent_info as any).source || 'View Source'}
-                                  </a>
+                                  {(results.network_data.parent_info as any).reference_url ? (
+                                    <a
+                                      href={(results.network_data.parent_info as any).reference_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="ml-2 text-blue-400 hover:underline text-sm"
+                                    >
+                                      {(results.network_data.parent_info as any).source === 'sec_edgar' ? 'SEC EDGAR' :
+                                       (results.network_data.parent_info as any).source === 'opencorporates_api' ? 'OpenCorporates' :
+                                       (results.network_data.parent_info as any).source === 'wikipedia' ? 'Wikipedia' :
+                                       (results.network_data.parent_info as any).source === 'duckduckgo' ? 'DuckDuckGo' :
+                                       (results.network_data.parent_info as any).source || 'View Source'}
+                                    </a>
+                                  ) : (
+                                    <span className="ml-2 text-gray-300 text-sm capitalize">
+                                      {(results.network_data.parent_info as any).source === 'intelligence_report'
+                                        ? 'Intelligence Report (no direct URL available)'
+                                        : (results.network_data.parent_info as any).source}
+                                    </span>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -877,6 +885,23 @@ export default function ResultsPage({ params }: PageProps) {
                         </p>
                       </div>
                     )}
+
+                    {/* Display subsidiaries of this entity, if any */}
+                    {hasSubsidiaries && (
+                      <div>
+                        <h3 className="text-lg font-semibold text-white mb-4">
+                          Subsidiaries ({results.subsidiaries!.length})
+                        </h3>
+                        <p className="text-sm text-gray-400 mb-4">
+                          Companies owned or controlled by {results.entity_name}
+                        </p>
+                        <div className="space-y-3">
+                          {results.subsidiaries!.map((subsidiary: any, idx: number) => (
+                            <EntityCard key={idx} entity={subsidiary} showOwnership={false} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : hasSubsidiaries ? (
                   /* Case 2: Entity is a PARENT (has subsidiaries but no parent) */
@@ -897,7 +922,6 @@ export default function ResultsPage({ params }: PageProps) {
                   /* Case 3: STANDALONE entity (no parent, no subsidiaries) */
                   <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-8">
                     <div className="text-center">
-                      <div className="text-4xl mb-4">🏢</div>
                       <h3 className="text-lg font-semibold text-white mb-2">
                         Standalone Entity
                       </h3>

@@ -141,11 +141,14 @@ Report:
             parts = [p.strip() for p in content.split("|")]
             if len(parts) < 3:
                 return None
+            source_note = parts[3] if len(parts) > 3 else "intelligence_report"
+            reference_url = source_note if source_note.startswith("http") else None
             return {
                 "name": parts[0],
                 "relationship": "parent",
                 "confidence": parts[2].lower() if len(parts) > 2 else "medium",
-                "source": parts[3] if len(parts) > 3 else "intelligence_report"
+                "source": "intelligence_report" if not reference_url else source_note,
+                "reference_url": reference_url
             }
         except Exception:
             return None
