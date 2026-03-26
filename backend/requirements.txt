@@ -1,6 +1,7 @@
 # FastAPI Framework
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
+websockets>=12.0
 pydantic==2.5.3
 pydantic-settings==2.1.0
 
@@ -26,9 +27,10 @@ pandas==2.1.4
 python-Levenshtein==0.23.0
 fuzzywuzzy==0.18.0
 
-# PDF Generation (reuse from existing code)
+# PDF + Excel Generation
 fpdf2==2.7.8
 reportlab==4.0.8
+openpyxl==3.1.2
 
 # Web Scraping (reuse from existing code)
 beautifulsoup4==4.12.3

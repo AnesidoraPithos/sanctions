@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SearchForm from '@/components/SearchForm';
+import ProgressTracker from '@/components/ProgressTracker';
 import { SearchRequest } from '@/lib/types';
 import { api } from '@/lib/api-client';
 
@@ -16,39 +17,41 @@ export default function Home() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
 
   const handleSearch = async (request: SearchRequest) => {
     setIsLoading(true);
     setError(null);
 
+    // Pre-generate a UUID for network/deep searches so WebSocket can connect before response
+    let enrichedRequest = request;
+    if (request.tier === 'network' || request.tier === 'deep') {
+      const clientId = crypto.randomUUID();
+      enrichedRequest = { ...request, client_search_id: clientId };
+      setActiveSearchId(clientId);
+    }
+
     try {
-      // Call the appropriate API endpoint based on the selected tier
       let response;
 
-      switch (request.tier) {
+      switch (enrichedRequest.tier) {
         case 'network':
-          console.log('[Search] Calling network tier API with params:', {
-            depth: request.network_depth,
-            ownership_threshold: request.ownership_threshold,
-            include_sisters: request.include_sisters
-          });
-          response = await api.searchNetwork(request);
+          response = await api.searchNetwork(enrichedRequest);
           break;
         case 'deep':
-          console.log('[Search] Calling deep tier API');
-          response = await api.searchDeep(request);
+          response = await api.searchDeep(enrichedRequest);
           break;
         case 'base':
         default:
-          console.log('[Search] Calling base tier API');
-          response = await api.searchBase(request);
+          response = await api.searchBase(enrichedRequest);
           break;
       }
 
-      // Redirect to results page
+      setActiveSearchId(null);
       router.push(`/results/${response.search_id}`);
     } catch (err: unknown) {
       console.error('Search error:', err);
+      setActiveSearchId(null);
       const errorObj = err as { message?: string; data?: { message?: string }; code?: string };
       const errorMessage = errorObj.message || 'Failed to perform search. Please try again.';
       setError(errorMessage);
@@ -116,6 +119,9 @@ export default function Home() {
 
           {/* Search Form */}
           <SearchForm onSearch={handleSearch} isLoading={isLoading} />
+
+          {/* Live progress tracker (shown for network/deep tier searches) */}
+          <ProgressTracker searchId={activeSearchId} />
         </div>
 
         {/* Features Info */}

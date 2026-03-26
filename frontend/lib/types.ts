@@ -32,6 +32,8 @@ export interface SearchRequest {
   // Network tier: Configurable search limits (Phase 2 enhancement)
   max_level_2_searches?: number; // 5-50, default: 20
   max_level_3_searches?: number; // 5-30, default: 10
+  // Deep tier: pre-generated UUID for WebSocket progress tracking (Phase 3)
+  client_search_id?: string;
 }
 
 /**
@@ -219,6 +221,19 @@ export interface FinancialIntelligence {
   transactions: Transaction[];
 }
 
+/**
+ * Deep Tier Types (Phase 3)
+ */
+
+export interface FinancialFlow {
+  source: string;
+  target: string;
+  amount?: number;
+  currency?: string;
+  type: string;
+  date?: string;
+}
+
 export interface SearchResponse {
   search_id: string;
   status: SearchStatus;
@@ -239,6 +254,8 @@ export interface SearchResponse {
   subsidiaries?: Subsidiary[];
   warnings?: Warning[];
   data_sources_used?: string[];
+  // Deep tier fields (Phase 3)
+  financial_flows?: FinancialFlow[];
 }
 
 export interface ResultsResponse {
@@ -266,6 +283,8 @@ export interface ResultsResponse {
   subsidiaries?: Subsidiary[];
   warnings?: Warning[];
   data_sources_used?: string[];
+  // Deep tier fields (Phase 3)
+  financial_flows?: FinancialFlow[];
 }
 
 export interface HistoryEntry {
@@ -327,6 +346,9 @@ export interface TierSelectorProps {
   onMaxLevel2SearchesChange?: (max: number) => void;
   maxLevel3Searches?: number;
   onMaxLevel3SearchesChange?: (max: number) => void;
+  // Deep tier controls (Phase 3)
+  includeFinancialFlows?: boolean;
+  onIncludeFinancialFlowsChange?: (include: boolean) => void;
 }
 
 export interface NetworkGraphProps {

@@ -40,6 +40,8 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
   // Phase 2 enhancement: Search limits
   const [maxLevel2Searches, setMaxLevel2Searches] = useState(20);
   const [maxLevel3Searches, setMaxLevel3Searches] = useState(10);
+  // Phase 3: Deep tier
+  const [includeFinancialFlows, setIncludeFinancialFlows] = useState(true);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,8 +56,8 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
       country: country || undefined,
       fuzzy_threshold: fuzzyThreshold,
       tier,
-      // Include network parameters if network tier selected
-      ...(tier === 'network' && {
+      // Include network parameters if network or deep tier selected
+      ...((tier === 'network' || tier === 'deep') && {
         network_depth: networkDepth,
         ownership_threshold: ownershipThreshold,
         include_sisters: includeSisters,
@@ -94,6 +96,8 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
         onMaxLevel2SearchesChange={setMaxLevel2Searches}
         maxLevel3Searches={maxLevel3Searches}
         onMaxLevel3SearchesChange={setMaxLevel3Searches}
+        includeFinancialFlows={includeFinancialFlows}
+        onIncludeFinancialFlowsChange={setIncludeFinancialFlows}
       />
 
       {/* Entity Name Input */}

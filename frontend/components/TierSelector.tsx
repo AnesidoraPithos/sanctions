@@ -50,12 +50,12 @@ const TIER_OPTIONS: TierOption[] = [
     duration: "5-15 minutes",
     features: [
       "All network tier features",
-      "Financial flow analysis",
-      "Trade data analysis",
-      "Criminal record checks",
+      "Financial flow analysis (USAspending + transactions)",
+      "Federal procurement records",
+      "Enhanced AI intelligence report",
       "Advanced risk scoring",
     ],
-    disabled: true, // Phase 3
+    disabled: false,
   },
 ];
 
@@ -72,6 +72,8 @@ export default function TierSelector({
   onMaxLevel2SearchesChange,
   maxLevel3Searches = 10,
   onMaxLevel3SearchesChange,
+  includeFinancialFlows = true,
+  onIncludeFinancialFlowsChange,
 }: TierSelectorProps) {
   return (
     <div className="space-y-6">
@@ -296,12 +298,65 @@ export default function TierSelector({
         </div>
       )}
 
-      {/* Deep Tier Configuration (Placeholder) */}
+      {/* Deep Tier Configuration */}
       {selectedTier === "deep" && (
-        <div className="p-4 bg-gray-900/50 border border-gray-700 rounded-lg">
-          <div className="text-sm font-medium text-gray-400">
-            Deep Tier configuration coming in Phase 3
+        <div className="space-y-4 p-4 bg-gray-900/50 border border-gray-700 rounded-lg">
+          <div className="text-sm font-medium text-gray-300 mb-3">
+            Deep Tier Configuration
           </div>
+
+          {/* Reuse network depth slider */}
+          <div>
+            <label
+              htmlFor="deep-network-depth"
+              className="block text-sm text-gray-400 mb-2"
+            >
+              Search Depth:{" "}
+              <span className="text-blue-400 font-semibold">{networkDepth}</span>{" "}
+              {networkDepth === 1 ? "level" : "levels"}
+            </label>
+            <input
+              id="deep-network-depth"
+              type="range"
+              min="1"
+              max="3"
+              step="1"
+              value={networkDepth}
+              onChange={(e) => onNetworkDepthChange?.(parseInt(e.target.value))}
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+            />
+            <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <span>Level 1 (fastest)</span>
+              <span>Level 2</span>
+              <span>Level 3 (most comprehensive)</span>
+            </div>
+          </div>
+
+          {/* Include Financial Flows toggle */}
+          <div className="flex items-start space-x-3">
+            <input
+              id="include-financial-flows"
+              type="checkbox"
+              checked={includeFinancialFlows}
+              onChange={(e) => onIncludeFinancialFlowsChange?.(e.target.checked)}
+              className="mt-1 h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-offset-gray-900"
+            />
+            <div>
+              <label
+                htmlFor="include-financial-flows"
+                className="text-sm text-gray-400 cursor-pointer"
+              >
+                Include financial flows
+              </label>
+              <p className="text-xs text-gray-500 mt-1">
+                Analyse federal procurement records (USAspending.gov) and related-party transactions
+              </p>
+            </div>
+          </div>
+
+          <p className="text-xs text-yellow-400/80">
+            Deep Tier runs all Network Tier steps plus financial flow analysis. Expect 5–15 minutes for large companies.
+          </p>
         </div>
       )}
     </div>

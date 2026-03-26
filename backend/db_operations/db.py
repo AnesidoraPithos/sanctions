@@ -171,6 +171,7 @@ def get_search_results(search_id: str) -> Optional[Dict[str, Any]]:
             "subsidiaries": network_data.get('subsidiaries', []) if network_data else [],
             "warnings": network_data.get('warnings', []) if network_data else [],
             "data_sources_used": network_data.get('data_sources_used', []) if network_data else [],
+            "financial_flows": network_data.get('financial_flows', []) if network_data else [],
             "intelligence_report": intelligence_report,
             "timestamp": timestamp,
             "metadata": results_data.get('metadata', {})

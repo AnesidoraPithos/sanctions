@@ -8,12 +8,13 @@
 
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ResultsResponse, SanctionsHit, MediaHit, NetworkData, FinancialIntelligence } from '@/lib/types';
+import { ResultsResponse, SanctionsHit, MediaHit, NetworkData, FinancialIntelligence, FinancialFlow } from '@/lib/types';
 import { api } from '@/lib/api-client';
 import RiskBadge from '@/components/RiskBadge';
 import TierBadge from '@/components/TierBadge';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import NetworkGraph from '@/components/NetworkGraph';
+import ExportControls from '@/components/ExportControls';
 import { format } from 'date-fns';
 
 interface PageProps {
@@ -94,7 +95,7 @@ export default function ResultsPage({ params }: PageProps) {
   const [results, setResults] = useState<ResultsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  type TabType = 'sanctions' | 'media' | 'report' | 'financial' | 'network-relations';
+  type TabType = 'sanctions' | 'media' | 'report' | 'financial' | 'network-relations' | 'financial-flows';
   const [activeTab, setActiveTab] = useState<TabType>('sanctions');
 
   useEffect(() => {
@@ -118,7 +119,7 @@ export default function ResultsPage({ params }: PageProps) {
 
   // Set default active tab based on tier
   useEffect(() => {
-    if (results && results.tier === 'network') {
+    if (results && (results.tier === 'network' || results.tier === 'deep')) {
       setActiveTab('network-relations');
     }
   }, [results]);
@@ -161,18 +162,21 @@ export default function ResultsPage({ params }: PageProps) {
       {/* Header */}
       <header className="border-b border-gray-800 bg-[#0d1425]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold font-mono text-blue-400">
                 Background Research Results
               </h1>
             </div>
-            <Link
-              href="/"
-              className="text-sm text-gray-400 hover:text-white transition-colors"
-            >
-              ← New Search
-            </Link>
+            <div className="flex items-center gap-4">
+              <ExportControls searchId={searchId} />
+              <Link
+                href="/"
+                className="text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap"
+              >
+                ← New Search
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -198,9 +202,14 @@ export default function ResultsPage({ params }: PageProps) {
               <p className="text-xs text-gray-400 mb-2">Tier</p>
               <div className="flex items-center gap-2">
                 <TierBadge tier={results.tier} />
-                {results.tier === 'network' && (
+                {(results.tier === 'network' || results.tier === 'deep') && (
                   <span className="text-xs text-blue-400">
                     {results.metadata?.network_depth ? `(${results.metadata.network_depth}L)` : ''}
+                  </span>
+                )}
+                {results.tier === 'deep' && (
+                  <span className="text-xs px-2 py-0.5 bg-purple-900/40 border border-purple-600 text-purple-300 rounded font-semibold">
+                    DEEP RESEARCH
                   </span>
                 )}
               </div>
@@ -221,8 +230,8 @@ export default function ResultsPage({ params }: PageProps) {
               <p className="text-xs text-gray-400">Media Hits</p>
             </div>
 
-            {/* Show network tier stats if available */}
-            {results.tier === 'network' ? (
+            {/* Show network/deep tier stats if available */}
+            {(results.tier === 'network' || results.tier === 'deep') ? (
               <>
                 <div>
                   <p className="text-2xl font-bold text-green-400">
@@ -230,13 +239,22 @@ export default function ResultsPage({ params }: PageProps) {
                   </p>
                   <p className="text-xs text-gray-400">Subsidiaries</p>
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-orange-400">
-                    {((results.financial_intelligence as FinancialIntelligence)?.directors?.length || 0) +
-                     ((results.financial_intelligence as FinancialIntelligence)?.shareholders?.length || 0)}
-                  </p>
-                  <p className="text-xs text-gray-400">People</p>
-                </div>
+                {results.tier === 'deep' ? (
+                  <div>
+                    <p className="text-2xl font-bold text-purple-400">
+                      {results.financial_flows?.length || 0}
+                    </p>
+                    <p className="text-xs text-gray-400">Financial Flows</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-2xl font-bold text-orange-400">
+                      {((results.financial_intelligence as FinancialIntelligence)?.directors?.length || 0) +
+                       ((results.financial_intelligence as FinancialIntelligence)?.shareholders?.length || 0)}
+                    </p>
+                    <p className="text-xs text-gray-400">People</p>
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -253,14 +271,14 @@ export default function ResultsPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Network Tier Confirmation Banner */}
-        {results.tier === 'network' && (
+        {/* Network / Deep Tier Confirmation Banner */}
+        {(results.tier === 'network' || results.tier === 'deep') && (
           <div className="mb-6 bg-blue-900/20 border border-blue-700 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <span className="text-blue-400 text-xl">🔬</span>
               <div className="flex-1">
                 <h4 className="text-sm font-semibold text-blue-400 mb-1">
-                  Network Tier Research Completed
+                  {results.tier === 'deep' ? 'Deep Tier Research Completed' : 'Network Tier Research Completed'}
                 </h4>
                 <p className="text-sm text-blue-300">
                   {results.metadata?.network_depth && (results.metadata.network_depth as number) > 1
@@ -397,8 +415,8 @@ export default function ResultsPage({ params }: PageProps) {
               Intelligence Report
             </button>
 
-            {/* Network Tier Tabs */}
-            {results.tier === 'network' && results.network_data && (
+            {/* Network / Deep Tier Tabs */}
+            {(results.tier === 'network' || results.tier === 'deep') && results.network_data && (
               <>
                 <button
                   onClick={() => setActiveTab('financial')}
@@ -424,6 +442,20 @@ export default function ResultsPage({ params }: PageProps) {
                      ((results.network_data as any)?.sisters?.length || 0)}
                   )
                 </button>
+
+                {/* Financial Flows tab — deep tier only */}
+                {results.tier === 'deep' && (
+                  <button
+                    onClick={() => setActiveTab('financial-flows')}
+                    className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'financial-flows'
+                        ? 'border-purple-500 text-purple-400'
+                        : 'border-transparent text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Financial Flows ({results.financial_flows?.length || 0})
+                  </button>
+                )}
               </>
             )}
           </nav>
@@ -680,6 +712,67 @@ export default function ResultsPage({ params }: PageProps) {
               </div>
             );
           })()}
+
+          {/* Financial Flows Tab (deep tier only) */}
+          {activeTab === 'financial-flows' && (
+            <div className="space-y-4">
+              {results.financial_flows && results.financial_flows.length > 0 ? (
+                <>
+                  <p className="text-sm text-gray-400">
+                    {results.financial_flows.length} financial flow{results.financial_flows.length !== 1 ? 's' : ''} identified
+                    from federal procurement records and related-party transactions.
+                  </p>
+                  <div className="bg-[#0d1425] border border-gray-800 rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-900/50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Source</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Target</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Type</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Amount</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-800">
+                          {(results.financial_flows as FinancialFlow[]).map((flow, idx) => (
+                            <tr key={idx} className="hover:bg-gray-900/30">
+                              <td className="px-4 py-3 text-white max-w-[200px] truncate" title={flow.source}>
+                                {flow.source}
+                              </td>
+                              <td className="px-4 py-3 text-gray-300 max-w-[200px] truncate" title={flow.target}>
+                                {flow.target}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="text-xs px-2 py-0.5 bg-purple-900/30 text-purple-300 rounded capitalize">
+                                  {flow.type.replace(/_/g, ' ')}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right text-gray-300 font-mono text-xs">
+                                {flow.amount != null
+                                  ? `${flow.currency || 'USD'} ${Number(flow.amount).toLocaleString()}`
+                                  : '—'}
+                              </td>
+                              <td className="px-4 py-3 text-gray-400 text-xs">{flow.date || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-8 text-center">
+                  <p className="text-gray-400">
+                    No financial flows found. This may be normal for private or non-US entities.
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Sources checked: USAspending.gov (federal procurement) and SEC EDGAR related-party transactions.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Network Relations Tab (unified Network Graph + Subsidiaries) */}
           {activeTab === 'network-relations' && results.network_data && (() => {

@@ -30,6 +30,8 @@ from fastapi.responses import JSONResponse
 import logging
 
 from routes import search_routes, results_routes, health_routes
+from routes import export_routes
+from websocket import progress_handler
 from config import settings
 
 # Configure logging
@@ -61,6 +63,8 @@ app.add_middleware(
 app.include_router(health_routes.router, prefix="/api", tags=["Health"])
 app.include_router(search_routes.router, prefix="/api/search", tags=["Search"])
 app.include_router(results_routes.router, prefix="/api/results", tags=["Results"])
+app.include_router(export_routes.router, prefix="/api/export", tags=["Export"])
+app.include_router(progress_handler.router, tags=["WebSocket"])
 
 @app.get("/")
 async def root():

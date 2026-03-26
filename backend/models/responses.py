@@ -84,6 +84,17 @@ class FinancialIntelligence(BaseModel):
     transactions: List[Dict[str, Any]] = Field(default_factory=list, description="Related party transactions")
 
 
+class FinancialFlow(BaseModel):
+    """A single financial flow between two entities"""
+
+    source: str = Field(..., description="Source entity name")
+    target: str = Field(..., description="Target entity name")
+    amount: Optional[float] = Field(None, description="Transaction amount")
+    currency: Optional[str] = Field(None, description="Currency code (e.g. USD)")
+    type: str = Field(..., description="Flow type: contract, grant, loan, procurement, etc.")
+    date: Optional[str] = Field(None, description="Transaction date")
+
+
 class SearchResponse(BaseModel):
     """Response model for entity search"""
 
@@ -173,6 +184,12 @@ class SearchResponse(BaseModel):
         description="List of data sources successfully used (sec_edgar, opencorporates, wikipedia, etc.)"
     )
 
+    # Deep tier fields (Phase 3)
+    financial_flows: Optional[List[FinancialFlow]] = Field(
+        None,
+        description="Financial flows between entities (deep tier only)"
+    )
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -210,6 +227,9 @@ class ResultsResponse(BaseModel):
     subsidiaries: Optional[List[Dict[str, Any]]] = Field(None, description="Subsidiaries list")
     warnings: Optional[List[Dict[str, Any]]] = Field(None, description="Warnings")
     data_sources_used: Optional[List[str]] = Field(None, description="Data sources used")
+
+    # Deep tier fields (Phase 3)
+    financial_flows: Optional[List[Dict[str, Any]]] = Field(None, description="Financial flows (deep tier)")
 
     class Config:
         json_schema_extra = {

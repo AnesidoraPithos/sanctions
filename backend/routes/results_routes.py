@@ -85,7 +85,9 @@ async def get_results(
             financial_intelligence=results.get('financial_intelligence'),
             subsidiaries=results.get('subsidiaries', []),
             warnings=results.get('warnings', []),
-            data_sources_used=results.get('data_sources_used', [])
+            data_sources_used=results.get('data_sources_used', []),
+            # Deep tier fields (Phase 3)
+            financial_flows=results.get('financial_flows', []),
         )
 
     except HTTPException:

@@ -564,21 +564,346 @@ async def search_deep_tier(request: SearchRequest):
     Perform deep tier entity background search (Phase 3)
 
     Deep tier includes:
-    - Network tier (all network features)
-    - Financial flow analysis
-    - Trade data analysis
-    - Criminal record checks
-    - Advanced risk scoring
-
-    Expected duration: 5-15 minutes
-
-    Returns:
-        Feature not yet implemented (Phase 3)
+    - All network tier features
+    - USAspending.gov federal procurement data (graceful skip if unavailable)
+    - Financial flow extraction from related-party transactions
+    - Enhanced intelligence report
     """
-    raise HTTPException(
-        status_code=501,
-        detail={
-            "error": "NotImplemented",
-            "message": "Deep tier is not yet implemented (Phase 3 feature)"
+    # Use client-supplied UUID if provided (enables WebSocket progress tracking before response)
+    search_id = request.client_search_id if request.client_search_id else str(uuid.uuid4())
+    timestamp = datetime.utcnow()
+    search_start_time = time.time()
+
+    # Import progress helper (lazy to avoid circular imports)
+    try:
+        from websocket.progress_handler import update_progress, complete_progress, fail_progress
+        _has_progress = True
+    except ImportError:
+        _has_progress = False
+
+    def _progress(step: str, percent: int) -> None:
+        if _has_progress:
+            update_progress(search_id, step, percent)
+
+    logger.info(f"Starting deep tier search: {search_id} for entity: {request.entity_name}")
+
+    try:
+        # --- STEP 1: Base tier ---
+        _progress("Sanctions screening", 5)
+        logger.info(f"[{search_id}] Step 1: Base tier research...")
+        sanctions_service = get_sanctions_service()
+        research_service = get_research_service()
+
+        sanctions_hits = sanctions_service.search_sanctions(
+            entity_name=request.entity_name,
+            country=request.country,
+            fuzzy_threshold=request.fuzzy_threshold,
+        )
+        media_intelligence = research_service.get_media_intelligence(request.entity_name)
+
+        logger.info(
+            f"[{search_id}] Base tier: {len(sanctions_hits)} sanctions hits, "
+            f"{media_intelligence['total_hits']} media hits"
+        )
+
+        # --- STEP 2: Conglomerate discovery ---
+        _progress("Conglomerate discovery", 20)
+        logger.info(f"[{search_id}] Step 2: Conglomerate discovery...")
+        conglomerate_service = get_conglomerate_service()
+
+        conglomerate_data = conglomerate_service.discover_subsidiaries(
+            parent_company=request.entity_name,
+            depth=request.network_depth,
+            ownership_threshold=request.ownership_threshold,
+            include_sisters=request.include_sisters,
+            max_level_2_searches=request.max_level_2_searches,
+            max_level_3_searches=request.max_level_3_searches,
+        )
+
+        subsidiaries = conglomerate_data.get("subsidiaries", [])
+        sisters = conglomerate_data.get("sisters", [])
+        parent_info = conglomerate_data.get("parent", None)
+        warnings = conglomerate_data.get("warnings", [])
+        data_sources_used = conglomerate_data.get("data_sources_used", [])
+
+        logger.info(
+            f"[{search_id}] Conglomerate: {len(subsidiaries)} subsidiaries, "
+            f"{len(sisters)} sisters"
+        )
+
+        # --- STEP 3: Financial intelligence ---
+        _progress("Extracting financial intelligence", 40)
+        logger.info(f"[{search_id}] Step 3: Extracting financial intelligence...")
+        cik = conglomerate_service.search_sec_edgar_for_cik(request.entity_name)
+        financial_intelligence = conglomerate_service.extract_financial_intelligence(
+            company_name=request.entity_name,
+            cik=cik,
+        )
+
+        directors = financial_intelligence.get("directors", [])
+        shareholders = financial_intelligence.get("shareholders", [])
+        transactions = financial_intelligence.get("transactions", [])
+        warnings.extend(financial_intelligence.get("warnings", []))
+
+        # --- STEP 4: Cross-entity sanctions screening ---
+        _progress("Cross-entity sanctions screening", 55)
+        logger.info(f"[{search_id}] Step 4: Cross-entity sanctions screening...")
+
+        def _screen_entity(entity: dict) -> dict:
+            try:
+                hits = sanctions_service.search_sanctions(
+                    entity_name=entity["name"],
+                    country=None,
+                    fuzzy_threshold=request.fuzzy_threshold,
+                )
+                entity["sanctions_hits"] = len(hits)
+                entity["sanctions_data"] = hits[:5]
+            except Exception as exc:
+                logger.error(f"Error screening {entity['name']}: {exc}")
+                entity.setdefault("sanctions_hits", 0)
+                entity.setdefault("sanctions_data", [])
+            return entity
+
+        subsidiary_sanctions_count = 0
+        person_sanctions_count = 0
+
+        all_entities = list(subsidiaries) + list(directors) + list(shareholders)
+        if all_entities:
+            try:
+                from config import settings as cfg
+                max_workers = min(len(all_entities), cfg.MAX_PARALLEL_SANCTIONS_SCREENING)
+            except (ImportError, AttributeError):
+                max_workers = min(len(all_entities), 20)
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [executor.submit(_screen_entity, e) for e in all_entities]
+                for future in as_completed(futures):
+                    e = future.result()
+                    hits = e.get("sanctions_hits", 0)
+                    if e in subsidiaries:
+                        subsidiary_sanctions_count += hits
+                    else:
+                        person_sanctions_count += hits
+
+        # --- STEP 5: Build network graph ---
+        _progress("Building network graph", 65)
+        logger.info(f"[{search_id}] Step 5: Building network graph...")
+        network_service = get_network_service()
+        network_graph = network_service.build_network_graph(
+            company_name=request.entity_name,
+            subsidiaries=subsidiaries,
+            sisters=sisters,
+            directors=directors,
+            shareholders=shareholders,
+            transactions=transactions,
+            parent_info=parent_info,
+        )
+
+        # --- STEP 6: USAspending.gov procurement records (graceful skip) ---
+        _progress("Querying federal procurement records", 72)
+        logger.info(f"[{search_id}] Step 6: Federal procurement data (USAspending)...")
+        usaspending_flows: list = []
+        try:
+            import requests as _req
+            payload = {
+                "filters": {
+                    "recipient_search_text": [request.entity_name],
+                    "award_type_codes": ["A", "B", "C", "D"],
+                },
+                "fields": ["Recipient Name", "Award Amount", "Awarding Agency Name", "Action Date", "Award Type"],
+                "limit": 20,
+                "page": 1,
+            }
+            resp = _req.post(
+                "https://api.usaspending.gov/api/v2/search/spending_by_award/",
+                json=payload,
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                awards = resp.json().get("results", [])
+                for award in awards:
+                    usaspending_flows.append({
+                        "source": award.get("Awarding Agency Name", "US Federal Government"),
+                        "target": award.get("Recipient Name", request.entity_name),
+                        "amount": award.get("Award Amount"),
+                        "currency": "USD",
+                        "type": award.get("Award Type", "procurement"),
+                        "date": award.get("Action Date"),
+                    })
+                logger.info(f"[{search_id}] USAspending: {len(usaspending_flows)} awards found")
+            else:
+                logger.warning(f"[{search_id}] USAspending returned {resp.status_code}")
+        except Exception as exc:
+            logger.warning(f"[{search_id}] USAspending unavailable: {exc}")
+            warnings.append({
+                "source": "usaspending",
+                "message": "Federal procurement data unavailable (USAspending.gov unreachable)",
+                "severity": "info",
+            })
+
+        # --- STEP 7: Build financial flows from transactions + USAspending ---
+        _progress("Extracting financial flows", 80)
+        financial_flows: list = list(usaspending_flows)
+        for tx in transactions:
+            if tx.get("counterparty"):
+                financial_flows.append({
+                    "source": request.entity_name,
+                    "target": tx.get("counterparty", ""),
+                    "amount": tx.get("amount"),
+                    "currency": tx.get("currency", "USD"),
+                    "type": tx.get("transaction_type", "related_party"),
+                    "date": tx.get("transaction_date"),
+                })
+
+        # --- STEP 8: Generate intelligence report ---
+        _progress("Generating intelligence report", 85)
+        logger.info(f"[{search_id}] Step 8: Generating intelligence report...")
+        intelligence_report = research_service.generate_intelligence_report(request.entity_name)
+
+        # Fallback parent extraction
+        if not parent_info and intelligence_report:
+            parent_info = research_service.extract_parent_from_report(
+                request.entity_name, intelligence_report
+            )
+
+        # --- STEP 9: Risk assessment ---
+        _progress("Calculating risk level", 92)
+        risk_service = get_risk_assessment_service()
+        ai_assessment = risk_service.extract_ai_risk_assessment(intelligence_report)
+        risk_level, risk_explanation = risk_service.calculate_combined_risk_level(
+            sanctions_hits=sanctions_hits,
+            ai_assessment=ai_assessment,
+            media_intelligence=media_intelligence,
+        )
+
+        # --- STEP 10: Format & save ---
+        _progress("Saving results", 96)
+        sanctions_data = sanctions_service.format_sanctions_data(sanctions_hits)
+        media_data = research_service.format_media_data(media_intelligence)
+
+        total_duration = time.time() - search_start_time
+        logger.info(f"[{search_id}] TOTAL DEEP TIER SEARCH TIME: {total_duration:.2f}s")
+
+        level_stats = {
+            "level_1": len([s for s in subsidiaries if s.get("level") == 1]),
+            "level_2": len([s for s in subsidiaries if s.get("level") == 2]),
+            "level_3": len([s for s in subsidiaries if s.get("level") == 3]),
         }
-    )
+
+        metadata = {
+            "entity_name": request.entity_name,
+            "country": request.country,
+            "fuzzy_threshold": request.fuzzy_threshold,
+            "tier": "deep",
+            "network_depth": request.network_depth,
+            "ownership_threshold": request.ownership_threshold,
+            "include_sisters": request.include_sisters,
+            "max_level_2_searches": request.max_level_2_searches,
+            "max_level_3_searches": request.max_level_3_searches,
+            "search_duration_seconds": round(total_duration, 2),
+            "parallelization_enabled": True,
+            "conglomerate_method": conglomerate_data.get("method", "unknown"),
+            "data_sources_used": data_sources_used,
+            "risk_explanation": risk_explanation,
+            "financial_flows_count": len(financial_flows),
+        }
+
+        network_data_db = {
+            "graph": network_graph,
+            "subsidiaries": subsidiaries,
+            "sisters": sisters,
+            "parent_info": parent_info,
+            "financial_intelligence": {
+                "directors": directors,
+                "shareholders": shareholders,
+                "transactions": transactions,
+            },
+            "financial_flows": financial_flows,
+            "warnings": warnings,
+            "data_sources_used": data_sources_used,
+            "statistics": {
+                "total_subsidiaries": len(subsidiaries),
+                "total_sisters": len(sisters),
+                "total_directors": len(directors),
+                "total_shareholders": len(shareholders),
+                "total_transactions": len(transactions),
+                "subsidiary_sanctions_hits": subsidiary_sanctions_count,
+                "person_sanctions_hits": person_sanctions_count,
+                "level_1_count": level_stats["level_1"],
+                "level_2_count": level_stats["level_2"],
+                "level_3_count": level_stats["level_3"],
+            },
+        }
+
+        save_search_results(
+            search_id=search_id,
+            entity_name=request.entity_name,
+            tier="deep",
+            risk_level=risk_level,
+            sanctions_data=sanctions_data,
+            research_data={"media_intelligence": media_intelligence, "media_data": media_data},
+            network_data=network_data_db,
+            intelligence_report=intelligence_report,
+            metadata=metadata,
+        )
+
+        _progress("Complete", 100)
+        if _has_progress:
+            complete_progress(search_id)
+
+        logger.info(f"[{search_id}] Deep tier search complete")
+
+        return SearchResponse(
+            search_id=search_id,
+            status="completed",
+            tier="deep",
+            entity_name=request.entity_name,
+            risk_level=risk_level,
+            risk_explanation=risk_explanation,
+            sanctions_hits=len(sanctions_hits),
+            media_hits=media_intelligence["total_hits"],
+            intelligence_report=intelligence_report,
+            timestamp=timestamp,
+            sanctions_data=sanctions_data[:10],
+            media_data=media_data[:10],
+            network_data=network_graph,
+            financial_intelligence={
+                "directors": directors[:20],
+                "shareholders": shareholders[:20],
+                "transactions": transactions[:20],
+            },
+            subsidiaries=subsidiaries[:50],
+            financial_flows=financial_flows[:50],
+            warnings=warnings,
+            data_sources_used=data_sources_used,
+            metadata=metadata,
+        )
+
+    except Exception as e:
+        logger.error(f"[{search_id}] Deep tier search failed: {str(e)}", exc_info=True)
+
+        if _has_progress:
+            fail_progress(search_id, str(e))
+
+        try:
+            save_search_results(
+                search_id=search_id,
+                entity_name=request.entity_name,
+                tier="deep",
+                risk_level="UNKNOWN",
+                sanctions_data=[],
+                research_data={"error": str(e)},
+                intelligence_report=f"Deep tier search failed: {str(e)}",
+                metadata={"status": "failed", "error": str(e)},
+            )
+        except Exception:
+            pass
+
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "DeepSearchError",
+                "message": f"Failed to complete deep tier search: {str(e)}",
+                "search_id": search_id,
+            },
+        )
