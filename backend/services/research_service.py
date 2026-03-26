@@ -98,6 +98,58 @@ class ResearchService:
         """
         return self.agent.generate_intelligence_report(entity_name)
 
+    def extract_parent_from_report(self, entity_name: str, report_text: str) -> Dict[str, Any] | None:
+        """
+        Fallback: extract parent company from the intelligence report text when
+        network search returned nothing.
+
+        Args:
+            entity_name: Name of the entity being researched
+            report_text: Markdown intelligence report already generated
+
+        Returns:
+            Parent company dict (name, relationship, source, confidence) or None
+        """
+        prompt = f"""The following intelligence report was written about "{entity_name}".
+
+Extract the PARENT COMPANY or ACQUIRING COMPANY of "{entity_name}" from the report.
+
+CRITICAL RULES:
+1. Extract ONLY the company that directly owns / acquired "{entity_name}"
+2. Do NOT return "{entity_name}" itself
+3. If the report describes an acquisition, the acquirer is the parent
+4. If no clear owner/parent/acquirer is mentioned, respond exactly: NO_PARENT_FOUND
+
+Output format (single line):
+PARENT_COMPANY_NAME | JURISDICTION | CONFIDENCE | SOURCE_NOTE
+
+Where CONFIDENCE is one of: high, medium, low
+
+Report:
+{report_text[:3000]}
+"""
+        try:
+            response = self.agent.client.chat.completions.create(
+                model=self.agent.model_id,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=200
+            )
+            content = response.choices[0].message.content.strip()
+            if "NO_PARENT_FOUND" in content or "|" not in content:
+                return None
+            parts = [p.strip() for p in content.split("|")]
+            if len(parts) < 3:
+                return None
+            return {
+                "name": parts[0],
+                "relationship": "parent",
+                "confidence": parts[2].lower() if len(parts) > 2 else "medium",
+                "source": parts[3] if len(parts) > 3 else "intelligence_report"
+            }
+        except Exception:
+            return None
+
     def format_media_data(
         self,
         media_intelligence: Dict[str, Any]

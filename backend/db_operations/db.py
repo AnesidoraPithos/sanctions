@@ -162,7 +162,11 @@ def get_search_results(search_id: str) -> Optional[Dict[str, Any]]:
             "sanctions_hits": match_count,
             "sanctions_data": results_data.get('sanctions', []),
             "research_data": results_data.get('research', {}),
-            "network_data": network_data.get('graph', {}) if network_data else {},
+            "network_data": {
+                **network_data.get('graph', {}),
+                "parent_info": network_data.get('parent_info'),
+                "sisters": network_data.get('sisters', []),
+            } if network_data else {},
             "financial_intelligence": network_data.get('financial_intelligence', {}) if network_data else {},
             "subsidiaries": network_data.get('subsidiaries', []) if network_data else [],
             "warnings": network_data.get('warnings', []) if network_data else [],

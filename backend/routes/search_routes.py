@@ -405,6 +405,13 @@ async def search_network_tier(request: SearchRequest):
 
         logger.info(f"[{search_id}] Intelligence report generated")
 
+        # STEP 6.1: Fallback parent extraction from intelligence report
+        if not parent_info and intelligence_report:
+            logger.info(f"[{search_id}] No parent found via network search — attempting extraction from intelligence report...")
+            parent_info = research_service.extract_parent_from_report(request.entity_name, intelligence_report)
+            if parent_info:
+                logger.info(f"[{search_id}] Parent extracted from report: {parent_info['name']}")
+
         # STEP 6.5: Extract AI risk assessment and calculate combined risk
         logger.info(f"[{search_id}] Step 6.5: Calculating combined risk level...")
         risk_service = get_risk_assessment_service()

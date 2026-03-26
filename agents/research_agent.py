@@ -13,6 +13,13 @@ try:
 except ImportError:
     from duckduckgo_search import DDGS
 
+# Handle googlesearch import
+try:
+    from googlesearch import search as google_search
+    GOOGLE_SEARCH_AVAILABLE = True
+except ImportError:
+    GOOGLE_SEARCH_AVAILABLE = False
+
 # Import backend config for limits
 import sys
 backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'backend')
@@ -2279,9 +2286,9 @@ Be conservative - only extract entities clearly identified as sister companies w
 
         # Try multiple search strategies
         queries = [
-            f'site:wikipedia.org "{company_name}" "parent company" OR "owned by" OR "subsidiary of"',
+            f'site:wikipedia.org "{company_name}" "parent company" OR "owned by" OR "subsidiary of" OR "acquired by"',
             f'site:opencorporates.com "{company_name}" "parent company" OR "owned by"',
-            f'"{company_name}" "parent company" OR "owned by" OR "subsidiary of" OR "holding company"'
+            f'"{company_name}" "parent company" OR "owned by" OR "subsidiary of" OR "holding company" OR "acquired by" OR "acquisition"'
         ]
 
         all_results = []
@@ -2317,7 +2324,7 @@ CRITICAL RULES:
 3. DO NOT include subsidiaries of "{company_name}" - we want the company ABOVE it in the hierarchy
 4. DO NOT include sister companies - we want the direct parent/owner
 5. If multiple ownership levels exist, extract the DIRECT parent (not the ultimate parent)
-6. Be conservative - only extract if clearly stated that company X OWNS or is the PARENT of "{company_name}"
+6. Be conservative - only extract if clearly stated that company X OWNS, is the PARENT of, or ACQUIRED "{company_name}" (acquisition = ownership)
 
 Search Results:
 {text_data}
@@ -2479,6 +2486,7 @@ Huawei Investment & Holding Co., Ltd | China | high | https://en.wikipedia.org/w
             text_data += f"URL: {r.get('href', '')}\n"
             text_data += f"Snippet: {r.get('body', '')}\n\n"
 
+        try:
             # Use LLM to extract subsidiaries
             prompt = f"""
 Analyze the following search results about "{company_name}".
@@ -2605,6 +2613,138 @@ Be conservative - only extract entities clearly identified as subsidiaries with 
             self._log(f"Error searching subsidiaries via DuckDuckGo: {e}", "ERROR")
             return []
 
+    def _search_google_subsidiaries(self, company_name):
+        """
+        Search for subsidiaries using Google (via googlesearch-python), prioritising
+        high-quality sources such as greyb.com.
+
+        Args:
+            company_name (str): Company name
+
+        Returns:
+            list: List of subsidiary dictionaries with source='google'
+        """
+        if not GOOGLE_SEARCH_AVAILABLE:
+            self._log("googlesearch-python not installed; skipping Google subsidiary search", "WARN")
+            return []
+
+        try:
+            queries = [
+                f'"{company_name}" subsidiaries list site:insights.greyb.com',
+                f'"{company_name}" subsidiaries complete list',
+            ]
+
+            seen_urls = []
+            for query in queries:
+                try:
+                    for url in google_search(query, num_results=5, sleep_interval=1):
+                        if url and url not in seen_urls:
+                            seen_urls.append(url)
+                except Exception as e:
+                    self._log(f"Google query failed '{query[:60]}': {e}", "WARN")
+                time.sleep(2)
+
+            # Prioritise greyb.com URLs
+            seen_urls.sort(key=lambda u: (0 if 'greyb.com' in u else 1))
+            top_urls = seen_urls[:3]
+
+            if not top_urls:
+                return []
+
+            all_subsidiaries = []
+
+            for url in top_urls:
+                try:
+                    response = requests.get(
+                        url,
+                        headers={'User-Agent': 'Mozilla/5.0 (compatible; research-bot/1.0)'},
+                        timeout=15
+                    )
+                    response.raise_for_status()
+
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(response.text, 'lxml')
+
+                    # Remove noise tags
+                    for tag in soup(['nav', 'footer', 'script', 'style', 'header']):
+                        tag.decompose()
+
+                    page_text = soup.get_text(separator='\n', strip=True)[:15000]
+
+                    prompt = f"""
+Analyze the following web page content about "{company_name}".
+
+Extract ONLY the LEGAL ENTITY NAMES of SUBSIDIARY COMPANIES.
+
+Subsidiary companies are companies that are OWNED BY "{company_name}".
+
+CRITICAL RULES:
+1. Extract ONLY the actual legal company name (e.g., "Company A Inc.", "Company B Ltd.")
+2. DO NOT include descriptions, products, or services
+3. DO NOT include "{company_name}" itself
+4. DO NOT include numbering or bullet points in the name field
+
+For each subsidiary company found, provide:
+- Legal entity name ONLY
+- Jurisdiction (country/state if mentioned, else 'Unknown')
+- Status (always "Subsidiary")
+- Source URL: {url}
+
+Output format (one per line):
+LEGAL_ENTITY_NAME | JURISDICTION | Subsidiary | {url}
+
+If no subsidiaries are clearly identified, respond with "NO_SUBSIDIARIES_FOUND".
+
+Page content:
+{page_text}
+"""
+
+                    response_llm = self.client.chat.completions.create(
+                        model=self.model_id,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.1,
+                        max_tokens=2000
+                    )
+
+                    content = response_llm.choices[0].message.content.strip()
+
+                    if "NO_SUBSIDIARIES_FOUND" in content:
+                        continue
+
+                    for line in content.split('\n'):
+                        line = line.strip()
+                        if not line or '|' not in line:
+                            continue
+                        parts = [p.strip() for p in line.split('|')]
+                        if len(parts) >= 3:
+                            extracted_name = re.sub(r'^\s*\d+\.\s*', '', parts[0]).strip()
+                            invalid_placeholders = [
+                                'LEGAL_ENTITY_NAME', 'NO_SUBSIDIARIES_FOUND',
+                                'COMPANY_NAME', 'EXAMPLE'
+                            ]
+                            if any(p.lower() in extracted_name.lower() for p in invalid_placeholders):
+                                continue
+                            if self._validate_company_name(extracted_name):
+                                all_subsidiaries.append({
+                                    'name': extracted_name,
+                                    'jurisdiction': parts[1],
+                                    'status': parts[2],
+                                    'relationship': 'subsidiary',
+                                    'level': 1,
+                                    'source': 'google',
+                                    'reference_url': url
+                                })
+
+                except Exception as e:
+                    self._log(f"Error fetching/parsing {url}: {e}", "WARN")
+                    continue
+
+            return all_subsidiaries
+
+        except Exception as e:
+            self._log(f"Error in Google subsidiary search: {e}", "ERROR")
+            return []
+
     def _search_wikipedia_subsidiaries(self, company_name):
         """
         Search Wikipedia for subsidiaries and sister companies.
@@ -2634,7 +2774,7 @@ Be conservative - only extract entities clearly identified as subsidiaries with 
             search_params = {
                 'action': 'opensearch',
                 'search': company_name,
-                'limit': 1,
+                'limit': 3,
                 'format': 'json'
             }
 
@@ -2642,12 +2782,30 @@ Be conservative - only extract entities clearly identified as subsidiaries with 
             response.raise_for_status()
             search_results = response.json()
 
-            # Get the first result's title
+            # Pick the best matching title using fuzzy similarity
             if not search_results[1]:
                 self._log(f"No Wikipedia page found for {company_name}", "WARN")
                 return {'subsidiaries': [], 'sisters': []}
 
-            page_title = search_results[1][0]
+            from fuzzywuzzy import fuzz
+            best_title = None
+            best_score = 0
+            for candidate in search_results[1]:
+                score = fuzz.token_set_ratio(company_name.lower(), candidate.lower())
+                if score > best_score:
+                    best_score = score
+                    best_title = candidate
+
+            WIKI_SIMILARITY_THRESHOLD = 55
+            if best_score < WIKI_SIMILARITY_THRESHOLD:
+                self._log(
+                    f"Wikipedia result '{best_title}' doesn't match '{company_name}' "
+                    f"(similarity {best_score}% < {WIKI_SIMILARITY_THRESHOLD}%), skipping",
+                    "WARN"
+                )
+                return {'subsidiaries': [], 'sisters': []}
+
+            page_title = best_title
             self._log(f"Found Wikipedia page: {page_title}", "SUCCESS")
 
             # Fetch the page content
@@ -2806,13 +2964,15 @@ Extract ALL entities with clear names.
                             except ValueError:
                                 pass
 
+                    wiki_url = f"https://en.wikipedia.org/wiki/{page_title.replace(' ', '_')}"
                     company_dict = {
                         'name': company_name,
                         'jurisdiction': parts[1],
                         'status': 'Active',
                         'level': 1,
                         'source': 'wikipedia',
-                        'ownership_percentage': ownership_pct
+                        'ownership_percentage': ownership_pct,
+                        'reference_url': wiki_url
                     }
 
                     if relationship == 'subsidiary':
@@ -3572,6 +3732,18 @@ NONE
                 subsidiaries.append(sub)
                 seen_names.add(sub['name'].lower())
 
+        # Google search (greyb.com and other sources)
+        self._log("Searching subsidiaries via Google...", "INFO")
+        google_subs = self._search_google_subsidiaries(parent_company_name)
+        if google_subs:
+            self._log(f"Found {len(google_subs)} subsidiaries via Google", "SUCCESS")
+            for sub in google_subs:
+                if sub['name'].lower() not in seen_names:
+                    subsidiaries.append(sub)
+                    seen_names.add(sub['name'].lower())
+            if 'google' not in data_sources_tried:
+                data_sources_tried.append('google')
+
         # Also use the level-based search for deeper hierarchy
         level_1_subs = self._search_subsidiaries_level(parent_company_name, 1)
         for sub in level_1_subs:
@@ -3659,10 +3831,13 @@ NONE
             self._log("No parent company found", "INFO")
 
         # Determine method label based on what found results
+        sources = []
         if wiki_subsidiaries or wiki_sisters:
-            method_label = 'wikipedia+duckduckgo'
-        else:
-            method_label = 'duckduckgo'
+            sources.append('wikipedia')
+        sources.append('duckduckgo')
+        if 'google' in data_sources_tried:
+            sources.append('google')
+        method_label = '+'.join(sources)
 
         return {
             'subsidiaries': subsidiaries,

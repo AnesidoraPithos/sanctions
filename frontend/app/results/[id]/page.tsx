@@ -20,6 +20,73 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+function renderMarkdown(text: string): string {
+  const lines = text.split('\n');
+  let html = '';
+  let inOl = false;
+  let inUl = false;
+
+  const closeList = () => {
+    if (inOl) { html += '</ol>'; inOl = false; }
+    if (inUl) { html += '</ul>'; inUl = false; }
+  };
+
+  const processInline = (s: string): string => {
+    // [Source: https://...] → compact citation link
+    s = s.replace(/\[Source:\s*(https?:\/\/[^\]]+)\]/g, '<a href="$1" target="_blank">[Source]</a>');
+    // [text](url) → hyperlink
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+    // **text** → bold
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // bare URLs (not already inside href="...")
+    s = s.replace(/(?<!['"=])(https?:\/\/[^\s<"]+)/g, '<a href="$1" target="_blank">$1</a>');
+    return s;
+  };
+
+  for (const line of lines) {
+    if (line.startsWith('### ')) {
+      closeList();
+      html += `<h3>${processInline(line.slice(4))}</h3>\n`;
+    } else if (line.startsWith('## ')) {
+      closeList();
+      html += `<h2>${processInline(line.slice(3))}</h2>\n`;
+    } else if (line.startsWith('# ')) {
+      closeList();
+      html += `<h1>${processInline(line.slice(2))}</h1>\n`;
+    } else if (/^\d+\.\s/.test(line)) {
+      if (inUl) { html += '</ul>'; inUl = false; }
+      if (!inOl) { html += '<ol>'; inOl = true; }
+      html += `<li>${processInline(line.replace(/^\d+\.\s/, ''))}</li>\n`;
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      if (inOl) { html += '</ol>'; inOl = false; }
+      if (!inUl) { html += '<ul>'; inUl = true; }
+      html += `<li>${processInline(line.slice(2))}</li>\n`;
+    } else if (line.trim() === '') {
+      closeList();
+      html += '<br/>\n';
+    } else if (line.startsWith('Risk Level:')) {
+      closeList();
+      const parts = line.split('|');
+      const riskHeader = parts[0].trim();
+      const scoreComponents = parts.slice(1);
+      html += `<div style="background:#1a1f2e;border-left:4px solid #f59e0b;padding:12px 16px;margin:12px 0;border-radius:4px">`;
+      html += `<div style="color:#f59e0b;font-weight:bold;margin-bottom:8px">${processInline(riskHeader)}</div>`;
+      for (const comp of scoreComponents) {
+        if (comp.trim()) {
+          html += `<div style="color:#d1d5db;margin:2px 0">&bull; ${processInline(comp.trim())}</div>`;
+        }
+      }
+      html += `</div>\n`;
+    } else {
+      closeList();
+      html += `<p>${processInline(line)}</p>\n`;
+    }
+  }
+
+  closeList();
+  return html;
+}
+
 export default function ResultsPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const searchId = resolvedParams.id;
@@ -461,15 +528,7 @@ export default function ResultsPage({ params }: PageProps) {
               {results.intelligence_report ? (
                 <div
                   className="prose prose-invert max-w-none prose-headings:text-white prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-p:text-gray-300 prose-a:text-blue-400 prose-strong:text-white prose-ul:text-gray-300"
-                  dangerouslySetInnerHTML={{
-                    __html: results.intelligence_report
-                      .replace(/^# /gm, '<h1>')
-                      .replace(/\n/g, '</h1>\n')
-                      .replace(/^## /gm, '<h2>')
-                      .replace(/^### /gm, '<h3>')
-                      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                      .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>')
-                  }}
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(results.intelligence_report) }}
                 />
               ) : (
                 <p className="text-gray-400 text-center py-8">
@@ -633,6 +692,7 @@ export default function ResultsPage({ params }: PageProps) {
                   case 'opencorporates_api': return 'OpenCorporates';
                   case 'wikipedia': return 'Wikipedia';
                   case 'duckduckgo': return 'DuckDuckGo';
+                  case 'google': return 'Google';
                   default: return source || 'Unknown';
                 }
               };

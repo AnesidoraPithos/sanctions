@@ -33,6 +33,7 @@ reportlab==4.0.8
 # Web Scraping (reuse from existing code)
 beautifulsoup4==4.12.3
 lxml==5.1.0
+googlesearch-python==1.2.3
 
 # Date/Time
 python-dateutil==2.8.2
