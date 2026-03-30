@@ -13,9 +13,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Entity Background Research - Sanctions Screening & Intelligence",
-  description: "Comprehensive entity background research system featuring sanctions screening, OSINT intelligence gathering, and AI-powered risk assessment.",
-  keywords: "sanctions, screening, OSINT, intelligence, risk assessment, due diligence",
+  title: "BEAR²: Background Entity Assessment & Risk Research",
+  description: "BEAR²: Background Entity Assessment & Risk Research — comprehensive entity background research system featuring sanctions screening, OSINT intelligence gathering, and AI-powered risk assessment.",
+  keywords: "sanctions, screening, OSINT, intelligence, risk assessment",
 };
 
 export default function RootLayout({

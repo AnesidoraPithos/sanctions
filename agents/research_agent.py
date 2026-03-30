@@ -328,16 +328,16 @@ REPORT REQUIREMENTS:
 
      **Risk Assessment Framework - Calculate total score (0-100):**
 
-     1. **Regulatory & Legal Indicators (0-40 points)**:
-        - Active sanctions listings: 40 points
-        - Criminal investigations/charges: 30 points
-        - Civil enforcement actions: 20 points
-        - Regulatory violations/fines: 15 points
-        - Pending investigations: 10 points
+     1. **Regulatory & Legal Indicators (0-50 points)**:
+        - Active sanctions listings: 50 points
+        - Criminal investigations/charges: 40 points
+        - Civil enforcement actions: 30 points
+        - Regulatory violations/fines: 25 points
+        - Pending investigations: 15 points
         - Past resolved issues (>3 years): 5 points
 
-     2. **Media Signal Strength (0-25 points)**:
-        - Official government sources (treasury.gov, justice.gov, state.gov): 10 points each (max 25)
+     2. **Media Signal Strength (0-20 points)**:
+        - Official government sources (treasury.gov, justice.gov, state.gov): 10 points each (max 20)
         - Major credible news (Reuters, Bloomberg, WSJ, AP): 3 points each (max 15)
         - General media/blogs: 1 point each (max 5)
 
@@ -349,9 +349,9 @@ REPORT REQUIREMENTS:
         - Environmental/labor violations: 8 points
         - Civil disputes: 5 points
 
-     4. **Temporal Relevance (0-15 points)**:
-        - Issues within last 6 months: 15 points
-        - Issues within last 1 year: 10 points
+     4. **Temporal Relevance (0-10 points)**:
+        - Issues within last 6 months: 10 points
+        - Issues within last 1 year: 8 points
         - Issues within last 3 years: 5 points
         - Older than 3 years: 2 points
 

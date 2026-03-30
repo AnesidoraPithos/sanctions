@@ -42,6 +42,10 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
   const [maxLevel3Searches, setMaxLevel3Searches] = useState(10);
   // Phase 3: Deep tier
   const [includeFinancialFlows, setIncludeFinancialFlows] = useState(true);
+  // Phase 4: Advanced intelligence toggles
+  const [includeDirectorPivot, setIncludeDirectorPivot] = useState(true);
+  const [includeInfrastructure, setIncludeInfrastructure] = useState(true);
+  const [includeBeneficialOwnership, setIncludeBeneficialOwnership] = useState(true);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +67,12 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
         include_sisters: includeSisters,
         max_level_2_searches: maxLevel2Searches,
         max_level_3_searches: maxLevel3Searches,
+      }),
+      // Phase 4 toggles — deep tier only
+      ...(tier === 'deep' && {
+        include_director_pivot: includeDirectorPivot,
+        include_infrastructure: includeInfrastructure,
+        include_beneficial_ownership: includeBeneficialOwnership,
       }),
     };
 
@@ -98,6 +108,12 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
         onMaxLevel3SearchesChange={setMaxLevel3Searches}
         includeFinancialFlows={includeFinancialFlows}
         onIncludeFinancialFlowsChange={setIncludeFinancialFlows}
+        includeDirectorPivot={includeDirectorPivot}
+        onIncludeDirectorPivotChange={setIncludeDirectorPivot}
+        includeInfrastructure={includeInfrastructure}
+        onIncludeInfrastructureChange={setIncludeInfrastructure}
+        includeBeneficialOwnership={includeBeneficialOwnership}
+        onIncludeBeneficialOwnershipChange={setIncludeBeneficialOwnership}
       />
 
       {/* Entity Name Input */}
@@ -118,7 +134,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
           disabled={isLoading}
           required
         />
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-sm text-gray-500 mt-1">
           Enter the company or individual name to research
         </p>
       </div>
@@ -166,12 +182,12 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
           className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
           disabled={isLoading}
         />
-        <div className="flex justify-between text-xs text-gray-500 mt-1">
+        <div className="flex justify-between text-sm text-gray-500 mt-1">
           <span>0% (Loose)</span>
           <span>50% (Moderate)</span>
           <span>100% (Exact)</span>
         </div>
-        <p className="text-xs text-gray-500 mt-2">
+        <p className="text-sm text-gray-500 mt-2">
           Higher values = stricter matching (recommended: 70-90%)
         </p>
       </div>

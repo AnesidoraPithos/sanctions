@@ -100,6 +100,20 @@ class SearchRequest(BaseModel):
             return v if v else None
         return None
 
+    # Phase 4: Advanced intelligence toggles (deep tier only)
+    include_director_pivot: bool = Field(
+        default=True,
+        description="Deep tier: Pivot directors to find interlocking companies via SEC EDGAR"
+    )
+    include_infrastructure: bool = Field(
+        default=True,
+        description="Deep tier: Correlate digital infrastructure via WHOIS lookups"
+    )
+    include_beneficial_ownership: bool = Field(
+        default=True,
+        description="Deep tier: Trace beneficial ownership via OCCRP Aleph + Open Ownership"
+    )
+
     # Deep tier: client-supplied search_id for WebSocket progress tracking (Phase 3)
     client_search_id: Optional[str] = Field(
         None,

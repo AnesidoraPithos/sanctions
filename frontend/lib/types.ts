@@ -34,6 +34,10 @@ export interface SearchRequest {
   max_level_3_searches?: number; // 5-30, default: 10
   // Deep tier: pre-generated UUID for WebSocket progress tracking (Phase 3)
   client_search_id?: string;
+  // Phase 4 toggles (deep tier only)
+  include_director_pivot?: boolean;
+  include_infrastructure?: boolean;
+  include_beneficial_ownership?: boolean;
 }
 
 /**
@@ -222,6 +226,46 @@ export interface FinancialIntelligence {
 }
 
 /**
+ * Phase 4 Types — Advanced Corporate Intelligence
+ */
+
+export interface DirectorCompany {
+  company_name: string;
+  role?: string;
+  filing_date?: string;
+  source_url?: string;
+}
+
+export interface DirectorPivot {
+  director_name: string;
+  title?: string;
+  companies: DirectorCompany[];
+}
+
+export interface InfrastructureHit {
+  domain: string;
+  registrant_org?: string;
+  registrar?: string;
+  creation_date?: string;
+  nameservers?: string[];
+  related_entities: string[];
+}
+
+export interface BeneficialOwner {
+  name: string;
+  nationality?: string;
+  ownership_pct?: number;
+  source: string;
+  source_url?: string;
+  verification_date?: string;
+}
+
+export interface AdvancedOsintData {
+  littlesis_results: Record<string, unknown>[];
+  dork_results: Record<string, unknown>[];
+}
+
+/**
  * Deep Tier Types (Phase 3)
  */
 
@@ -256,6 +300,11 @@ export interface SearchResponse {
   data_sources_used?: string[];
   // Deep tier fields (Phase 3)
   financial_flows?: FinancialFlow[];
+  // Phase 4 fields
+  director_pivots?: DirectorPivot[];
+  infrastructure?: InfrastructureHit[];
+  beneficial_owners?: BeneficialOwner[];
+  advanced_osint?: AdvancedOsintData;
 }
 
 export interface ResultsResponse {
@@ -285,6 +334,14 @@ export interface ResultsResponse {
   data_sources_used?: string[];
   // Deep tier fields (Phase 3)
   financial_flows?: FinancialFlow[];
+  // Phase 4 fields
+  director_pivots?: DirectorPivot[];
+  infrastructure?: InfrastructureHit[];
+  beneficial_owners?: BeneficialOwner[];
+  advanced_osint?: AdvancedOsintData;
+  // Bookmark fields
+  is_saved?: boolean;
+  save_label?: string;
 }
 
 export interface HistoryEntry {
@@ -294,6 +351,13 @@ export interface HistoryEntry {
   risk_level: RiskLevel;
   sanctions_hits: number;
   timestamp: string;
+  is_saved?: boolean;
+  save_label?: string;
+  saved_at?: string;
+}
+
+export interface SaveRequest {
+  label?: string;
 }
 
 export interface HistoryResponse {
@@ -349,6 +413,13 @@ export interface TierSelectorProps {
   // Deep tier controls (Phase 3)
   includeFinancialFlows?: boolean;
   onIncludeFinancialFlowsChange?: (include: boolean) => void;
+  // Phase 4 toggles
+  includeDirectorPivot?: boolean;
+  onIncludeDirectorPivotChange?: (include: boolean) => void;
+  includeInfrastructure?: boolean;
+  onIncludeInfrastructureChange?: (include: boolean) => void;
+  includeBeneficialOwnership?: boolean;
+  onIncludeBeneficialOwnershipChange?: (include: boolean) => void;
 }
 
 export interface NetworkGraphProps {

@@ -156,6 +156,32 @@ export const api = {
     });
     return response.data;
   },
+
+  /**
+   * Bookmark a search result
+   */
+  saveResult: async (searchId: string, label?: string): Promise<{ saved: boolean; search_id: string }> => {
+    const response = await apiClient.post(`/api/results/${searchId}/save`, { label });
+    return response.data;
+  },
+
+  /**
+   * Remove bookmark from a search result
+   */
+  unsaveResult: async (searchId: string): Promise<{ saved: boolean; search_id: string }> => {
+    const response = await apiClient.delete(`/api/results/${searchId}/save`);
+    return response.data;
+  },
+
+  /**
+   * Get bookmarked search results
+   */
+  getSavedSearches: async (limit: number = 100): Promise<HistoryResponse> => {
+    const response = await apiClient.get<HistoryResponse>('/api/results/', {
+      params: { limit, saved: true },
+    });
+    return response.data;
+  },
 };
 
 // Export axios instance for custom requests

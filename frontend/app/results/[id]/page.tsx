@@ -8,13 +8,18 @@
 
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ResultsResponse, SanctionsHit, MediaHit, NetworkData, FinancialIntelligence, FinancialFlow } from '@/lib/types';
+import Image from 'next/image';
+import { ResultsResponse, SanctionsHit, MediaHit, NetworkData, FinancialIntelligence, FinancialFlow, DirectorPivot, InfrastructureHit, BeneficialOwner } from '@/lib/types';
+import ManagementNetworkTab from '@/components/ManagementNetworkTab';
+import InfrastructureTab from '@/components/InfrastructureTab';
+import BeneficialOwnershipTab from '@/components/BeneficialOwnershipTab';
 import { api } from '@/lib/api-client';
 import RiskBadge from '@/components/RiskBadge';
 import TierBadge from '@/components/TierBadge';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import NetworkGraph from '@/components/NetworkGraph';
 import ExportControls from '@/components/ExportControls';
+import SaveButton from '@/components/SaveButton';
 import { format } from 'date-fns';
 
 interface PageProps {
@@ -95,7 +100,7 @@ export default function ResultsPage({ params }: PageProps) {
   const [results, setResults] = useState<ResultsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  type TabType = 'sanctions' | 'media' | 'report' | 'financial' | 'network-relations' | 'financial-flows';
+  type TabType = 'sanctions' | 'media' | 'report' | 'financial' | 'network-relations' | 'financial-flows' | 'management-network' | 'infrastructure' | 'beneficial-ownership';
   const [activeTab, setActiveTab] = useState<TabType>('sanctions');
 
   useEffect(() => {
@@ -161,14 +166,25 @@ export default function ResultsPage({ params }: PageProps) {
     <div className="min-h-screen bg-[#0b1121] text-white">
       {/* Header */}
       <header className="border-b border-gray-800 bg-[#0d1425]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold font-mono text-blue-400">
-                Background Research Results
-              </h1>
-            </div>
-            <div className="flex items-center gap-4">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-4 lg:px-6 py-6">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+            <Link href="/" className="flex items-center gap-3">
+              <Image src="/bear-logo.png" alt="BEAR² Logo" width={144} height={144} className="rounded" />
+              <div>
+                <h1 className="text-2xl font-bold font-mono tracking-tight text-blue-400">
+                  BEAR<sup>2</sup>
+                </h1>
+                <p className="text-sm text-gray-400">
+                  Background Entity Assessment &amp; Risk Research
+                </p>
+              </div>
+            </Link>
+            <div className="flex flex-wrap items-center gap-3">
+              <SaveButton
+                searchId={searchId}
+                initialSaved={results.is_saved ?? false}
+                initialLabel={results.save_label}
+              />
               <ExportControls searchId={searchId} />
               <Link
                 href="/"
@@ -182,16 +198,16 @@ export default function ResultsPage({ params }: PageProps) {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-screen-2xl mx-auto px-4 sm:px-4 lg:px-6 py-8">
         {/* Summary Card */}
         <div className="bg-[#0d1425] border border-gray-800 rounded-xl p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div>
-              <p className="text-xs text-gray-400 mb-2">Entity Name</p>
+              <p className="text-sm text-gray-400 mb-2">Entity Name</p>
               <p className="text-lg font-semibold">{results.entity_name}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-2">Risk Level</p>
+              <p className="text-sm text-gray-400 mb-2">Risk Level</p>
               <RiskBadge
                 level={results.risk_level}
                 size="lg"
@@ -199,23 +215,23 @@ export default function ResultsPage({ params }: PageProps) {
               />
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-2">Tier</p>
+              <p className="text-sm text-gray-400 mb-2">Tier</p>
               <div className="flex items-center gap-2">
                 <TierBadge tier={results.tier} />
                 {(results.tier === 'network' || results.tier === 'deep') && (
-                  <span className="text-xs text-blue-400">
+                  <span className="text-sm text-blue-400">
                     {results.metadata?.network_depth ? `(${results.metadata.network_depth}L)` : ''}
                   </span>
                 )}
                 {results.tier === 'deep' && (
-                  <span className="text-xs px-2 py-0.5 bg-purple-900/40 border border-purple-600 text-purple-300 rounded font-semibold">
+                  <span className="text-sm px-2 py-0.5 bg-purple-900/40 border border-purple-600 text-purple-300 rounded font-semibold">
                     DEEP RESEARCH
                   </span>
                 )}
               </div>
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-2">Timestamp</p>
+              <p className="text-sm text-gray-400 mb-2">Timestamp</p>
               <p className="text-sm">{format(new Date(results.timestamp), 'PPpp')}</p>
             </div>
           </div>
@@ -223,11 +239,11 @@ export default function ResultsPage({ params }: PageProps) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-800">
             <div>
               <p className="text-2xl font-bold text-blue-400">{results.sanctions_hits}</p>
-              <p className="text-xs text-gray-400">Sanctions Hits</p>
+              <p className="text-sm text-gray-400">Sanctions Hits</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-purple-400">{allMedia.length}</p>
-              <p className="text-xs text-gray-400">Media Hits</p>
+              <p className="text-sm text-gray-400">Media Hits</p>
             </div>
 
             {/* Show network/deep tier stats if available */}
@@ -237,22 +253,24 @@ export default function ResultsPage({ params }: PageProps) {
                   <p className="text-2xl font-bold text-green-400">
                     {results.subsidiaries?.length || 0}
                   </p>
-                  <p className="text-xs text-gray-400">Subsidiaries</p>
+                  <p className="text-sm text-gray-400">Subsidiaries</p>
                 </div>
                 {results.tier === 'deep' ? (
-                  <div>
-                    <p className="text-2xl font-bold text-purple-400">
-                      {results.financial_flows?.length || 0}
-                    </p>
-                    <p className="text-xs text-gray-400">Financial Flows</p>
-                  </div>
+                  <>
+                    <div>
+                      <p className="text-2xl font-bold text-purple-400">
+                        {results.financial_flows?.length || 0}
+                      </p>
+                      <p className="text-sm text-gray-400">Financial Flows</p>
+                    </div>
+                  </>
                 ) : (
                   <div>
                     <p className="text-2xl font-bold text-orange-400">
                       {((results.financial_intelligence as FinancialIntelligence)?.directors?.length || 0) +
                        ((results.financial_intelligence as FinancialIntelligence)?.shareholders?.length || 0)}
                     </p>
-                    <p className="text-xs text-gray-400">People</p>
+                    <p className="text-sm text-gray-400">People</p>
                   </div>
                 )}
               </>
@@ -260,15 +278,39 @@ export default function ResultsPage({ params }: PageProps) {
               <>
                 <div>
                   <p className="text-2xl font-bold text-green-400">{officialSources.length}</p>
-                  <p className="text-xs text-gray-400">Official Sources</p>
+                  <p className="text-sm text-gray-400">Official Sources</p>
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-yellow-400">{generalMedia.length}</p>
-                  <p className="text-xs text-gray-400">General Media</p>
+                  <p className="text-sm text-gray-400">General Media</p>
                 </div>
               </>
             )}
           </div>
+
+          {/* Phase 4 stats row — deep tier only */}
+          {results.tier === 'deep' && (results.director_pivots?.length || results.infrastructure?.length || results.beneficial_owners?.length) ? (
+            <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-800">
+              <div>
+                <p className="text-2xl font-bold text-violet-400">
+                  {(results.director_pivots || []).reduce((sum, p) => sum + ((p as DirectorPivot).companies?.length || 0), 0)}
+                </p>
+                <p className="text-sm text-gray-400">Interlocked Companies</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-cyan-400">
+                  {results.infrastructure?.length || 0}
+                </p>
+                <p className="text-sm text-gray-400">Domains Analysed</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-emerald-400">
+                  {results.beneficial_owners?.length || 0}
+                </p>
+                <p className="text-sm text-gray-400">UBOs Found</p>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Network / Deep Tier Confirmation Banner */}
@@ -330,7 +372,7 @@ export default function ResultsPage({ params }: PageProps) {
                   }
                 </p>
                 {Array.isArray(results.metadata?.data_sources_used) && (
-                  <p className="text-xs text-blue-300/70 mt-1">
+                  <p className="text-sm text-blue-300/70 mt-1">
                     <strong>Data sources checked:</strong>{' '}
                     {(results.metadata.data_sources_used as string[]).map((source: string) => {
                       const displayName = source === 'opencorporates_api' ? 'OpenCorporates API' :
@@ -342,7 +384,7 @@ export default function ResultsPage({ params }: PageProps) {
                   </p>
                 )}
                 {results.metadata?.network_depth && (results.metadata.network_depth as number) > 1 ? (
-                  <p className="text-xs text-blue-300/70 mt-2">
+                  <p className="text-sm text-blue-300/70 mt-2">
                     <strong>Search limits:</strong>{' '}
                     {(results.metadata.network_depth as number) >= 2 && (
                       <>Top {results.metadata.max_level_2_searches || 20} subsidiaries searched for level 2</>
@@ -372,7 +414,7 @@ export default function ResultsPage({ params }: PageProps) {
                   ))}
                 </ul>
                 {results.data_sources_used && results.data_sources_used.length > 0 && (
-                  <p className="text-xs text-yellow-300/70 mt-2">
+                  <p className="text-sm text-yellow-300/70 mt-2">
                     Data sources used: {results.data_sources_used.join(', ')}
                   </p>
                 )}
@@ -456,6 +498,44 @@ export default function ResultsPage({ params }: PageProps) {
                     Financial Flows ({results.financial_flows?.length || 0})
                   </button>
                 )}
+
+                {/* Phase 4 tabs — deep tier only */}
+                {results.tier === 'deep' && results.director_pivots && (
+                  <button
+                    onClick={() => setActiveTab('management-network')}
+                    className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                      activeTab === 'management-network'
+                        ? 'border-violet-500 text-violet-400'
+                        : 'border-transparent text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Management Network ({results.director_pivots.length})
+                  </button>
+                )}
+                {results.tier === 'deep' && results.infrastructure && (
+                  <button
+                    onClick={() => setActiveTab('infrastructure')}
+                    className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'infrastructure'
+                        ? 'border-cyan-500 text-cyan-400'
+                        : 'border-transparent text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Infrastructure ({results.infrastructure.length})
+                  </button>
+                )}
+                {results.tier === 'deep' && results.beneficial_owners && (
+                  <button
+                    onClick={() => setActiveTab('beneficial-ownership')}
+                    className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                      activeTab === 'beneficial-ownership'
+                        ? 'border-emerald-500 text-emerald-400'
+                        : 'border-transparent text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Beneficial Ownership ({results.beneficial_owners.length})
+                  </button>
+                )}
               </>
             )}
           </nav>
@@ -477,7 +557,7 @@ export default function ResultsPage({ params }: PageProps) {
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 className="text-lg font-semibold">{hit.name}</h3>
-                          <span className={`text-xs px-2 py-1 rounded ${
+                          <span className={`text-sm px-2 py-1 rounded ${
                             hit.match_quality === 'EXACT' ? 'bg-red-600' :
                             hit.match_quality === 'HIGH' ? 'bg-orange-600' :
                             hit.match_quality === 'MEDIUM' ? 'bg-yellow-600' :
@@ -507,7 +587,7 @@ export default function ResultsPage({ params }: PageProps) {
                         href={hit.link}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 text-xs mt-3 inline-block"
+                        className="text-blue-400 hover:text-blue-300 text-sm mt-3 inline-block"
                       >
                         View Source →
                       </a>
@@ -529,7 +609,7 @@ export default function ResultsPage({ params }: PageProps) {
                 allMedia.map((hit: MediaHit, idx: number) => (
                   <div key={idx} className="bg-[#0d1425] border border-gray-800 rounded-lg p-5">
                     <div className="flex items-start gap-3 mb-2">
-                      <span className={`text-xs px-2 py-1 rounded flex-shrink-0 ${
+                      <span className={`text-sm px-2 py-1 rounded flex-shrink-0 ${
                         hit.source_type === 'official' ? 'bg-green-600' : 'bg-blue-600'
                       }`}>
                         {hit.source_type === 'official' ? 'OFFICIAL' : 'MEDIA'}
@@ -538,13 +618,13 @@ export default function ResultsPage({ params }: PageProps) {
                     </div>
                     <p className="text-sm text-gray-400 mb-3">{hit.snippet}</p>
                     {hit.relevance && (
-                      <p className="text-xs text-green-400 mb-2">✓ {hit.relevance}</p>
+                      <p className="text-sm text-green-400 mb-2">✓ {hit.relevance}</p>
                     )}
                     <a
                       href={hit.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-400 hover:text-blue-300 text-xs"
+                      className="text-blue-400 hover:text-blue-300 text-sm"
                     >
                       Read More →
                     </a>
@@ -586,10 +666,10 @@ export default function ResultsPage({ params }: PageProps) {
                         <table className="w-full text-sm">
                           <thead className="bg-gray-900/50">
                             <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Name</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Title</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Nationality</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Sanctions</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Name</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Title</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Nationality</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Sanctions</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-800">
@@ -600,11 +680,11 @@ export default function ResultsPage({ params }: PageProps) {
                                 <td className="px-4 py-3 text-gray-300">{director.nationality || '-'}</td>
                                 <td className="px-4 py-3">
                                   {director.sanctions_hits && director.sanctions_hits > 0 ? (
-                                    <span className="text-xs px-2 py-1 bg-red-900/30 text-red-400 rounded">
+                                    <span className="text-sm px-2 py-1 bg-red-900/30 text-red-400 rounded">
                                       {director.sanctions_hits} hit(s)
                                     </span>
                                   ) : (
-                                    <span className="text-gray-500 text-xs">None</span>
+                                    <span className="text-gray-500 text-sm">None</span>
                                   )}
                                 </td>
                               </tr>
@@ -627,11 +707,11 @@ export default function ResultsPage({ params }: PageProps) {
                         <table className="w-full text-sm">
                           <thead className="bg-gray-900/50">
                             <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Name</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Type</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Ownership %</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Jurisdiction</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Sanctions</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Name</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Type</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Ownership %</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Jurisdiction</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Sanctions</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-800">
@@ -643,11 +723,11 @@ export default function ResultsPage({ params }: PageProps) {
                                 <td className="px-4 py-3 text-gray-300">{shareholder.jurisdiction || '-'}</td>
                                 <td className="px-4 py-3">
                                   {shareholder.sanctions_hits && shareholder.sanctions_hits > 0 ? (
-                                    <span className="text-xs px-2 py-1 bg-red-900/30 text-red-400 rounded">
+                                    <span className="text-sm px-2 py-1 bg-red-900/30 text-red-400 rounded">
                                       {shareholder.sanctions_hits} hit(s)
                                     </span>
                                   ) : (
-                                    <span className="text-gray-500 text-xs">None</span>
+                                    <span className="text-gray-500 text-sm">None</span>
                                   )}
                                 </td>
                               </tr>
@@ -670,21 +750,21 @@ export default function ResultsPage({ params }: PageProps) {
                         <div key={idx} className="bg-[#0d1425] border border-gray-800 rounded-lg p-4">
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                             <div>
-                              <span className="text-gray-400 text-xs">Type:</span>
+                              <span className="text-gray-400 text-sm">Type:</span>
                               <p className="text-white">{transaction.transaction_type || '-'}</p>
                             </div>
                             <div>
-                              <span className="text-gray-400 text-xs">Counterparty:</span>
+                              <span className="text-gray-400 text-sm">Counterparty:</span>
                               <p className="text-white">{transaction.counterparty || '-'}</p>
                             </div>
                             <div>
-                              <span className="text-gray-400 text-xs">Amount:</span>
+                              <span className="text-gray-400 text-sm">Amount:</span>
                               <p className="text-white">
                                 {transaction.currency} {transaction.amount?.toLocaleString() || '-'}
                               </p>
                             </div>
                             <div>
-                              <span className="text-gray-400 text-xs">Date:</span>
+                              <span className="text-gray-400 text-sm">Date:</span>
                               <p className="text-white">{transaction.transaction_date || '-'}</p>
                             </div>
                           </div>
@@ -727,11 +807,11 @@ export default function ResultsPage({ params }: PageProps) {
                       <table className="w-full text-sm">
                         <thead className="bg-gray-900/50">
                           <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Source</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Target</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Type</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Amount</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Date</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Source</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Target</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Type</th>
+                            <th className="px-4 py-3 text-right text-sm font-medium text-gray-400 uppercase">Amount</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Date</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-800">
@@ -744,16 +824,16 @@ export default function ResultsPage({ params }: PageProps) {
                                 {flow.target}
                               </td>
                               <td className="px-4 py-3">
-                                <span className="text-xs px-2 py-0.5 bg-purple-900/30 text-purple-300 rounded capitalize">
+                                <span className="text-sm px-2 py-0.5 bg-purple-900/30 text-purple-300 rounded capitalize">
                                   {flow.type.replace(/_/g, ' ')}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 text-right text-gray-300 font-mono text-xs">
+                              <td className="px-4 py-3 text-right text-gray-300 font-mono text-sm">
                                 {flow.amount != null
                                   ? `${flow.currency || 'USD'} ${Number(flow.amount).toLocaleString()}`
                                   : '—'}
                               </td>
-                              <td className="px-4 py-3 text-gray-400 text-xs">{flow.date || '—'}</td>
+                              <td className="px-4 py-3 text-gray-400 text-sm">{flow.date || '—'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -766,12 +846,33 @@ export default function ResultsPage({ params }: PageProps) {
                   <p className="text-gray-400">
                     No financial flows found. This may be normal for private or non-US entities.
                   </p>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-sm text-gray-500 mt-2">
                     Sources checked: USAspending.gov (federal procurement) and SEC EDGAR related-party transactions.
                   </p>
                 </div>
               )}
             </div>
+          )}
+
+          {/* Management Network Tab (Phase 4) */}
+          {activeTab === 'management-network' && (
+            <ManagementNetworkTab
+              directorPivots={(results.director_pivots || []) as DirectorPivot[]}
+            />
+          )}
+
+          {/* Infrastructure Tab (Phase 4) */}
+          {activeTab === 'infrastructure' && (
+            <InfrastructureTab
+              infrastructure={(results.infrastructure || []) as InfrastructureHit[]}
+            />
+          )}
+
+          {/* Beneficial Ownership Tab (Phase 4) */}
+          {activeTab === 'beneficial-ownership' && (
+            <BeneficialOwnershipTab
+              beneficialOwners={(results.beneficial_owners || []) as BeneficialOwner[]}
+            />
           )}
 
           {/* Network Relations Tab (unified Network Graph + Subsidiaries) */}
@@ -797,12 +898,12 @@ export default function ResultsPage({ params }: PageProps) {
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold text-white">{entity.name}</h3>
                         {entity.level && (
-                          <span className="text-xs px-2 py-1 bg-blue-900/30 text-blue-300 rounded">
+                          <span className="text-sm px-2 py-1 bg-blue-900/30 text-blue-300 rounded">
                             Level {entity.level}
                           </span>
                         )}
                         {entity.relationship === 'sister' && (
-                          <span className="text-xs px-2 py-1 bg-purple-900/30 text-purple-300 rounded">
+                          <span className="text-sm px-2 py-1 bg-purple-900/30 text-purple-300 rounded">
                             Sister Company
                           </span>
                         )}
@@ -896,7 +997,7 @@ export default function ResultsPage({ params }: PageProps) {
                               <h4 className="text-xl font-semibold text-white">
                                 {(results.network_data.parent_info as any).name}
                               </h4>
-                              <span className="text-xs px-2 py-1 bg-purple-900/30 text-purple-300 rounded">
+                              <span className="text-sm px-2 py-1 bg-purple-900/30 text-purple-300 rounded">
                                 Parent
                               </span>
                             </div>
@@ -948,7 +1049,7 @@ export default function ResultsPage({ params }: PageProps) {
                                 </div>
                               )}
                             </div>
-                            <p className="text-xs text-gray-500 mt-3">
+                            <p className="text-sm text-gray-500 mt-3">
                               This entity is owned by or is a subsidiary of the parent company shown above.
                             </p>
                           </div>
@@ -1029,7 +1130,7 @@ export default function ResultsPage({ params }: PageProps) {
                           <li>• Wikipedia corporate structure data</li>
                           <li>• DuckDuckGo web search</li>
                         </ul>
-                        <p className="mt-4 text-xs">
+                        <p className="mt-4 text-sm">
                           This is normal for private companies, small businesses, or individuals.
                         </p>
                       </div>

@@ -33,10 +33,10 @@ export default function ProgressTracker({ searchId }: ProgressTrackerProps) {
       </div>
 
       {error && (
-        <p className="text-xs text-red-400 mt-2">{error}</p>
+        <p className="text-sm text-red-400 mt-2">{error}</p>
       )}
 
-      <p className="text-xs text-gray-500 mt-2">
+      <p className="text-sm text-gray-500 mt-2">
         Results will load automatically when research completes.
       </p>
     </div>

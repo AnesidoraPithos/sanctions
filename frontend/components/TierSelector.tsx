@@ -74,6 +74,12 @@ export default function TierSelector({
   onMaxLevel3SearchesChange,
   includeFinancialFlows = true,
   onIncludeFinancialFlowsChange,
+  includeDirectorPivot = true,
+  onIncludeDirectorPivotChange,
+  includeInfrastructure = true,
+  onIncludeInfrastructureChange,
+  includeBeneficialOwnership = true,
+  onIncludeBeneficialOwnershipChange,
 }: TierSelectorProps) {
   return (
     <div className="space-y-6">
@@ -105,19 +111,19 @@ export default function TierSelector({
                   {option.label}
                 </span>
                 {option.disabled && (
-                  <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">
+                  <span className="text-sm text-gray-500 bg-gray-800 px-2 py-1 rounded">
                     Phase 3
                   </span>
                 )}
               </div>
 
               {/* Duration */}
-              <div className="text-xs text-gray-400 mb-3">{option.duration}</div>
+              <div className="text-sm text-gray-400 mb-3">{option.duration}</div>
 
               {/* Features */}
               <ul className="space-y-1">
                 {option.features.map((feature, idx) => (
-                  <li key={idx} className="flex items-start text-xs text-gray-400">
+                  <li key={idx} className="flex items-start text-sm text-gray-400">
                     <span className="text-blue-400 mr-2">•</span>
                     <span>{feature}</span>
                   </li>
@@ -163,12 +169,12 @@ export default function TierSelector({
               }
               className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
             />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <div className="flex justify-between text-sm text-gray-500 mt-1">
               <span>Level 1 (fastest)</span>
               <span>Level 2</span>
               <span>Level 3 (most comprehensive)</span>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-sm text-gray-500 mt-2">
               Higher depth discovers more subsidiaries but takes longer
             </p>
           </div>
@@ -194,12 +200,12 @@ export default function TierSelector({
               }
               className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
             />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <div className="flex justify-between text-sm text-gray-500 mt-1">
               <span>0% (all)</span>
               <span>50%</span>
               <span>100% (wholly-owned)</span>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-sm text-gray-500 mt-2">
               Minimum ownership percentage to include subsidiaries
             </p>
           </div>
@@ -222,7 +228,7 @@ export default function TierSelector({
               >
                 Include sister companies
               </label>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-sm text-gray-500 mt-1">
                 Include entities with the same parent company
               </p>
             </div>
@@ -250,12 +256,12 @@ export default function TierSelector({
                 }
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
               />
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <div className="flex justify-between text-sm text-gray-500 mt-1">
                 <span>5 (fastest)</span>
                 <span>25 (balanced)</span>
                 <span>50 (comprehensive)</span>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-sm text-gray-500 mt-2">
                 To prevent timeouts, only the top N subsidiaries by ownership % will be searched for level 2.
                 <span className="text-yellow-400"> Higher values may timeout for large companies.</span>
               </p>
@@ -284,12 +290,12 @@ export default function TierSelector({
                 }
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
               />
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <div className="flex justify-between text-sm text-gray-500 mt-1">
                 <span>5 (fastest)</span>
                 <span>15 (balanced)</span>
                 <span>30 (comprehensive)</span>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-sm text-gray-500 mt-2">
                 To prevent timeouts, only the top N level 2 subsidiaries will be searched for level 3.
                 <span className="text-yellow-400"> Higher values significantly increase search time.</span>
               </p>
@@ -325,7 +331,7 @@ export default function TierSelector({
               onChange={(e) => onNetworkDepthChange?.(parseInt(e.target.value))}
               className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
             />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <div className="flex justify-between text-sm text-gray-500 mt-1">
               <span>Level 1 (fastest)</span>
               <span>Level 2</span>
               <span>Level 3 (most comprehensive)</span>
@@ -348,13 +354,79 @@ export default function TierSelector({
               >
                 Include financial flows
               </label>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-sm text-gray-500 mt-1">
                 Analyse federal procurement records (USAspending.gov) and related-party transactions
               </p>
             </div>
           </div>
 
-          <p className="text-xs text-yellow-400/80">
+          {/* Phase 4 toggles */}
+          <div className="border-t border-gray-700/50 pt-4 mt-4">
+            <p className="text-sm font-medium text-gray-400 mb-3">
+              Phase 4 — Advanced Intelligence
+            </p>
+
+            <div className="space-y-3">
+              {/* Director pivot */}
+              <div className="flex items-start space-x-3">
+                <input
+                  id="include-director-pivot"
+                  type="checkbox"
+                  checked={includeDirectorPivot}
+                  onChange={(e) => onIncludeDirectorPivotChange?.(e.target.checked)}
+                  className="mt-1 h-4 w-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500 focus:ring-offset-gray-900"
+                />
+                <div>
+                  <label htmlFor="include-director-pivot" className="text-sm text-gray-400 cursor-pointer">
+                    Include director pivoting
+                  </label>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    Discover interlocking directorates via SEC EDGAR full-text search
+                  </p>
+                </div>
+              </div>
+
+              {/* Infrastructure correlation */}
+              <div className="flex items-start space-x-3">
+                <input
+                  id="include-infrastructure"
+                  type="checkbox"
+                  checked={includeInfrastructure}
+                  onChange={(e) => onIncludeInfrastructureChange?.(e.target.checked)}
+                  className="mt-1 h-4 w-4 text-cyan-600 bg-gray-700 border-gray-600 rounded focus:ring-cyan-500 focus:ring-offset-gray-900"
+                />
+                <div>
+                  <label htmlFor="include-infrastructure" className="text-sm text-gray-400 cursor-pointer">
+                    Include infrastructure correlation
+                  </label>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    WHOIS lookups on media-extracted domains; detect shared registrants
+                  </p>
+                </div>
+              </div>
+
+              {/* Beneficial ownership */}
+              <div className="flex items-start space-x-3">
+                <input
+                  id="include-beneficial-ownership"
+                  type="checkbox"
+                  checked={includeBeneficialOwnership}
+                  onChange={(e) => onIncludeBeneficialOwnershipChange?.(e.target.checked)}
+                  className="mt-1 h-4 w-4 text-emerald-600 bg-gray-700 border-gray-600 rounded focus:ring-emerald-500 focus:ring-offset-gray-900"
+                />
+                <div>
+                  <label htmlFor="include-beneficial-ownership" className="text-sm text-gray-400 cursor-pointer">
+                    Include beneficial ownership lookup
+                  </label>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    Trace UBOs via OCCRP Aleph and Open Ownership Register
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-sm text-yellow-400/80">
             Deep Tier runs all Network Tier steps plus financial flow analysis. Expect 5–15 minutes for large companies.
           </p>
         </div>

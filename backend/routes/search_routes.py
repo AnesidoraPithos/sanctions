@@ -776,8 +776,84 @@ async def search_deep_tier(request: SearchRequest):
             media_intelligence=media_intelligence,
         )
 
+        # --- STEP 11: Director pivot (Phase 4) ---
+        director_pivots: list = []
+        if request.include_director_pivot:
+            _progress("Pivoting directors (interlocking directorates)...", 93)
+            try:
+                from services.director_pivot_service import DirectorPivotService
+                director_pivots = DirectorPivotService().pivot_directors(directors[:10])
+                logger.info(f"[{search_id}] Director pivot: {len(director_pivots)} pivots")
+            except Exception as _exc:
+                logger.warning(f"[{search_id}] Director pivot failed: {_exc}")
+                warnings.append({
+                    "source": "director_pivot",
+                    "message": f"Director pivot unavailable: {_exc}",
+                    "severity": "info",
+                })
+
+        # --- STEP 12: Infrastructure correlation (Phase 4) ---
+        infrastructure: list = []
+        if request.include_infrastructure:
+            _progress("Correlating digital infrastructure...", 94)
+            try:
+                from services.infrastructure_service import InfrastructureService
+                _all_sources = (
+                    media_intelligence.get("official_sources", [])
+                    + media_intelligence.get("general_media", [])
+                )
+                all_urls = [h.get("url", "") for h in _all_sources if h.get("url")]
+                infrastructure = InfrastructureService().correlate_infrastructure(
+                    request.entity_name, all_urls
+                )
+                logger.info(f"[{search_id}] Infrastructure: {len(infrastructure)} domains analysed")
+            except Exception as _exc:
+                logger.warning(f"[{search_id}] Infrastructure correlation failed: {_exc}")
+                warnings.append({
+                    "source": "infrastructure",
+                    "message": f"Infrastructure correlation unavailable: {_exc}",
+                    "severity": "info",
+                })
+
+        # --- STEP 13: Beneficial ownership (Phase 4) ---
+        beneficial_owners: list = []
+        if request.include_beneficial_ownership:
+            _progress("Tracing beneficial ownership...", 95)
+            try:
+                from services.beneficial_ownership_service import BeneficialOwnershipService
+                beneficial_owners = BeneficialOwnershipService().get_beneficial_owners(
+                    request.entity_name
+                )
+                logger.info(f"[{search_id}] Beneficial owners: {len(beneficial_owners)} found")
+            except Exception as _exc:
+                logger.warning(f"[{search_id}] Beneficial ownership tracing failed: {_exc}")
+                warnings.append({
+                    "source": "beneficial_ownership",
+                    "message": f"Beneficial ownership data unavailable: {_exc}",
+                    "severity": "info",
+                })
+
+        # --- STEP 14: Advanced OSINT (Phase 4) ---
+        advanced_osint_data: dict = {"littlesis_results": [], "dork_results": []}
+        _progress("Advanced OSINT reconnaissance...", 96)
+        try:
+            from services.osint_advanced_service import AdvancedOsintService
+            advanced_osint_data = AdvancedOsintService().get_advanced_osint(request.entity_name)
+            logger.info(
+                f"[{search_id}] Advanced OSINT: "
+                f"{len(advanced_osint_data.get('littlesis_results', []))} LittleSis, "
+                f"{len(advanced_osint_data.get('dork_results', []))} dork results"
+            )
+        except Exception as _exc:
+            logger.warning(f"[{search_id}] Advanced OSINT failed: {_exc}")
+            warnings.append({
+                "source": "advanced_osint",
+                "message": f"Advanced OSINT unavailable: {_exc}",
+                "severity": "info",
+            })
+
         # --- STEP 10: Format & save ---
-        _progress("Saving results", 96)
+        _progress("Saving results", 97)
         sanctions_data = sanctions_service.format_sanctions_data(sanctions_hits)
         media_data = research_service.format_media_data(media_intelligence)
 
@@ -806,6 +882,10 @@ async def search_deep_tier(request: SearchRequest):
             "data_sources_used": data_sources_used,
             "risk_explanation": risk_explanation,
             "financial_flows_count": len(financial_flows),
+            # Phase 4 counts
+            "director_pivots_count": len(director_pivots),
+            "infrastructure_domains_count": len(infrastructure),
+            "beneficial_owners_count": len(beneficial_owners),
         }
 
         network_data_db = {
@@ -833,6 +913,11 @@ async def search_deep_tier(request: SearchRequest):
                 "level_2_count": level_stats["level_2"],
                 "level_3_count": level_stats["level_3"],
             },
+            # Phase 4
+            "director_pivots": director_pivots,
+            "infrastructure": infrastructure,
+            "beneficial_owners": beneficial_owners,
+            "advanced_osint": advanced_osint_data,
         }
 
         save_search_results(
@@ -874,6 +959,11 @@ async def search_deep_tier(request: SearchRequest):
             },
             subsidiaries=subsidiaries[:50],
             financial_flows=financial_flows[:50],
+            # Phase 4
+            director_pivots=director_pivots,
+            infrastructure=infrastructure,
+            beneficial_owners=beneficial_owners,
+            advanced_osint=advanced_osint_data,
             warnings=warnings,
             data_sources_used=data_sources_used,
             metadata=metadata,

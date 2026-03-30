@@ -5,6 +5,7 @@ Endpoints for retrieving saved search results and search history.
 """
 
 from fastapi import APIRouter, HTTPException, Path
+from pydantic import BaseModel
 from typing import Optional
 import logging
 import os
@@ -16,8 +17,12 @@ if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
 # Import backend modules
-from models.responses import ResultsResponse, HistoryResponse, HistoryEntry
-from db_operations.db import get_search_results, get_search_history
+from models.responses import ResultsResponse, HistoryResponse, HistoryEntry, SaveResponse
+from db_operations.db import get_search_results, get_search_history, toggle_save_result, get_saved_searches
+
+
+class SaveRequest(BaseModel):
+    label: Optional[str] = None
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +93,14 @@ async def get_results(
             data_sources_used=results.get('data_sources_used', []),
             # Deep tier fields (Phase 3)
             financial_flows=results.get('financial_flows', []),
+            # Phase 4 fields
+            director_pivots=results.get('director_pivots', []) or None,
+            infrastructure=results.get('infrastructure', []) or None,
+            beneficial_owners=results.get('beneficial_owners', []) or None,
+            advanced_osint=results.get('advanced_osint') or None,
+            # Bookmark fields
+            is_saved=results.get('is_saved', False),
+            save_label=results.get('save_label'),
         )
 
     except HTTPException:
@@ -106,28 +119,26 @@ async def get_results(
 
 @router.get("/")
 async def get_history(
-    limit: int = 50
+    limit: int = 50,
+    saved: bool = False,
 ):
     """
-    Get search history
-
-    Returns list of recent searches with basic information.
-    Use GET /results/{search_id} to retrieve full details for a specific search.
+    Get search history (or saved searches when ?saved=true).
 
     Args:
         limit: Maximum number of entries to return (default: 50, max: 100)
+        saved: If true, return only bookmarked entries
 
     Returns:
         HistoryResponse with list of search entries
     """
-    # Enforce maximum limit
     if limit > 100:
         limit = 100
 
-    logger.info(f"Retrieving search history (limit: {limit})")
+    logger.info(f"Retrieving {'saved' if saved else 'all'} search history (limit: {limit})")
 
     try:
-        history = get_search_history(limit=limit)
+        history = get_saved_searches(limit=limit) if saved else get_search_history(limit=limit)
 
         entries = [
             HistoryEntry(
@@ -136,24 +147,51 @@ async def get_history(
                 tier=entry['tier'],
                 risk_level=entry['risk_level'],
                 sanctions_hits=entry['sanctions_hits'],
-                timestamp=entry['timestamp']
+                timestamp=entry['timestamp'],
+                is_saved=entry.get('is_saved', False),
+                save_label=entry.get('save_label'),
+                saved_at=entry.get('saved_at'),
             )
             for entry in history
         ]
 
         logger.info(f"Retrieved {len(entries)} history entries")
 
-        return HistoryResponse(
-            entries=entries,
-            total=len(entries)
-        )
+        return HistoryResponse(entries=entries, total=len(entries))
 
     except Exception as e:
         logger.error(f"Error retrieving search history: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail={
-                "error": "DatabaseError",
-                "message": "Failed to retrieve search history"
-            }
+            detail={"error": "DatabaseError", "message": "Failed to retrieve search history"}
         )
+
+
+@router.post("/{search_id}/save", response_model=SaveResponse)
+async def save_result(
+    search_id: str = Path(..., description="Search ID (UUID)"),
+    body: SaveRequest = SaveRequest(),
+):
+    """Bookmark a search result."""
+    result = get_search_results(search_id)
+    if not result:
+        raise HTTPException(status_code=404, detail={"error": "NotFound", "message": f"Search {search_id} not found"})
+
+    success = toggle_save_result(search_id, True, body.label)
+    if not success:
+        raise HTTPException(status_code=500, detail={"error": "DatabaseError", "message": "Failed to save result"})
+
+    return SaveResponse(saved=True, search_id=search_id, label=body.label)
+
+
+@router.delete("/{search_id}/save", response_model=SaveResponse)
+async def unsave_result(
+    search_id: str = Path(..., description="Search ID (UUID)"),
+):
+    """Remove a bookmark from a search result."""
+    result = get_search_results(search_id)
+    if not result:
+        raise HTTPException(status_code=404, detail={"error": "NotFound", "message": f"Search {search_id} not found"})
+
+    toggle_save_result(search_id, False)
+    return SaveResponse(saved=False, search_id=search_id)

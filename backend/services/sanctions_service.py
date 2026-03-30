@@ -56,7 +56,7 @@ class SanctionsService:
         """
         # Build search parameters for USA Trade API
         search_params = {
-            "name": entity_name,
+            "q": entity_name,
             "fuzzy_name": "true"
         }
 
@@ -73,6 +73,33 @@ class SanctionsService:
         ]
 
         return filtered_results
+
+    def format_sanctions_data(self, sanctions_hits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Format sanctions hits for API response
+
+        Args:
+            sanctions_hits: Raw sanctions hits from search
+
+        Returns:
+            Formatted sanctions data matching SanctionsHit model
+        """
+        formatted = []
+        for hit in sanctions_hits:
+            formatted.append({
+                "name": hit.get("Name", ""),
+                "list": hit.get("List", ""),
+                "type": hit.get("Type"),
+                "address": hit.get("Address"),
+                "remark": hit.get("Remark"),
+                "link": hit.get("Link"),
+                "api_score": hit.get("api_score"),
+                "local_score": hit.get("local_score"),
+                "combined_score": hit.get("combined_score", 0),
+                "match_quality": hit.get("match_quality", "LOW"),
+                "similarity_breakdown": hit.get("similarity_breakdown")
+            })
+        return formatted
 
     def calculate_risk_level(self, sanctions_hits: List[Dict[str, Any]]) -> str:
         """

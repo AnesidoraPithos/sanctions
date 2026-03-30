@@ -1,3 +1,5 @@
+from asyncio.log import logger
+
 import requests
 import os
 import json
@@ -7,7 +9,19 @@ class USASanctionsAgent:
     API_URL = "https://data.trade.gov/consolidated_screening_list/v1/search"
     
     def __init__(self):
+        # Try to get API key from environment
         self.API_KEY = os.getenv('USA_TRADE_GOV_API_KEY')
+        
+        # If not found, try loading from .env file in project root
+        if not self.API_KEY:
+            try:
+                from dotenv import load_dotenv
+                import os
+                dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+                load_dotenv(dotenv_path)
+                self.API_KEY = os.getenv('USA_TRADE_GOV_API_KEY')
+            except ImportError:
+                pass
 
     def search(self, search_params, query_name=None):
         """
@@ -242,13 +256,22 @@ class USASanctionsAgent:
 
             # Get API score
             api_score = float(r.get('score', 0))
+            
+            logger.info(f"[{api_score}] API score for {r.get('name')}")
 
             # Calculate local similarity if query_name provided
             if query_name:
                 result_name = r.get('name', '')
                 try:
                     local_score = get_composite_score(query_name, result_name)
-                    combined_score = combine_scores(api_score, local_score)
+                    for alt_name in r.get('alt_names', []):
+                        if alt_name:
+                            alt_score = get_composite_score(query_name, alt_name)
+                            local_score = max(local_score, alt_score)
+                    if api_score == 100:
+                        combined_score = 100
+                    else:
+                        combined_score = combine_scores(api_score, local_score)
                     match_quality = classify_match_quality(combined_score)
                     similarity_breakdown = calculate_similarity_scores(query_name, result_name)
                 except Exception as e:

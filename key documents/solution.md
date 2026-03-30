@@ -1,10 +1,10 @@
 # Entity Background Research Agent — Solution Architecture Document
 
-**Document Version**: 2.0
-**System Version**: 3.1.0
-**Date**: 2026-03-19
+**Document Version**: 3.0
+**System Version**: 3.2.0
+**Date**: 2026-03-27
 **Project**: Entity Background Research Agent - Intelligence Operations System
-**Status**: Phase 2 Complete - Production Ready
+**Status**: Phase 3 Complete - Production Ready
 
 ---
 
@@ -42,11 +42,13 @@ International relations staff currently spend 30 minutes to several hours manual
 The Entity Background Research Agent automates multi-source research across 10+ databases, visualizes entity relationships, and generates comprehensive risk assessments in **minutes rather than hours**. The system features a modern **React/Next.js frontend** with **REST API backend** and a **three-tiered research system** that allows users to balance speed, cost, and depth:
 
 **Research Tiers:**
+
 - **Base Research** (~30-60 seconds): Database sanctions screening + AI report generation + media source citations
 - **Network Research** (~2-5 minutes): Base + corporate structure discovery (subsidiaries, parents, sisters, directors, shareholders)
-- **Deep Research** (~5-15 minutes): Network + financial flow mapping + criminal history checks
+- **Deep Research** (~5-15 minutes): Network + financial flow mapping (USAspending.gov federal procurement + SEC related-party transactions) + enhanced AI intelligence report
 
 **Core Capabilities:**
+
 - **15-300x faster** results on subsequent queries (< 2 seconds vs 30 seconds - 10 minutes) via save/restore functionality
 - Automated sanctions screening across OFAC, BIS, Treasury, State, DOD, FCC databases
 - Conglomerate search with configurable depth (1-3 levels) and ownership filtering
@@ -54,6 +56,8 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 - Fuzzy name matching with configurable thresholds to catch name variations
 - Interactive relationship visualizations (Neo4j-style network graphs)
 - LLM-generated intelligence reports with multi-format export (JSON, Excel, PDF)
+- Financial flow mapping: USAspending.gov federal procurement records + SEC related-party transactions
+- Live WebSocket progress tracking during network/deep tier searches
 - REST API for frontend integration and future automation workflows
 
 ### Target Users
@@ -176,7 +180,7 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
 │  │   OpenAI/    │  │  ImportYeti  │  │ USAspending  │  │   Wikipedia  │   │
 │  │  Anthropic   │  │     API      │  │     API      │  │     API      │   │
-│  │     LLM      │  │  (Planned)   │  │  (Planned)   │  │              │   │
+│  │     LLM      │  │  (Planned)   │  │  (Deep Tier) │  │              │   │
 │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -200,6 +204,7 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 **Technology**: React/Next.js (TypeScript web application)
 
 **Components**:
+
 - **Research Tier Slider**: Three-position slider for selecting base/network/deep research depth
 - **Search Interface**: Input forms for entity name, country, search parameters with tier selection
 - **Results Dashboard**: Comprehensive results display with tab-based navigation
@@ -218,6 +223,7 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 **API Client**: Axios or Fetch API for REST backend communication
 
 **Pages** (Next.js App Router):
+
 - `/` - Homepage with research tier selection and search interface
 - `/results/[id]` - Results dashboard for completed searches
 - `/history` - Saved search history and management
@@ -228,6 +234,7 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 **Technology**: Flask or FastAPI (Python web framework)
 
 **Components**:
+
 - **Authentication Middleware**: JWT token validation and user session management
 - **Rate Limiting Middleware**: Request throttling (100 req/hr base, 500 req/hr premium)
 - **Search Routes**: Tier-specific endpoints for base, network, and deep research
@@ -237,6 +244,7 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 - **Request Validation**: Pydantic models for request/response validation
 
 **API Endpoints**:
+
 - `POST /api/auth/login` - User authentication
 - `POST /api/search/base` - Base tier search (sanctions + report + media)
 - `POST /api/search/network` - Network tier search (base + conglomerate)
@@ -254,11 +262,13 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 #### Layer 2: Application Core
 
 **Search Orchestration Engine**:
+
 - **Query Processor**: Handles single-entity sanctions screening and OSINT research
 - **Conglomerate Processor**: Manages multi-level subsidiary discovery and recursive analysis
 - **Reverse Processor**: Identifies parent companies and sister entities
 
 **Data Integration Services**:
+
 - **Sanctions Service**: Queries 10+ USA sanctions databases (OFAC, BIS, Treasury, State, DOD, FCC)
 - **Conglomerate Service**: Extracts corporate structures from SEC EDGAR (10-K, 20-F Exhibit 21.1), OpenCorporates, Wikipedia, web search
 - **Financial Intelligence Service**: Parses SEC filings for directors, shareholders, related party transactions
@@ -282,32 +292,44 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 
 - **USA Sanctions API** (10+ databases)
 - **SEC EDGAR API**
+
 - **OpenCorporates API** (optional, requires API key)
 - **DuckDuckGo Search API**
+
 - **OpenAI/Anthropic LLM APIs**
+
 - **ImportYeti API** (planned - trade data)
 - **USAspending.gov API** (planned - government procurement)
 - **Wikipedia API**
 
 ### 3.4 Deployment Architecture
 
-**Deployment Mode**: Desktop application (Streamlit local server)
+**Deployment Mode**: React/Next.js frontend + FastAPI backend (local or server)
 
 **Runtime Environment**:
-- **Language**: Python 3.10+
-- **Web Framework**: Streamlit
-- **Database**: SQLite (embedded, single-file database)
-- **Dependencies**: See `requirements.txt` for complete list
+
+- **Frontend Language**: TypeScript / Node.js 18+
+- **Frontend Framework**: Next.js 14 (App Router), Tailwind CSS, Cytoscape.js
+- **Backend Language**: Python 3.10+
+- **Backend Framework**: FastAPI (uvicorn ASGI server)
+- **Database**: SQLite (embedded, backend-local)
+- **Dependencies**: See `backend/requirements.txt` and `frontend/package.json`
+
+**Local Development**:
+
+- Backend: `cd backend && uvicorn app:app --reload` (port 8000)
+- Frontend: `cd frontend && npm run dev` (port 3000)
 
 **Data Storage**:
-- **Search Database**: `~/.entity_research/searches.db` (SQLite)
-- **Cache Directory**: `~/.entity_research/cache/`
-- **Export Directory**: `~/Downloads/entity_research_exports/`
+
+- **Search Database**: `sanctions.db` (project root, SQLite)
+- **Export Files**: Streamed directly as HTTP responses (no intermediate file storage)
 
 **API Access Requirements**:
+
 - Internet connectivity for external APIs
 - API keys: OpenCorporates (optional), OpenAI/Anthropic (required for LLM features)
-- No authentication required for USA Sanctions API, SEC EDGAR, DuckDuckGo
+- No authentication required for USA Sanctions API, SEC EDGAR, DuckDuckGo, USAspending.gov
 
 ### 3.5 Data and Control Flows
 
@@ -362,31 +384,32 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 
 #### Flow 1C — Deep Research Tier (Comprehensive Investigation)
 
-1. User selects **Deep Research** tier via slider (right position)
-2. UI displays: "~5-15 minutes | Network + financial flows + criminal history"
-3. User enters entity name and country
-4. User clicks "EXECUTE SEARCH"
-5. Frontend sends `POST /api/search/deep` with request payload
-6. Backend establishes WebSocket connection for real-time progress
-7. **Step 1**: System executes all Network tier operations (Flow 1B steps 7-16)
-8. WebSocket sends: "Analyzing financial flows... 60% complete"
-9. **Financial Intelligence Service** extracts trade data (ImportYeti, planned)
-10. **Financial Intelligence Service** queries government procurement (USAspending.gov, planned)
-11. WebSocket sends: "Performing criminal history checks... 75% complete"
-12. **Criminal History Service** (planned) checks directors/officers across jurisdictions
-13. **Beneficial Ownership Service** (planned) traces offshore structures
-14. WebSocket sends: "Mapping beneficial ownership... 85% complete"
-15. **Visualization Engine** adds financial flow layers to network graph
-16. WebSocket sends: "Generating comprehensive report... 95% complete"
-17. **Intelligence Layer** synthesizes deep-level findings with financial context
-18. **Database** saves search with all layers
-19. Backend returns comprehensive results with multi-layer graph
-20. UI displays results with "DEEP RESEARCH" badge, full network + financial flows
-21. User exports comprehensive multi-sheet Excel with all data layers
+1. User selects **Deep Tier** (enabled, Phase 3 complete)
+2. User configures search depth (1-3 levels) and "Include financial flows" toggle
+3. Frontend pre-generates a UUID (`client_search_id`) and connects WebSocket to `/ws/progress/{id}`
+4. Frontend sends `POST /api/search/deep` with payload including `client_search_id`
+5. Backend uses the client-supplied UUID so WebSocket progress is immediately addressable
+6. WebSocket sends: "Sanctions screening... 5% complete"
+7. **Step 1–3**: System executes all Network tier steps (sanctions, conglomerate discovery, financial intelligence, cross-entity screening)
+8. WebSocket sends: "Building network graph... 65% complete"
+9. **Step 6**: Backend queries USAspending.gov for federal procurement awards (graceful skip if unavailable; warning added to response)
+10. WebSocket sends: "Querying federal procurement records... 72% complete"
+11. **Step 7**: Backend extracts financial flows from USAspending awards + SEC related-party transactions
+12. WebSocket sends: "Extracting financial flows... 80% complete"
+13. **Intelligence Layer** generates enhanced deep-tier intelligence report
+14. WebSocket sends: "Calculating risk level... 92% complete"
+15. **Database** saves search with `tier="deep"`, `financial_flows` field included in `network_data`
+16. WebSocket sends: "Complete... 100%" — connection closes
+17. Backend returns `SearchResponse` with `tier="deep"`, `financial_flows`, network data, network graph
+18. Frontend redirects to `/results/{search_id}`
+19. UI displays "DEEP RESEARCH" badge (purple) + "DEEP" tier badge + Financial Flows tab
+20. Financial Flows tab renders source → target, amount, currency, type, date table
+21. Export Controls (PDF/Excel/JSON) shown in results header
 
 **Performance**: 5-15 minutes
-**Cost**: High (full network + financial + criminal checks)
-**Use Case**: High-stakes engagements, regulatory compliance, litigation support
+**Cost**: High (full network + USAspending.gov + financial flow extraction)
+**Use Case**: High-stakes engagements, regulatory compliance, litigation support, federal contractor screening
+**Graceful Degradation**: If USAspending.gov is unavailable, search completes with a warning; financial flows still populated from SEC transactions
 
 #### Flow 2 — Single Entity Sanctions Screening (Legacy)
 
@@ -413,6 +436,7 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 4. User clicks "EXECUTE QUERY"
 5. **Conglomerate Processor** initiates search
 6. **Conglomerate Service** queries sources in waterfall priority:
+
    - SEC EDGAR (10-K, 20-F Exhibit 21.1) → OpenCorporates API → Wikipedia → DuckDuckGo
 7. For Level 1: System discovers subsidiaries and displays with checkboxes
 8. User selects subsidiaries to process
@@ -434,6 +458,7 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 3. User **enables** "SEARCH FOR PARENT & SISTERS" toggle
 4. User clicks "EXECUTE QUERY"
 5. **Reverse Processor** queries multiple sources to identify parent company:
+
    - OpenCorporates control statements → SEC EDGAR mentions → Companies House UK PSC
 6. System displays parent company with confidence score
 7. **Reverse Processor** queries parent's subsidiaries to find sisters
@@ -451,6 +476,7 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 
 1. During any entity search, **Conglomerate Service** checks if entity has SEC registration
 2. If registered, **Financial Intelligence Service** retrieves SEC filings:
+
    - 10-K (US annual reports)
    - 20-F (foreign issuer annual reports)
    - DEF 14A (proxy statements)
@@ -489,12 +515,14 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 **Decision**: Use embedded SQLite database to store complete search results in JSON format.
 
 **Rationale**:
+
 - **Speed**: Sub-2-second restore times enable 15-300x speedup vs. re-running APIs
 - **Simplicity**: No separate database server, minimal configuration
 - **Portability**: Single-file database easy to backup and transfer
 - **Sufficient Performance**: SQLite handles 50KB-5MB search objects efficiently
 
 **Trade-offs**:
+
 - **Single-user**: Not suitable for concurrent multi-user access (acceptable for desktop use case)
 - **Storage Growth**: Database grows over time (~5MB per complex search)
 - **Mitigation**: Provide search deletion and database maintenance tools
@@ -504,12 +532,14 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 **Decision**: Use Levenshtein distance algorithm with configurable threshold (default 80%) for entity name matching.
 
 **Rationale**:
+
 - **Handles Variations**: Catches spelling differences, transliterations (Huawei vs 华为), abbreviations (Corp vs Corporation)
 - **Transparency**: Displays match scores (0-100%) for user validation
 - **Flexibility**: Users adjust threshold based on risk tolerance
 - **Simple**: Deterministic algorithm, no ML training required
 
 **Trade-offs**:
+
 - **False Positives**: Lower thresholds (< 75%) may match unrelated entities
 - **False Negatives**: Higher thresholds (> 90%) may miss legitimate matches
 - **Mitigation**: Display match scores prominently, allow threshold adjustment per search
@@ -519,12 +549,14 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 **Decision**: Query data sources in priority order: SEC EDGAR → OpenCorporates → Wikipedia → DuckDuckGo.
 
 **Rationale**:
+
 - **Reliability**: Prioritize authoritative sources (SEC regulatory filings) over public sources (Wikipedia)
 - **Performance**: Stop searching once sufficient subsidiaries found
 - **Cost**: SEC EDGAR and Wikipedia are free; OpenCorporates API is paid (optional)
 - **Coverage**: Fallback ensures results even for non-public companies
 
 **Trade-offs**:
+
 - **Completeness**: May miss subsidiaries if higher-priority source has incomplete data
 - **Mitigation**: Provide option to force query all sources (disable early stopping)
 
@@ -533,12 +565,14 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 **Decision**: Use OpenAI/Anthropic LLM APIs to synthesize findings into human-readable intelligence reports.
 
 **Rationale**:
+
 - **Comprehension**: Stakeholders need actionable insights, not raw data dumps
 - **Efficiency**: Automated synthesis saves analyst time
 - **Context**: LLM can incorporate geopolitical context and explain sanctions significance
 - **Quality**: State-of-the-art language models produce high-quality reports
 
 **Trade-offs**:
+
 - **Cost**: API calls cost $0.01-0.10 per report depending on length
 - **Reliability**: LLM output quality varies, requires human review
 - **Privacy**: Sensitive entity names sent to third-party API
@@ -549,12 +583,14 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 **Decision**: Build web UI using Streamlit Python framework instead of traditional web frameworks (Flask/Django) or desktop GUI (Qt/Tkinter).
 
 **Rationale**:
+
 - **Rapid Development**: Streamlit enables fast UI prototyping with minimal code
 - **Python Native**: Seamless integration with Python data processing libraries
 - **Interactive**: Built-in support for charts, graphs, tables without JavaScript
 - **Deployment**: Runs as local server accessible via browser (localhost:8501)
 
 **Trade-offs**:
+
 - **Performance**: Streamlit re-runs entire script on user interaction (can be slow for large datasets)
 - **Customization**: Less control over UI/UX compared to React/Vue.js
 - **Scalability**: Not ideal for high-traffic multi-user deployment
@@ -565,12 +601,14 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 **Decision**: Allow users to manually select which subsidiaries to analyze at each level instead of auto-processing all discovered entities.
 
 **Rationale**:
+
 - **Time Control**: Users balance thoroughness vs. speed based on risk assessment needs
 - **Cost Control**: Avoid expensive API calls for irrelevant subsidiaries
 - **Relevance**: User domain expertise determines which subsidiaries matter for their decision
 - **Scalability**: Large conglomerates (100+ subsidiaries) become manageable
 
 **Trade-offs**:
+
 - **Manual Effort**: Requires user clicks and decision-making during search
 - **Completeness Risk**: User may miss critical subsidiaries if selection is rushed
 - **Mitigation**: Provide "Select All" option, show ownership % to guide selection
@@ -580,12 +618,14 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 **Decision**: Assign 5-level risk classification (SAFE, LOW, MID, HIGH, VERY HIGH) based on name similarity, entity type match, and address match.
 
 **Rationale**:
+
 - **Simplicity**: Stakeholders need actionable risk levels, not raw match scores
 - **Consistency**: Standardized scoring ensures uniform risk communication
 - **Transparency**: Score components (name match %, type match, address match) displayed alongside level
 - **Flexibility**: Users can adjust fuzzy threshold to shift risk levels
 
 **Trade-offs**:
+
 - **Oversimplification**: Nuanced risks may be lost in 5-level bucketing
 - **Subjectivity**: Threshold boundaries (e.g., 85% = HIGH vs MID) are somewhat arbitrary
 - **Mitigation**: Always display raw match scores alongside risk levels, explain scoring methodology in documentation
@@ -595,6 +635,7 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 **Decision**: Use Next.js (App Router) with TypeScript for the frontend instead of Streamlit.
 
 **Rationale**:
+
 - **Modern User Experience**: React provides component-based architecture with instant client-side interactions, smooth transitions, and real-time updates via WebSockets
 - **Server-Side Rendering (SSR)**: Next.js App Router enables SSR/SSG for faster initial page loads and better SEO
 - **Developer Experience**: TypeScript provides type safety, Next.js offers file-based routing, built-in API routes, and excellent tooling
@@ -604,12 +645,14 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 - **Mobile Responsive**: React component libraries (shadcn/ui, Material-UI) provide mobile-first responsive design
 
 **Trade-offs**:
+
 - **Larger Bundle Size**: React/Next.js has larger initial bundle (~200-500KB gzipped) vs Streamlit's server-rendered pages
 - **Separate Backend Requirement**: Must maintain separate REST API backend vs Streamlit's integrated approach
 - **Increased Complexity**: Requires managing state, API client, error boundaries, loading states
 - **Deployment Overhead**: Two deployment targets (frontend + backend) vs single Streamlit app
 
 **Mitigation**:
+
 - Use Next.js code splitting and lazy loading to minimize bundle size
 - Implement service workers for offline caching of saved searches
 - Use TypeScript and ESLint to catch errors early
@@ -620,6 +663,7 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 **Decision**: Users select research depth (base/network/deep) via slider interface before search execution.
 
 **Rationale**:
+
 - **User Control**: Gives users explicit control over time/cost vs. thoroughness trade-off based on decision importance
 - **Expectation Management**: Clear upfront indication of search duration (30-60s / 2-5min / 5-15min) prevents user frustration
 - **Cost Efficiency**: Users pay/wait only for depth needed - base tier sufficient for routine checks, deep tier for critical decisions
@@ -628,6 +672,7 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 - **API Efficiency**: Tier selection prevents over-fetching - base tier doesn't trigger expensive conglomerate or financial flow queries
 
 **Implementation**:
+
 - **UI**: Horizontal slider with three discrete positions (left=base, center=network, right=deep)
 - **Tier Indicators**: Each position shows tier name, estimated time, and expandable feature list
 - **Search Execution**: Backend routes to `/api/search/{tier}` endpoints that execute only tier-appropriate features
@@ -636,11 +681,13 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 - **Persistence**: User's last tier selection saved in preferences for session continuity
 
 **Trade-offs**:
+
 - **No Mid-Search Upgrade**: Users cannot upgrade tier during search execution (must abort and restart)
 - **Tier Selection Burden**: Users must assess appropriate tier upfront without seeing preliminary results
 - **Fixed Tier Boundaries**: Some users may want hybrid tiers (e.g., base + personnel without full conglomerate)
 
 **Mitigation**:
+
 - Provide clear tier comparison table with examples of use cases for each tier
 - Allow post-search upgrade with one-click re-execution at higher tier
 - Display estimated costs (API call counts) alongside time estimates for cost-conscious users
@@ -652,7 +699,7 @@ The Entity Background Research Agent automates multi-source research across 10+ 
 
 ### 5.1 Repository Structure
 
-```
+```text
 entity-background-research-agent/
 ├── README.md                       # System documentation
 ├── CLAUDE.md                       # Project guidelines
@@ -670,24 +717,19 @@ entity-background-research-agent/
 │   │   │   └── page.tsx            # Settings page
 │   │   └── api/                    # Optional Next.js API routes (proxy)
 │   ├── components/
-│   │   ├── ResearchTierSlider.tsx  # Base/Network/Deep selector
-│   │   ├── SearchForm.tsx          # Entity name, country inputs
-│   │   ├── ResultsDashboard.tsx    # Results display container
-│   │   ├── NetworkGraph.tsx        # D3.js/Cytoscape network visualization
-│   │   ├── IntelligenceReport.tsx  # LLM report viewer
-│   │   ├── SavedSearches.tsx       # Search history manager
-│   │   ├── ExportControls.tsx      # PDF/Excel export
-│   │   ├── ProgressTracker.tsx     # Real-time progress via WebSocket
-│   │   └── ui/                     # Reusable UI components (buttons, cards, etc.)
+│   │   ├── TierSelector.tsx        # Base/Network/Deep selector with per-tier config
+│   │   ├── SearchForm.tsx          # Entity name, country, tier inputs
+│   │   ├── NetworkGraph.tsx        # Cytoscape.js network visualization
+│   │   ├── RiskBadge.tsx           # Colour-coded risk level indicator
+│   │   ├── TierBadge.tsx           # BASE / NETWORK / DEEP badge
+│   │   ├── ExportControls.tsx      # PDF/Excel/JSON download buttons (Phase 3)
+│   │   ├── ProgressTracker.tsx     # Real-time progress bar via WebSocket (Phase 3)
+│   │   └── LoadingSpinner.tsx      # Generic loading indicator
 │   ├── lib/
-│   │   ├── api-client.ts           # Backend API client (Axios)
-│   │   ├── websocket.ts            # WebSocket connection manager
-│   │   ├── types.ts                # TypeScript types/interfaces
+│   │   ├── api-client.ts           # Backend API client (fetch)
+│   │   ├── websocket.ts            # useProgress() hook over WebSocket (Phase 3)
+│   │   ├── types.ts                # TypeScript types/interfaces (incl. FinancialFlow)
 │   │   └── utils.ts                # Utility functions
-│   ├── hooks/
-│   │   ├── useSearch.ts            # Search execution hook
-│   │   ├── useProgress.ts          # Progress tracking hook
-│   │   └── useHistory.ts           # Search history hook
 │   ├── styles/
 │   │   └── globals.css             # Global styles (dark cyber theme)
 │   ├── public/                     # Static assets
@@ -697,26 +739,28 @@ entity-background-research-agent/
 │   └── .env.local                  # Environment variables (API base URL)
 │
 ├── backend/                        # REST API server (NEW)
-│   ├── app.py                      # Flask/FastAPI application entry point
-│   ├── requirements.txt            # Python dependencies
+│   ├── app.py                      # FastAPI application entry point
+│   ├── requirements.txt            # Python dependencies (incl. openpyxl, websockets)
+│   ├── config.py                   # Backend configuration
 │   ├── routes/
-│   │   ├── auth_routes.py          # /api/auth/* endpoints
-│   │   ├── search_routes.py        # /api/search/{tier} endpoints
-│   │   ├── results_routes.py       # /api/results/{id} endpoints
-│   │   ├── history_routes.py       # /api/history endpoints
-│   │   ├── export_routes.py        # /api/export endpoints
-│   │   └── settings_routes.py      # /api/settings endpoints
-│   ├── middleware/
-│   │   ├── auth.py                 # JWT authentication
-│   │   ├── rate_limit.py           # Rate limiting
-│   │   ├── cors.py                 # CORS configuration
-│   │   └── error_handler.py        # Global error handling
+│   │   ├── search_routes.py        # POST /api/search/{base|network|deep}
+│   │   ├── results_routes.py       # GET /api/results/{id}, GET /api/results/
+│   │   ├── health_routes.py        # GET /api/health
+│   │   └── export_routes.py        # POST /api/export/{search_id} — PDF/Excel/JSON (Phase 3)
 │   ├── websocket/
-│   │   └── progress_handler.py     # WebSocket progress updates
+│   │   ├── __init__.py
+│   │   └── progress_handler.py     # In-memory progress store + /ws/progress/{id} (Phase 3)
 │   ├── models/
-│   │   ├── request_models.py       # Pydantic request validation
-│   │   └── response_models.py      # Pydantic response schemas
-│   └── config.py                   # Backend configuration
+│   │   ├── requests.py             # Pydantic request models (incl. client_search_id)
+│   │   └── responses.py            # Pydantic response models (incl. FinancialFlow)
+│   ├── services/
+│   │   ├── sanctions_service.py    # Sanctions screening (10+ databases)
+│   │   ├── research_service.py     # OSINT media intelligence + LLM reports
+│   │   ├── conglomerate_service.py # Corporate structure discovery (SEC/OpenCorp/Wiki)
+│   │   ├── network_service.py      # Network graph construction (Cytoscape-compatible)
+│   │   └── risk_assessment_service.py  # 5-level risk scoring
+│   └── db_operations/
+│       └── db.py                   # SQLite CRUD (save/get/list, incl. financial_flows)
 │
 ├── core/                           # Application core layer (shared by backend)
 │   ├── orchestrator.py             # Search orchestration engine
@@ -860,20 +904,24 @@ entity-background-research-agent/
 **Protocol**: HTTPS REST API with WebSocket for real-time updates
 
 **Authentication**: JWT tokens via Authorization header
-```
+
+```http
 Authorization: Bearer <jwt_token>
 ```
 
 **API Endpoints**:
 
 #### Authentication
+
 - `POST /api/auth/login`
   - Request: `{ "username": "string", "password": "string" }`
   - Response: `{ "token": "jwt_token", "expires_in": 3600 }`
 
 #### Tier-Specific Search
+
 - `POST /api/search/base` - Base tier search
   - Request:
+
     ```json
     {
       "entity_name": "Huawei Technologies",
@@ -882,7 +930,9 @@ Authorization: Bearer <jwt_token>
       "fuzzy_threshold": 80
     }
     ```
+
   - Response:
+
     ```json
     {
       "search_id": "abc123",
@@ -902,6 +952,7 @@ Authorization: Bearer <jwt_token>
 
 - `POST /api/search/network` - Network tier search
   - Request: Same as base + optional conglomerate parameters
+
     ```json
     {
       "entity_name": "Alibaba Group",
@@ -912,19 +963,42 @@ Authorization: Bearer <jwt_token>
       "ownership_threshold": 50
     }
     ```
+
   - Response: Includes `subsidiaries`, `directors`, `shareholders`, `relationship_graph`
 
-- `POST /api/search/deep` - Deep tier search
-  - Request: Same as network
-  - Response: Includes `financial_flows`, `criminal_history`, `beneficial_ownership`
+- `POST /api/search/deep` - Deep tier search (Phase 3 — **implemented**)
+  - Request: Same as network + optional `client_search_id` (UUID pre-generated by frontend for WebSocket tracking)
+  - Response: Includes all network fields plus:
+
+    ```json
+    {
+      "tier": "deep",
+      "financial_flows": [
+        {
+          "source": "US Federal Government",
+          "target": "Apple Inc.",
+          "amount": 15000000,
+          "currency": "USD",
+          "type": "procurement",
+          "date": "2025-09-15"
+        }
+      ],
+      "financial_intelligence": { "directors": [...], "shareholders": [...], "transactions": [...] },
+      "network_data": { "nodes": [...], "edges": [...], "statistics": {...} },
+      "subsidiaries": [...],
+      "warnings": [{ "source": "usaspending", "message": "...", "severity": "info" }]
+    }
+    ```
 
 #### Results Management
+
 - `GET /api/results/{search_id}` - Retrieve search results
   - Response: Full search result object
 
 - `GET /api/history` - List user's saved searches
   - Query params: `?limit=50&offset=0&risk_level=HIGH&sort=timestamp_desc`
   - Response:
+
     ```json
     {
       "searches": [
@@ -945,12 +1019,17 @@ Authorization: Bearer <jwt_token>
 - `DELETE /api/history/{search_id}` - Delete saved search
   - Response: `{ "success": true }`
 
-#### Export
+#### Export (Phase 3 — **implemented**)
+
 - `POST /api/export/{search_id}` - Export results
   - Request: `{ "format": "pdf|excel|json" }`
-  - Response: Binary file download or `{ "download_url": "..." }`
+  - **JSON**: Returns full results object as `application/json` file download
+  - **Excel**: Returns multi-sheet `.xlsx` (Summary, Sanctions, Subsidiaries, Directors, Shareholders, Transactions)
+  - **PDF**: Returns formatted report using ReportLab (cover page, sanctions table, intelligence report text)
+  - Response: Binary `StreamingResponse` with `Content-Disposition: attachment; filename="..."`
 
 #### Settings
+
 - `GET /api/settings` - Get user settings
   - Response: `{ "fuzzy_threshold": 80, "auto_save": true, ... }`
 
@@ -958,20 +1037,29 @@ Authorization: Bearer <jwt_token>
   - Request: `{ "fuzzy_threshold": 85, "auto_save": false }`
   - Response: Updated settings object
 
-#### Real-Time Progress (WebSocket)
+#### Real-Time Progress (WebSocket — Phase 3 **implemented**)
+
 - `WebSocket /ws/progress/{search_id}` - Real-time progress updates
+  - Frontend pre-generates UUID, passes as `client_search_id` in POST body, connects WebSocket before HTTP call
+  - Backend emits progress events at each major step; polls in-memory store every 500 ms
   - Messages:
+
     ```json
     {
       "search_id": "abc123",
-      "status": "in_progress",
-      "current_step": "Searching corporate structure...",
-      "progress_percent": 45,
-      "estimated_remaining_seconds": 120
+      "step": "Extracting financial intelligence",
+      "percent": 40,
+      "done": false
     }
     ```
 
+  - Terminal message: `{ "step": "Complete", "percent": 100, "done": true }`
+  - Error message: `{ "step": "Failed", "percent": 0, "done": true, "error": "..." }`
+  - Timeout: connection auto-closes after 20 minutes
+  - Graceful degradation: if WebSocket unavailable, results still load via HTTP
+
 **Error Handling**:
+
 - `400 Bad Request` - Invalid request parameters
 - `401 Unauthorized` - Missing or invalid JWT token
 - `404 Not Found` - Search ID not found
@@ -979,11 +1067,13 @@ Authorization: Bearer <jwt_token>
 - `500 Internal Server Error` - Server-side error
 
 **Rate Limiting**:
+
 - Base tier: 100 requests/hour per user
 - Premium tier: 500 requests/hour per user
 - Headers: `X-RateLimit-Remaining`, `X-RateLimit-Reset`
 
 **CORS Configuration**:
+
 - Allowed origins: Frontend domain (e.g., `https://app.entity-research.com`)
 - Allowed methods: GET, POST, PUT, DELETE, OPTIONS
 - Allowed headers: Authorization, Content-Type
@@ -994,6 +1084,7 @@ Authorization: Bearer <jwt_token>
 #### USA Sanctions API Integration
 
 **Databases**:
+
 - OFAC SDN List (Office of Foreign Assets Control)
 - BIS Entity List (Bureau of Industry and Security)
 - Treasury Consolidated Sanctions List
@@ -1003,6 +1094,7 @@ Authorization: Bearer <jwt_token>
 - FCC Covered List (National Security Telecom)
 
 **Integration Pattern**:
+
 - Parallel HTTP requests to all databases
 - Response format: JSON (standardized across sources)
 - Error handling: Fallback to local cached sanctions data if API unavailable
@@ -1011,11 +1103,13 @@ Authorization: Bearer <jwt_token>
 #### SEC EDGAR API Integration
 
 **Data Retrieved**:
+
 - Company filings (10-K, 20-F, DEF 14A)
 - Exhibit 21.1 (subsidiary lists)
 - Proxy statements (directors, officers, compensation)
 
 **Integration Pattern**:
+
 - Query by CIK (Central Index Key) or company name
 - Response format: HTML/SGML (requires parsing)
 - Rate limiting: 10 requests/second (per SEC guidelines)
@@ -1024,11 +1118,13 @@ Authorization: Bearer <jwt_token>
 #### OpenCorporates API Integration
 
 **Data Retrieved**:
+
 - Company profile (jurisdiction, status, officers)
 - Control statements (parent companies)
 - Officer data (names, roles, appointment dates)
 
 **Integration Pattern**:
+
 - Requires API key (optional for system, falls back to Wikipedia if unavailable)
 - Response format: JSON
 - Rate limiting: 500 requests/day (free tier), higher for paid tiers
@@ -1037,11 +1133,13 @@ Authorization: Bearer <jwt_token>
 #### DuckDuckGo Search Integration
 
 **Data Retrieved**:
+
 - Media coverage (news articles, press releases)
 - Official government announcements
 - Public information about entities
 
 **Integration Pattern**:
+
 - Web scraping (DuckDuckGo does not provide official API)
 - Distinguish official sources (.gov, .treasury.gov) from general media
 - Extract: title, URL, snippet for top 10-20 results
@@ -1050,14 +1148,17 @@ Authorization: Bearer <jwt_token>
 #### LLM API Integration (OpenAI/Anthropic)
 
 **Data Sent**:
+
 - Structured prompt with search findings (sanctions matches, subsidiary data, financial intelligence)
 - System instructions for report format (executive summary, risk assessment, recommendations)
 
 **Data Received**:
+
 - Markdown-formatted intelligence report
 - Risk-level recommendation with justification
 
 **Integration Pattern**:
+
 - HTTP POST to LLM API with JSON payload
 - Streaming response for real-time display (optional)
 - Token limits: Cap input at 8K tokens, output at 2K tokens
@@ -1094,6 +1195,7 @@ CREATE INDEX idx_tags ON searches(tags);
 ```
 
 **Integration Pattern**:
+
 - Use Python `sqlite3` module (built-in)
 - Store complete search results as JSON BLOB
 - Restore by deserializing JSON from database
@@ -1260,38 +1362,58 @@ class SearchRepository:
 ### 8.1 External Data Sources
 
 | Service | Purpose | Auth Required | Cost | Rate Limits |
-|---------|---------|---------------|------|-------------|
+
+| --- | --- | --- | --- | --- |
 | **USA Sanctions API** | OFAC, BIS, Treasury, State, DOD, FCC sanctions lists | No | Free | None |
+
 | **SEC EDGAR** | Company filings (10-K, 20-F, DEF 14A) | No | Free | 10 req/sec |
 | **OpenCorporates** | Global corporate registry data | API Key (optional) | Freemium (500 req/day free, paid tiers available) | 500/day (free), higher (paid) |
+
 | **DuckDuckGo** | Media intelligence and OSINT | No | Free | Self-imposed delays to avoid blocking |
 | **Wikipedia API** | Corporate structure data | No | Free | Reasonable use policy |
+
 | **OpenAI GPT-4** | Intelligence report generation | API Key | $0.03-0.10 per report | Tier-based (5K req/day for Tier 1) |
 | **Anthropic Claude** | Intelligence report generation (alternative) | API Key | $0.02-0.08 per report | Tier-based |
 
-### 8.2 Planned Integrations (Future Phases)
+### 8.2 Active and Planned Integrations
 
-| Service | Purpose | Phase | Estimated Cost |
-|---------|---------|-------|----------------|
-| **ImportYeti** | US import/export trade data (Bills of Lading) | Phase 3 | Free tier available, paid for bulk |
-| **USAspending.gov** | Federal procurement and subcontractor data | Phase 3 | Free |
-| **Companies House UK** | UK PSC (Persons with Significant Control) | Phase 4 | Free |
-| **Open Ownership Register** | Beneficial ownership data (BODS standard) | Phase 4 | Free |
-| **OCCRP Aleph** | Offshore leaks (Panama Papers, Pandora Papers) | Phase 4 | Free (public data) |
-| **LittleSis** | Director interlocks, political connections | Phase 4 | Free (public data) |
+| Service | Purpose | Status | Estimated Cost |
+
+| --- | --- | --- | --- |
+| **USAspending.gov** | Federal procurement awards (prime contracts) | **Active — Deep Tier (Phase 3)** | Free |
+
+| **ImportYeti** | US import/export trade data (Bills of Lading) | Planned — Phase 4 | Free tier available, paid for bulk |
+| **Companies House UK** | UK PSC (Persons with Significant Control) | Planned — Phase 4 | Free |
+
+| **Open Ownership Register** | Beneficial ownership data (BODS standard) | Planned — Phase 4 | Free |
+| **OCCRP Aleph** | Offshore leaks (Panama Papers, Pandora Papers) | Planned — Phase 4 | Free (public data) |
+
+| **LittleSis** | Director interlocks, political connections | Planned — Phase 4 | Free (public data) |
 
 ### 8.3 Tooling and Runtime Dependencies
 
+#### Backend
+
 - **Python 3.10+**: Programming language
-- **Streamlit**: Web UI framework
+- **FastAPI**: REST + WebSocket API framework
+- **uvicorn[standard]**: ASGI server
+- **Pydantic v2**: Request/response validation
 - **SQLite**: Embedded database
-- **Plotly**: Interactive visualizations
-- **ReportLab**: PDF generation
-- **openpyxl**: Excel file generation
-- **requests**: HTTP client for API calls
+- **ReportLab**: PDF generation (export routes)
+- **openpyxl**: Excel file generation (export routes)
+- **websockets**: WebSocket support for FastAPI
+- **requests / httpx**: HTTP clients for external API calls
 - **beautifulsoup4**: HTML parsing for SEC filings
-- **python-Levenshtein**: Fast Levenshtein distance calculation
-- **openai / anthropic**: LLM API clients
+- **python-Levenshtein / fuzzywuzzy**: Fuzzy name matching
+- **openai**: LLM API client
+
+#### Frontend
+
+- **Next.js 14 (App Router)**: React framework with SSR/SSG
+- **TypeScript**: Type-safe frontend development
+- **Tailwind CSS**: Utility-first styling
+- **Cytoscape.js**: Interactive network graph visualization
+- **date-fns**: Date formatting utilities
 
 ---
 
@@ -1309,12 +1431,16 @@ class SearchRepository:
 ### 9.2 Security Risks and Mitigations
 
 | Risk | Mitigation |
-|------|------------|
+
+| --- | --- |
 | **API Key Exposure** | Use `.env` file excluded from git; provide `.env.example` template; encrypt API keys at rest (future) |
+
 | **Sensitive Data in LLM Calls** | Make LLM features optional; provide entity name redaction option; document data-sharing policies |
 | **SQL Injection** | Use parameterized queries for all database operations; validate user inputs |
+
 | **Dependency Vulnerabilities** | Regularly update dependencies; use `pip-audit` to scan for known vulnerabilities |
 | **Unencrypted Database** | Database stored locally with file system permissions; implement encryption at rest (future) |
+
 | **Man-in-the-Middle (API Calls)** | Use HTTPS for all external API calls; verify SSL certificates |
 
 ### 9.3 Compliance Considerations
@@ -1339,6 +1465,7 @@ class SearchRepository:
 ### 10.2 Scalability Considerations
 
 **Frontend Scalability**:
+
 - **Static Asset Hosting**: Deploy Next.js static assets to CDN (CloudFront, Vercel Edge Network) for global low-latency access
 - **Code Splitting**: Next.js automatic code splitting ensures users only download code for pages they visit
 - **Image Optimization**: Next.js Image component provides automatic optimization, lazy loading, and responsive images
@@ -1346,6 +1473,7 @@ class SearchRepository:
 - **Bundle Size**: Monitor bundle size; keep below 500KB gzipped; use dynamic imports for heavy components (D3.js, PDF viewer)
 
 **Backend Scalability**:
+
 - **Horizontal Scaling**: Deploy multiple API backend instances behind load balancer (AWS ALB, nginx) to handle concurrent users
 - **Async Processing**: Long-running searches (network/deep tier) use task queue (Celery + Redis) for background processing
   - Client receives `search_id` immediately
@@ -1358,11 +1486,13 @@ class SearchRepository:
 - **Memory Usage**: Large conglomerate searches (100+ subsidiaries) may consume 500MB-2GB RAM; implement streaming for very large result sets
 
 **WebSocket Scalability**:
+
 - **Redis Pub/Sub**: Use Redis for WebSocket message brokering across multiple backend instances
 - **Connection Management**: Limit concurrent WebSocket connections per user; implement heartbeat/ping-pong for connection health
 - **Graceful Fallback**: If WebSocket fails, client falls back to HTTP polling for progress updates
 
 **Caching Strategy**:
+
 - **API Gateway Caching**: Cache GET requests (results, history) at API gateway/CDN for 60 seconds
 - **Application-Level Caching**: Cache sanctions lists, SEC filings, OpenCorporates results in Redis with 24-hour TTL
 - **CDN Caching**: Cache frontend static assets with long TTL (1 year); use cache-busting via file hashes
@@ -1377,6 +1507,7 @@ class SearchRepository:
 ### 10.4 Operational Runbook
 
 **Installation**:
+
 1. Install Python 3.10+
 2. Clone repository: `git clone <repo-url>`
 3. Install dependencies: `pip install -r requirements.txt`
@@ -1384,11 +1515,13 @@ class SearchRepository:
 5. Run application: `streamlit run app.py`
 
 **Backup**:
+
 - Database: Copy `~/.entity_research/searches.db` to backup location
 - Settings: Included in database
 - Exports: Saved to `~/Downloads/entity_research_exports/` by default
 
 **Maintenance**:
+
 - Update dependencies: `pip install --upgrade -r requirements.txt`
 - Vacuum database: Run `VACUUM` SQL command periodically to reclaim space
 - Clear cache: Delete `~/.entity_research/cache/` directory
@@ -1443,22 +1576,24 @@ Settings configurable via UI settings panel:
 
 ## 12. Known Constraints and Future Enhancements
 
-### 12.1 Current Constraints (v2.1.0)
+### 12.1 Current Constraints (v3.2.0)
 
-1. **USA-Centric Sanctions**: Only queries USA sanctions databases (no EU, UN sanctions)
-2. **Limited Trade Data**: No trade intelligence (Bills of Lading) - planned for Phase 3
-3. **No Beneficial Ownership**: Limited offshore beneficial ownership discovery - planned for Phase 4
-4. **English-Only**: Non-English entity names require manual translation - LLM translation planned
+1. **USA-Centric Sanctions**: Only queries USA sanctions databases (no EU, UN sanctions) — planned Phase 5
+2. **Limited Trade Data**: ImportYeti Bills of Lading not yet integrated — planned Phase 4; USAspending.gov federal procurement is active (Deep Tier)
+3. **No Beneficial Ownership**: Limited offshore beneficial ownership discovery — planned Phase 4
+4. **English-Only**: Non-English entity names require manual translation — LLM translation planned
 5. **Single-User**: No multi-user collaboration features (shared searches, approval workflows)
-6. **No Real-Time Monitoring**: Cannot set alerts for changes in sanctions status - planned for Phase 5
-7. **No Batch Processing**: Cannot submit multiple entities in single session - planned for Phase 2
-8. **Limited Personnel Screening**: No individual criminal records or professional sanctions - planned for Phase 5
+6. **No Real-Time Monitoring**: Cannot set alerts for changes in sanctions status — planned Phase 5
+7. **No Batch Processing**: Cannot submit multiple entities in a single session
+8. **Limited Personnel Screening**: No individual criminal records or professional sanctions — planned Phase 5
+9. **USAspending Graceful Skip**: If USAspending.gov is unreachable, financial flows fall back to SEC transactions only; a warning is shown in results
 
 ### 12.2 Recommended Enhancements by Phase
 
 #### Phase 2 (Q2 2026) — Enhanced Usability
 
 **Features**:
+
 1. **Batch Entity Processing** (US-2.7)
    - Submit multiple entity names (CSV upload or text area)
    - Process sequentially with progress tracking
@@ -1471,6 +1606,7 @@ Settings configurable via UI settings panel:
    - Export comparison report as PDF
 
 3. **Enhanced UI/UX**
+
    - Dark mode support
    - Keyboard shortcuts for common actions
    - Advanced search history filters (date ranges, risk level, tags)
@@ -1485,6 +1621,7 @@ Settings configurable via UI settings panel:
 #### Phase 3 (Q3 2026) — Trade and Financial Intelligence
 
 **Features**:
+
 1. **ImportYeti Integration** (US-3.6)
    - Extract Bills of Lading from US sea shipments
    - Identify foreign suppliers and consignees
@@ -1515,6 +1652,7 @@ Settings configurable via UI settings panel:
 #### Phase 4 (Q4 2026) — Advanced Corporate Intelligence
 
 **Features**:
+
 1. **Director/Officer Network Pivoting** (Journey 2, Phase 2)
    - Extract directors/officers from OpenCorporates, Companies House UK
    - Perform Officer Pivot Search to find all companies where individual holds positions
@@ -1549,6 +1687,7 @@ Settings configurable via UI settings panel:
 #### Phase 5 (Q1 2027) — Individual Screening and Monitoring
 
 **Features**:
+
 1. **Individual Criminal Background Checks** (Journey 6)
    - Automatic individual discovery from SEC filings (directors, officers, UBOs)
    - Multi-country criminal records screening (US, UK, EU, Singapore, China)
@@ -1569,6 +1708,7 @@ Settings configurable via UI settings panel:
    - Improve scoring accuracy over time (target >90% precision)
 
 4. **Real-Time Monitoring and Alerts**
+
    - Set alerts for saved searches (email when sanctions status changes)
    - Periodic re-screening schedules (daily, weekly, monthly)
    - Dashboard view showing all monitored entities with status indicators
@@ -1581,11 +1721,12 @@ Settings configurable via UI settings panel:
 
 ## 13. Implementation Roadmap
 
-### Phase 1: Modernized Platform with Tiered Research (v3.0.0 - In Progress)
+### Phase 1: Modernized Platform with Tiered Research (v3.0.0) ✅ COMPLETE
 
-**Status**: 🚧 Design Phase → Implementation
+**Status**: ✅ Production-ready — React/Next.js frontend + FastAPI backend deployed
 
 **Major Architecture Changes**:
+
 - **React/Next.js Frontend**: Modern TypeScript web application with component-based UI
 - **REST API Backend**: Flask/FastAPI backend with OpenAPI documentation
 - **Three-Tiered Research System**: User-selectable research depth (base/network/deep)
@@ -1593,6 +1734,7 @@ Settings configurable via UI settings panel:
 - **Decoupled Architecture**: Frontend and backend deployed independently for scalability
 
 **Core Platform Features** (from v2.1.0):
+
 - Multi-source sanctions screening (10+ databases)
 - Fuzzy name matching with configurable thresholds
 - Conglomerate search (1-3 levels deep)
@@ -1608,7 +1750,9 @@ Settings configurable via UI settings panel:
 
 **New Phase 1 Deliverables**:
 
+
 1. **React/Next.js Frontend Application**
+
    - Research tier slider component (base/network/deep selection)
    - Search interface with tier-aware feature display
    - Results dashboard with tier badge indicators
@@ -1621,6 +1765,7 @@ Settings configurable via UI settings panel:
    - PWA support for offline saved search access
 
 2. **REST API Backend**
+
    - Flask or FastAPI application with OpenAPI 3.0 documentation
    - JWT authentication middleware
    - Rate limiting (100 req/hr base, 500 req/hr premium)
@@ -1634,6 +1779,7 @@ Settings configurable via UI settings panel:
    - Error handling and logging
 
 3. **Base Research Tier Implementation**
+
    - Sanctions screening (10+ databases)
    - OSINT media intelligence (DuckDuckGo)
    - Risk scoring (5-level system)
@@ -1642,6 +1788,7 @@ Settings configurable via UI settings panel:
    - Performance target: 30-60 seconds
 
 4. **Network Research Tier Implementation**
+
    - All Base tier features
    - Conglomerate search (SEC EDGAR, OpenCorporates, Wikipedia)
    - Director and shareholder extraction
@@ -1651,6 +1798,7 @@ Settings configurable via UI settings panel:
    - Performance target: 2-5 minutes
 
 5. **Deep Research Tier Implementation**
+
    - All Network tier features
    - Financial flow mapping (SEC related party transactions)
    - Trade data integration (ImportYeti - Phase 3 feature pulled forward)
@@ -1660,6 +1808,7 @@ Settings configurable via UI settings panel:
    - Performance target: 5-15 minutes
 
 **User Journeys Supported**:
+
 - Journey 0: Selecting Research Tier (NEW)
 - Journey 1: Basic Sanctions Screening (Base tier)
 - Journey 2: Conglomerate Investigation (Network tier)
@@ -1668,6 +1817,7 @@ Settings configurable via UI settings panel:
 - Journey 5: Search Retrieval and Monitoring (All tiers)
 
 **Success Metrics**:
+
 - Frontend bundle size: < 500KB gzipped
 - Base tier search: 30-60 seconds
 - Network tier search: 2-5 minutes
@@ -1677,6 +1827,7 @@ Settings configurable via UI settings panel:
 - Mobile responsiveness: Lighthouse score > 90
 
 **Deployment Architecture**:
+
 - Frontend: Deployed to Vercel/Netlify with CDN
 - Backend: Deployed to AWS EC2/ECS or similar (Docker container)
 - Database: SQLite (backend-local) or PostgreSQL (multi-instance)
@@ -1684,23 +1835,29 @@ Settings configurable via UI settings panel:
 
 ---
 
-### Phase 2: Enhanced Usability (Q2 2026)
+### Phase 2: Network Tier — Corporate Structure Analysis ✅ COMPLETE
 
-**Duration**: 3-4 weeks
-**Team Size**: 2 developers, 1 QA
+**Status**: ✅ Complete — Conglomerate discovery, directors/shareholders, Cytoscape.js graph, cross-entity sanctions screening
 
-**Features**:
-- Batch entity processing (CSV upload, multi-entity screening)
-- Search comparison (side-by-side, difference highlighting)
-- Enhanced UI/UX (dark mode, keyboard shortcuts, advanced filters)
-- Performance optimizations (caching improvements, database indexing)
+**Features delivered**:
+
+- Conglomerate discovery (SEC EDGAR Exhibit 21.1, OpenCorporates, Wikipedia, DuckDuckGo) with configurable 1–3 level depth
+- Directors and shareholders extraction from SEC filings (10-K, DEF 14A)
+- Related-party transactions extraction
+- Parallel cross-entity sanctions screening for subsidiaries and personnel
+- Cytoscape.js interactive network graph
+- Configurable ownership threshold, include-sisters toggle, level search limits
+- Network Relations tab (smart parent/subsidiary/standalone detection), Financial Intelligence tab
+- Multi-source warnings and data-source attribution
 
 **Success Metrics**:
+
 - Batch processing: 50 entities in < 30 minutes
 - Search comparison: < 5 seconds to compute differences
 - UI responsiveness: < 500ms for all user interactions
 
 **Deliverables**:
+
 - Updated Streamlit UI with batch processing interface
 - Search comparison module
 - Performance test suite
@@ -1708,49 +1865,86 @@ Settings configurable via UI settings panel:
 
 ---
 
-### Phase 3: Trade and Financial Intelligence (Q3 2026)
+### Phase 3: Deep Tier + Financial Flows + Export (2026-03-27) ✅ COMPLETE
 
-**Duration**: 6-8 weeks
-**Team Size**: 3 developers, 1 data analyst, 1 QA
+**Duration**: Implemented alongside Phase 1/2 platform build
+**Status**: Production-ready
 
-**Features**:
-- ImportYeti integration (Bills of Lading, supplier identification)
-- TBML detection (over/under-invoicing, HS code mismatches)
-- USAspending.gov procurement integration (subcontractor networks)
-- Enhanced transaction analysis (statistics, time series)
+**Delivered**:
 
-**Success Metrics**:
-- Trade data extraction: < 60 seconds per entity
-- TBML detection accuracy: > 85% precision on test dataset
-- Procurement data coverage: All US federal contracts retrieved
+1. **Deep Tier Search Endpoint** (`POST /api/search/deep`)
+   - Runs all Network tier steps plus USAspending.gov federal procurement query (graceful skip if unavailable)
+   - Extracts `financial_flows` from USAspending awards + SEC related-party transactions
+   - Returns `tier="deep"`, `financial_flows[]`, full network data, enhanced intelligence report
 
-**Deliverables**:
-- Trade intelligence service (ImportYeti client)
-- TBML detection algorithms
-- Procurement intelligence service (USAspending.gov client)
-- New UI tabs for trade and procurement data
-- Updated Excel export with trade/procurement sheets
+2. **WebSocket Progress Tracking** (`/ws/progress/{search_id}`)
+   - In-memory `progress_store` keyed by `search_id`
+   - Frontend pre-generates UUID (`client_search_id`), connects WebSocket before HTTP POST
+   - Backend emits step/percent events at each major search phase
+   - Auto-closes after completion or 20-minute timeout; graceful degradation if WS unavailable
+
+3. **Export Endpoints** (`POST /api/export/{search_id}`)
+   - **JSON**: Full results as `application/json` file download
+   - **Excel**: Multi-sheet `.xlsx` (Summary, Sanctions, Subsidiaries, Directors, Shareholders, Transactions)
+   - **PDF**: Formatted report using ReportLab (cover page, sanctions table, intelligence report)
+   - Export controls rendered in results page header
+
+4. **Frontend — Deep Tier UI**
+
+   - `TierSelector` deep tier card enabled (removed `disabled` flag); depth slider + financial flows toggle
+   - `ProgressTracker` component: animated progress bar driven by `useProgress()` WebSocket hook
+   - `ExportControls` component: PDF/Excel/JSON download buttons on results page
+   - `Financial Flows` tab on results page (source → target, amount, currency, type, date table)
+   - "DEEP RESEARCH" purple badge on results page
+   - `FinancialFlow` TypeScript type added to `lib/types.ts`
+
+**New/Updated Files**:
+
+- `backend/routes/search_routes.py` — deep tier endpoint (replaces 501 stub)
+- `backend/routes/export_routes.py` — **NEW**
+
+- `backend/websocket/progress_handler.py` — **NEW**
+
+- `backend/models/responses.py` — `FinancialFlow` model, `financial_flows` fields
+- `backend/models/requests.py` — `client_search_id` field, removed deep-tier validator block
+- `backend/db_operations/db.py` — returns `financial_flows` from stored data
+- `backend/routes/results_routes.py` — passes `financial_flows` through
+- `backend/app.py` — registers export + WebSocket routes
+- `backend/requirements.txt` — added `openpyxl`, `websockets`
+- `frontend/lib/types.ts` — `FinancialFlow`, `client_search_id`, deep tier props
+- `frontend/lib/websocket.ts` — **NEW** `useProgress()` hook
+- `frontend/components/TierSelector.tsx` — deep tier enabled
+- `frontend/components/ExportControls.tsx` — **NEW**
+
+- `frontend/components/ProgressTracker.tsx` — **NEW**
+
+- `frontend/components/SearchForm.tsx` — wires deep tier state
+- `frontend/app/results/[id]/page.tsx` — Financial Flows tab, export controls, DEEP badge
+- `frontend/app/page.tsx` — ProgressTracker integration, pre-generated UUID
 
 ---
 
-### Phase 4: Advanced Corporate Intelligence (Q4 2026)
+### Phase 4: Trade Intelligence + Advanced Corporate Intelligence (Q3–Q4 2026)
 
 **Duration**: 8-10 weeks
 **Team Size**: 4 developers, 1 data scientist, 1 QA
 
 **Features**:
+
 - Director/officer network pivoting (interlocking directorates)
 - Digital infrastructure correlation (WHOIS, reverse DNS, shared analytics)
 - Offshore beneficial ownership tracing (OCCRP Aleph, Open Ownership)
 - Advanced OSINT reconnaissance (Google Dorking, SpiderFoot, LittleSis)
 
 **Success Metrics**:
+
 - Director pivot: Find all companies for 20+ directors in < 90 seconds
 - Infrastructure correlation: 95% confidence for shared Google Analytics IDs
 - UBO tracing: Identify UBOs for 80% of offshore entities
 - OSINT coverage: 100+ data points per entity from advanced reconnaissance
 
 **Deliverables**:
+
 - Management network analysis module
 - Infrastructure correlation engine
 - Beneficial ownership tracing service
@@ -1766,6 +1960,7 @@ Settings configurable via UI settings panel:
 **Team Size**: 4 developers, 1 ML engineer, 1 QA
 
 **Features**:
+
 - Individual criminal background checks (multi-country)
 - Sex offender registry screening
 - Role-specific professional sanctions (FinCEN, SEC, FINRA, OIG)
@@ -1775,12 +1970,14 @@ Settings configurable via UI settings panel:
 - Real-time monitoring and alerts
 
 **Success Metrics**:
+
 - Individual screening coverage: 5+ countries (US, UK, EU, Singapore, China)
 - Criminal records accuracy: > 95% match precision
 - ML name matching improvement: +10% precision vs. Levenshtein baseline
 - Alert latency: < 24 hours from sanctions list update to user notification
 
 **Deliverables**:
+
 - Individual screening module (criminal records, sex offender registries)
 - Role-specific screening services (FinCEN, SEC, FINRA, OIG clients)
 - EU/UN sanctions integration
@@ -1883,6 +2080,7 @@ class FinancialIntelligence:
 Huawei Technologies Co., Ltd. (China) is a telecommunications equipment manufacturer with significant sanctions exposure across multiple USA databases. The entity appears on the BIS Entity List, DOD Section 1260H (Chinese Military Companies), and FCC Covered List. Conglomerate analysis identified 87 subsidiaries across 3 levels, with 12 subsidiaries (14%) having direct or indirect sanctions matches.
 
 **Key Risk Indicators**:
+
 - ✅ Multiple USA sanctions listings (BIS, DOD, FCC)
 - ✅ High-risk jurisdiction (China)
 - ✅ Subsidiaries with independent sanctions exposure
@@ -1898,6 +2096,7 @@ Huawei Technologies Co., Ltd. (China) is a telecommunications equipment manufact
 ### Primary Entity
 
 **Huawei Technologies Co., Ltd.**
+
 - **BIS Entity List**: Listed (Match Score: 98%)
   - Reason: Foreign policy/national security concerns
   - Restrictions: Export controls on US technology
@@ -1933,11 +2132,13 @@ Huawei Technologies Co., Ltd. (China) is a telecommunications equipment manufact
 - **Level 3**: 18 sub-sub-subsidiaries
 
 **Ownership Distribution**:
+
 - 100% owned: 68 subsidiaries (78%)
 - >50% owned: 14 subsidiaries (16%)
 - <50% owned: 5 subsidiaries (6%)
 
 **Geographic Distribution**:
+
 - China: 72 subsidiaries (83%)
 - Hong Kong: 8 subsidiaries (9%)
 - Offshore (Cayman Islands, BVI): 4 subsidiaries (5%)
@@ -1956,11 +2157,13 @@ Huawei Technologies Co., Ltd. (China) is a telecommunications equipment manufact
 *Note: Huawei is not SEC-registered. Limited public financial data available.*
 
 **Directors & Officers** (from public sources):
+
 - Ren Zhengfei (Founder, CEO) — Former PLA engineer
 - Meng Wanzhou (CFO) — Subject of US extradition request
 - [Additional personnel...]
 
 **Sanctions Cross-Check**:
+
 - Meng Wanzhou: No direct sanctions listing, but subject to US criminal charges
 
 ---
@@ -1990,12 +2193,16 @@ Huawei Technologies Co., Ltd. (China) is a telecommunications equipment manufact
 ## Risk Assessment
 
 | Factor | Level | Justification |
-|--------|-------|---------------|
+
+| --- | --- | --- |
 | **Sanctions Exposure** | VERY HIGH | Multiple USA sanctions listings (BIS, DOD, FCC) |
+
 | **Subsidiary Risk** | HIGH | 14% of subsidiaries have sanctions exposure |
 | **Geographic Risk** | HIGH | 83% of operations in China, high-risk jurisdiction |
+
 | **Ownership Opacity** | MEDIUM | Some offshore entities (Cayman Islands, BVI) |
 | **Personnel Risk** | MEDIUM | Key executives with military ties, CFO under US indictment |
+
 | **Reputational Risk** | VERY HIGH | Extensive negative media coverage, government warnings |
 
 **Overall Risk Level**: **VERY HIGH**
@@ -2037,6 +2244,7 @@ Huawei Technologies Co., Ltd. (China) is a telecommunications equipment manufact
 ## 16. Appendix C — Primary Repository Artifacts
 
 **Core Application**:
+
 - `app.py` — Streamlit application entry point
 - `requirements.txt` — Python dependencies
 - `README.md` — User documentation
@@ -2044,6 +2252,7 @@ Huawei Technologies Co., Ltd. (China) is a telecommunications equipment manufact
 - `.env.example` — Environment variable template
 
 **Source Code**:
+
 - `core/` — Application logic (orchestrator, processors)
 - `services/` — Data integration (sanctions, conglomerate, financial, OSINT)
 - `intelligence/` — LLM report generation
@@ -2055,12 +2264,14 @@ Huawei Technologies Co., Ltd. (China) is a telecommunications equipment manufact
 - `utils/` — Shared utilities
 
 **Documentation**:
+
 - `docs/architecture.md` — This document
 - `docs/api_reference.md` — API documentation
 - `docs/user_guide.md` — End-user guide
 - `docs/deployment_guide.md` — Deployment instructions
 
 **Testing**:
+
 - `tests/unit/` — Unit tests
 - `tests/integration/` — Integration tests
 - `tests/fixtures/` — Test data
@@ -2085,7 +2296,7 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 
 #### Key Features Implemented
 
-**1. Multi-Source Conglomerate Discovery**
+#### 1. Multi-Source Conglomerate Discovery
 - SEC EDGAR primary source for US public companies (Exhibit 21.1 parsing)
 - OpenCorporates API integration with graceful fallback
 - Wikipedia and DuckDuckGo fallback for international companies
@@ -2093,7 +2304,7 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 - Ownership threshold filtering (0-100%)
 - Sister company discovery via parent company relationships
 
-**2. Interactive Network Graph Visualization**
+#### 2. Interactive Network Graph Visualization
 - Technology: Cytoscape.js
 - Features:
   - Zoom, pan, drag nodes
@@ -2116,20 +2327,20 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
   - Sister relationships
 - Sanctions hits highlighted with red border
 
-**3. Financial Intelligence Extraction**
+#### 3. Financial Intelligence Extraction
 - Directors and officers extraction from SEC filings
 - Major shareholders identification with ownership percentages
 - Related party transactions tracking
 - Full integration with sanctions screening for all discovered persons
 - Display in dedicated Financial Intelligence tab
 
-**4. Cross-Entity Sanctions Screening**
+#### 4. Cross-Entity Sanctions Screening
 - All discovered subsidiaries automatically screened
 - All directors and shareholders screened for sanctions
 - Aggregate sanctions hit counts per entity type
 - Individual risk assessments for each entity
 
-**5. Enhanced Data Models**
+#### 5. Enhanced Data Models
 - `NetworkData` interface with nodes, edges, and statistics
 - `FinancialIntelligence` model for directors, shareholders, transactions
 - `Subsidiary` model with ownership percentages and sanctions status
@@ -2141,6 +2352,7 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 **Location**: `backend/services/`
 
 1. **conglomerate_service.py**
+
    - Multi-source subsidiary discovery with graceful fallback
    - Financial intelligence extraction from SEC filings
    - CIK number lookup for SEC EDGAR integration
@@ -2148,12 +2360,14 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
    - Returns comprehensive warnings when data sources unavailable
 
 2. **network_service.py**
+
    - Generates Cytoscape.js-compatible JSON graph data
    - Converts NetworkX graphs to frontend-ready format
    - Provides subgraph extraction capabilities
    - Includes graph statistics (node counts, edge counts, etc.)
 
 3. **risk_assessment_service.py**
+
    - Enhanced risk scoring for network tier entities
    - Aggregates risk across entire corporate structure
    - Considers parent-subsidiary relationships in risk calculation
@@ -2163,6 +2377,7 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 **Location**: `frontend/components/`
 
 1. **TierSelector.tsx**
+
    - Three-tier selection cards: Base, Network, Deep
    - Network tier controls:
      - Depth slider (1-3 levels)
@@ -2174,6 +2389,7 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
    - Duration estimates and feature lists
 
 2. **NetworkGraph.tsx**
+
    - Full Cytoscape.js interactive visualization
    - Layout selector with 4+ options
    - Node type filters with checkboxes
@@ -2190,6 +2406,7 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 #### Updated API Endpoints
 
 **POST /api/search/network**
+
 - Fully implemented (was 501 placeholder)
 - Processing flow:
   1. Base tier research (sanctions + media)
@@ -2203,6 +2420,7 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 - Duration: 2-10 minutes depending on depth and entity size
 
 **GET /api/results/{id}**
+
 - Updated to return network tier fields when applicable
 - Includes network_data, financial_intelligence, subsidiaries
 - Backwards compatible with base tier searches
@@ -2210,8 +2428,10 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 #### Performance Benchmarks
 
 | Tier | Depth | Avg Duration | Nodes | Edges | Data Sources |
-|------|-------|--------------|-------|-------|--------------|
+
+| --- | --- | --- | --- | --- | --- |
 | Network | 1 | 2-3 min | 20-40 | 25-50 | SEC EDGAR primary |
+
 | Network | 2 | 5-7 min | 40-80 | 60-120 | SEC EDGAR + Wikipedia |
 | Network | 3 | 7-10 min | 80-150 | 120-250 | Multiple sources |
 
@@ -2228,7 +2448,7 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 
 #### Changes Implemented
 
-**1. Parallel Level 2/3 Subsidiary Searches**
+#### 1. Parallel Level 2/3 Subsidiary Searches
 - File: `agents/research_agent.py`
 - Technology: Python `ThreadPoolExecutor`
 - Features:
@@ -2238,7 +2458,7 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
   - Progress logging shows parallel execution
   - Failed searches logged as warnings without blocking others
 
-**2. Parallel Cross-Entity Sanctions Screening**
+#### 2. Parallel Cross-Entity Sanctions Screening
 - File: `backend/routes/search_routes.py`
 - Separate thread pools for:
   - Subsidiaries (up to 20 concurrent workers)
@@ -2246,7 +2466,7 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 - Error handling per entity
 - Maintains count aggregation across threads
 
-**3. Configuration Updates**
+#### 3. Configuration Updates
 - `REQUEST_TIMEOUT` increased from 30 to 60 seconds
 - New settings:
   - `MAX_PARALLEL_SUBSIDIARY_SEARCHES = 10`
@@ -2258,13 +2478,17 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 **Scenario: Alibaba at Depth 2 (5 Level 2 Searches)**
 
 | Metric | Before (Sequential) | After (Parallel) | Improvement |
-|--------|---------------------|------------------|-------------|
+
+| --- | --- | --- | --- |
 | Level 1 search | 4s | 4s | - |
+
 | Level 2 searches | 5 × 4s = 20s | max(5) × 4s ≈ 5s | 4× faster |
 | Sanctions screening (111 entities) | 111 × 0.1s = 11s | 111/20 × 0.1s ≈ 0.6s | 18× faster |
+
 | **Total** | **~35s** ❌ TIMEOUT | **~10s** ✅ | **3.5× faster** |
 
 **Thread Safety Analysis**:
+
 - ✅ Logging protected by Python GIL
 - ✅ Result accumulation on independent objects
 - ✅ Deduplication protected by explicit `Lock()`
@@ -2280,7 +2504,7 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 
 #### User-Facing Changes
 
-**1. Pre-Search Configuration (TierSelector Component)**
+#### 1. Pre-Search Configuration (TierSelector Component)
 - New Controls:
   - "Max Level 2 Searches" slider (5-50, default: 20)
   - "Max Level 3 Searches" slider (5-30, default: 10)
@@ -2292,18 +2516,19 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
   - Warning: "Higher values may timeout for large companies"
   - Visual feedback on speed vs coverage spectrum
 
-**2. Post-Search Transparency**
+#### 2. Post-Search Transparency
 - Active limits displayed in results banner
 - Example: "Search limits: Top 20 subsidiaries searched for level 2, top 10 for level 3"
 - Shows defaults (20/10) for existing searches (backwards compatible)
 
-**3. Dynamic Warning Messages**
+#### 3. Dynamic Warning Messages
 - Warning messages use actual user-configured values
 - Example: "Limited level 2 search to top 15 subsidiaries by ownership (out of 111 total)"
 
 #### Technical Implementation
 
 **Backend Changes**:
+
 1. `backend/models/requests.py`:
    - New fields: `max_level_2_searches` (5-50), `max_level_3_searches` (5-30)
    - Pydantic validation enforces sensible ranges
@@ -2322,6 +2547,7 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
    - Warning messages dynamically reference actual limit values
 
 **Frontend Changes**:
+
 1. `frontend/lib/types.ts`:
    - Added `max_level_2_searches` and `max_level_3_searches` to SearchRequest
    - Added props to TierSelectorProps
@@ -2342,17 +2568,23 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 #### Configuration Trade-offs
 
 **Max Level 2 Searches**:
+
 | Value | Speed | Coverage | Use Case |
-|-------|-------|----------|----------|
+| --- | --- | --- | --- |
+
 | 5 | ~30s | Minimal | Quick overview, huge companies |
 | 20 | ~2min | Good | **Default**, works for most |
+
 | 50 | ~5min | Comprehensive | Small-medium companies |
 
 **Max Level 3 Searches**:
+
 | Value | Speed | Coverage | Use Case |
-|-------|-------|----------|----------|
+| --- | --- | --- | --- |
+
 | 5 | Fast | Minimal | Sample only |
 | 10 | Balanced | Good | **Default** |
+
 | 30 | Very Slow | Comprehensive | Research purposes |
 
 ---
@@ -2364,7 +2596,7 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 
 #### Solution Implemented
 
-**1. Smart Prioritization Algorithm**
+#### 1. Smart Prioritization Algorithm
 - Level 1: Search normally (get all subsidiaries)
 - Level 2:
   - Sort level 1 subsidiaries by ownership % (100% → 0%)
@@ -2379,14 +2611,14 @@ Phase 2 (Network Tier) has been successfully implemented with several critical e
 
 **Rationale**: High ownership = more relevant. Focus on wholly-owned and majority-owned entities.
 
-**2. Level Breakdown Display**
+#### 2. Level Breakdown Display
 - Backend calculates: level_1_count, level_2_count, level_3_count
 - Frontend displays in banner:
   - Depth 1: "Discovered 111 entities (111 level 1)"
   - Depth 2: "Discovered 45 entities (30 level 1, 15 level 2)"
   - No results: "No subsidiaries discovered. Searched 2 level(s) deep."
 
-**3. Configuration Options**
+#### 3. Configuration Options
 ```env
 MAX_LEVEL_2_SEARCHES=20  # Default: 20 (recommended 10-30)
 MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
@@ -2395,16 +2627,21 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 #### Performance Impact
 
 **Time Estimates**:
+
 | Company Size | Depth | Before Fix | After Fix |
-|--------------|-------|------------|-----------|
+| --- | --- | --- | --- |
+
 | Small (10)   | 2     | 1 min      | 1 min     |
 | Medium (50)  | 2     | 5 min      | 2 min     |
+
 | Large (111)  | 2     | TIMEOUT    | 2 min ✅   |
 | Large (111)  | 3     | TIMEOUT    | 3 min ✅   |
 
 **API Call Reduction**:
+
 | Scenario | Before | After | Reduction |
-|----------|--------|-------|-----------|
+| --- | --- | --- | --- |
+
 | Alibaba depth 2 | 111 calls | 20 calls | **82% fewer** |
 | Alibaba depth 3 | 111 + (111×N) | 20 + 10 | **90%+ fewer** |
 
@@ -2419,6 +2656,7 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 **Problem**: Network tier only discovered subsidiaries (downward), not parent companies (upward) or sister companies via parent (sideways).
 
 **Solution**:
+
 1. Created `_search_parent_company()` method in `agents/research_agent.py`
    - Multi-source search strategy (Wikipedia, OpenCorporates, general web)
    - LLM extraction of parent company name from search results
@@ -2442,11 +2680,13 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 **Problem**: When SEC EDGAR was used, it didn't appear in `data_sources_used` array.
 
 **Root Cause**:
+
 - Code checked `method == 'sec_edgar'`
 - But research_agent returns: `'sec_edgar_10k'`, `'sec_edgar_20f'`, `'sec_edgar_10k+duckduckgo'`
 - Exact match never succeeded
 
 **Solution**:
+
 - Changed condition from `== 'sec_edgar'` to `'sec_edgar' in method`
 - Now matches all SEC EDGAR variants correctly
 - File: `backend/services/conglomerate_service.py` line 117
@@ -2456,6 +2696,7 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 **Problem**: User only saw final successful data source, not all sources tried.
 
 **Solution**:
+
 1. Added `data_sources_tried` tracking in `agents/research_agent.py`
    - Initialize array at start of `find_subsidiaries()`
    - Append source name when trying each API
@@ -2472,6 +2713,7 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
    - Maps technical names to user-friendly names
 
 **Benefits**:
+
 - Full transparency: see ALL sources checked
 - Better error understanding when no results
 - API key awareness (see when OpenCorporates skipped)
@@ -2514,6 +2756,7 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 #### Test Coverage
 
 **Backend**:
+
 - ✅ Python compilation successful for all modified files
 - ✅ Type hints validated with Mypy
 - ✅ PEP 8 compliance verified
@@ -2521,6 +2764,7 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 - ⏳ Integration tests pending
 
 **Frontend**:
+
 - ✅ TypeScript compilation successful
 - ✅ Build verification passed (`npm run build`)
 - ✅ Type safety validated throughout
@@ -2543,24 +2787,29 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 ### 17.9 Known Limitations
 
 1. **OpenCorporates is optional but recommended**
+
    - System works without it using SEC EDGAR + Wikipedia
    - International company coverage better with OpenCorporates
    - Graceful degradation ensures system always functional
 
 2. **SEC EDGAR limited to US public companies**
+
    - Private companies have limited financial intelligence
    - Non-US companies rely on Wikipedia/DuckDuckGo
 
 3. **LLM extraction accuracy for parent companies**
+
    - Returns confidence level (high/medium/low)
    - User can verify via provided source URL
    - Conservative approach minimizes false positives
 
 4. **No real-time progress updates**
+
    - User must wait for search completion
    - WebSocket progress planned for Phase 3
 
 5. **Deep tier not yet implemented**
+
    - Returns 501 error
    - Financial flows and criminal checks planned for Phase 3
 
@@ -2569,16 +2818,19 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 ### 17.10 Performance Metrics Summary
 
 **Speed Improvements**:
+
 - Parallel processing: 3-4× faster searches
 - API call reduction: 82-90% fewer calls for large companies
 - Timeout elimination: All test cases complete within 60 seconds
 
 **Capacity Improvements**:
+
 - Handles companies with 100+ subsidiaries
 - Depth 3 searches now feasible (previously impossible)
 - Configurable limits allow user control over time vs. coverage
 
 **User Experience Improvements**:
+
 - Pre-search visibility of limits and configurations
 - Post-search transparency on data sources and limits used
 - Interactive graph visualization with 100+ node support
@@ -2612,6 +2864,7 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 ### 17.12 Files Modified Summary
 
 **Backend** (Python):
+
 - `agents/research_agent.py` - Parent discovery, parallel processing, smart limits
 - `backend/services/conglomerate_service.py` - NEW service
 - `backend/services/network_service.py` - NEW service
@@ -2625,6 +2878,7 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 - `backend/.env.example` - New configuration options
 
 **Frontend** (TypeScript/React):
+
 - `frontend/components/TierSelector.tsx` - NEW component
 - `frontend/components/NetworkGraph.tsx` - NEW component
 - `frontend/components/SearchForm.tsx` - Network tier integration
@@ -2635,6 +2889,7 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 - `frontend/package.json` - Cytoscape.js dependency
 
 **Dependencies Added**:
+
 - Frontend: `cytoscape`, `@types/cytoscape`
 - Backend: No new dependencies (reuses existing)
 
@@ -2643,6 +2898,7 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 ### 17.13 Documentation Created
 
 **Implementation Documentation**:
+
 - `PHASE2_COMPLETE.md` - Comprehensive Phase 2 completion guide
 - `PARALLELIZATION_IMPLEMENTATION_COMPLETE.md` - Parallel processing details
 - `CONFIGURABLE_SEARCH_LIMITS_COMPLETE.md` - User-configurable limits guide
@@ -2652,6 +2908,7 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 - `TESTING_GUIDE.md` - Testing procedures and test cases
 
 **Updated Documentation**:
+
 - This document (`solution.md`) - Section 17 added
 - `README.md` - Updated with Phase 2 features
 - `backend/.env.example` - New configuration options documented
@@ -2661,6 +2918,7 @@ MAX_LEVEL_3_SEARCHES=10  # Default: 10 (recommended 5-15)
 ### 17.14 Success Criteria - All Met ✅
 
 **Phase 2 Objectives**:
+
 - ✅ User can select "Network" tier with depth and ownership controls
 - ✅ POST /api/search/network returns complete network data in 2-10 minutes
 - ✅ Network graph visualizes entity relationships interactively

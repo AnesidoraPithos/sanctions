@@ -11,7 +11,8 @@ import os
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path)
 
 # Legacy constants for compatibility with core modules
 DB_FILE = os.path.join(os.path.dirname(__file__), '..', 'sanctions.db')
@@ -82,6 +83,12 @@ class Settings(BaseSettings):
     # Feature Flags
     ENABLE_NETWORK_TIER: bool = True   # Phase 2 - IMPLEMENTED ✅
     ENABLE_DEEP_TIER: bool = False     # Phase 3
+
+    # Phase 4 settings
+    ENABLE_PHASE4_FEATURES: bool = True
+    LITTLESIS_API_KEY: str = ""
+    MAX_DIRECTOR_PIVOT_COUNT: int = 10
+    MAX_WHOIS_DOMAINS: int = 15
 
     model_config = SettingsConfigDict(
         env_file=".env",

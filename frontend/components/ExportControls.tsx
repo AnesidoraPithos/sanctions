@@ -61,7 +61,7 @@ export default function ExportControls({ searchId }: ExportControlsProps) {
   ];
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {buttons.map(({ format, label, icon }) => (
         <button
           key={format}
@@ -69,7 +69,7 @@ export default function ExportControls({ searchId }: ExportControlsProps) {
           disabled={loading !== null}
           title={`Export as ${label}`}
           className={`
-            flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all
+            flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-all
             ${loading === format
               ? "border-blue-600 bg-blue-950/40 text-blue-400 cursor-wait"
               : "border-gray-700 bg-gray-900/50 text-gray-300 hover:border-blue-600 hover:text-blue-300"
@@ -82,7 +82,7 @@ export default function ExportControls({ searchId }: ExportControlsProps) {
         </button>
       ))}
       {error && (
-        <span className="text-xs text-red-400 ml-2">{error}</span>
+        <span className="text-sm text-red-400 ml-2">{error}</span>
       )}
     </div>
   );

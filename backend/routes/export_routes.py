@@ -138,6 +138,65 @@ def _build_excel(results: Dict[str, Any]) -> bytes:
         ws6.cell(row=r_idx, column=5, value=tx.get("transaction_date", ""))
         ws6.cell(row=r_idx, column=6, value=tx.get("purpose", ""))
 
+    # --- Sheet 7: Management Network (Phase 4) ---
+    network_data = results.get("network_data") or {}
+    director_pivots = network_data.get("director_pivots") or results.get("director_pivots") or []
+    ws7 = wb.create_sheet("Management Network")
+    mn_headers = ["Director", "Title", "Interlocked Company", "Filing Date", "Source URL"]
+    for c_idx, h in enumerate(mn_headers, start=1):
+        cell = ws7.cell(row=1, column=c_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+    r_idx = 2
+    for pivot in director_pivots:
+        director_name = pivot.get("director_name", "") if isinstance(pivot, dict) else ""
+        title = pivot.get("title", "") if isinstance(pivot, dict) else ""
+        companies = pivot.get("companies", []) if isinstance(pivot, dict) else []
+        for company in companies:
+            ws7.cell(row=r_idx, column=1, value=director_name)
+            ws7.cell(row=r_idx, column=2, value=title)
+            ws7.cell(row=r_idx, column=3, value=company.get("company_name", "") if isinstance(company, dict) else "")
+            ws7.cell(row=r_idx, column=4, value=company.get("filing_date", "") if isinstance(company, dict) else "")
+            ws7.cell(row=r_idx, column=5, value=company.get("source_url", "") if isinstance(company, dict) else "")
+            r_idx += 1
+
+    # --- Sheet 8: Infrastructure (Phase 4) ---
+    infrastructure = network_data.get("infrastructure") or results.get("infrastructure") or []
+    ws8 = wb.create_sheet("Infrastructure")
+    infra_headers = ["Domain", "Registrant Org", "Registrar", "Created", "Nameservers", "Related Entities"]
+    for c_idx, h in enumerate(infra_headers, start=1):
+        cell = ws8.cell(row=1, column=c_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+    for r_idx, item in enumerate(infrastructure, start=2):
+        if not isinstance(item, dict):
+            continue
+        ws8.cell(row=r_idx, column=1, value=item.get("domain", ""))
+        ws8.cell(row=r_idx, column=2, value=item.get("registrant_org", ""))
+        ws8.cell(row=r_idx, column=3, value=item.get("registrar", ""))
+        ws8.cell(row=r_idx, column=4, value=item.get("creation_date", ""))
+        nameservers = item.get("nameservers") or []
+        ws8.cell(row=r_idx, column=5, value=", ".join(nameservers) if isinstance(nameservers, list) else "")
+        related = item.get("related_entities") or []
+        ws8.cell(row=r_idx, column=6, value=", ".join(related) if isinstance(related, list) else "")
+
+    # --- Sheet 9: Beneficial Owners (Phase 4) ---
+    beneficial_owners = network_data.get("beneficial_owners") or results.get("beneficial_owners") or []
+    ws9 = wb.create_sheet("Beneficial Owners")
+    bo_headers = ["Name", "Nationality", "Ownership %", "Source", "Verification Date"]
+    for c_idx, h in enumerate(bo_headers, start=1):
+        cell = ws9.cell(row=1, column=c_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+    for r_idx, owner in enumerate(beneficial_owners, start=2):
+        if not isinstance(owner, dict):
+            continue
+        ws9.cell(row=r_idx, column=1, value=owner.get("name", ""))
+        ws9.cell(row=r_idx, column=2, value=owner.get("nationality", ""))
+        ws9.cell(row=r_idx, column=3, value=owner.get("ownership_pct", ""))
+        ws9.cell(row=r_idx, column=4, value=owner.get("source", ""))
+        ws9.cell(row=r_idx, column=5, value=owner.get("verification_date", ""))
+
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)

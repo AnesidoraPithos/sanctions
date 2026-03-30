@@ -24,7 +24,7 @@ const riskConfig: Record<RiskLevel, { color: string; label: string }> = {
 };
 
 const sizeClasses = {
-  sm: 'text-xs px-2 py-1',
+  sm: 'text-sm px-2 py-1',
   md: 'text-sm px-3 py-1.5',
   lg: 'text-base px-4 py-2',
 };
@@ -102,7 +102,7 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                       {/* Score Bar (if score available) */}
                       {explanation.intelligence_score !== null && (
                         <div className="mt-2">
-                          <div className="flex justify-between text-xs text-gray-600 mb-1">
+                          <div className="flex justify-between text-sm text-gray-600 mb-1">
                             <span>Intelligence Score</span>
                             <span>{explanation.intelligence_score}/100</span>
                           </div>
@@ -118,7 +118,7 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                               style={{ width: `${explanation.intelligence_score}%` }}
                             />
                           </div>
-                          <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <div className="flex justify-between text-sm text-gray-500 mt-1">
                             <span>Low (0-35)</span>
                             <span>Medium (36-65)</span>
                             <span>High (66-100)</span>
@@ -150,7 +150,7 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
 
                   {/* Footer */}
                   <div className="mt-6 pt-4 border-t border-gray-200">
-                    <p className="text-xs text-gray-500">
+                    <p className="text-sm text-gray-500">
                       This risk assessment combines sanctions screening results with AI-generated
                       intelligence analysis for a comprehensive evaluation.
                     </p>

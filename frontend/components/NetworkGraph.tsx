@@ -326,7 +326,7 @@ export default function NetworkGraph({
               <h3 className="text-lg font-semibold text-white mb-2">
                 {selectedNode.label}
               </h3>
-              <div className="inline-block px-2 py-1 text-xs rounded bg-blue-900/50 text-blue-300 mb-3">
+              <div className="inline-block px-2 py-1 text-sm rounded bg-blue-900/50 text-blue-300 mb-3">
                 {selectedNode.node_type}
               </div>
             </div>
@@ -382,7 +382,7 @@ export default function NetworkGraph({
       {/* Legend */}
       <div className="p-4 bg-gray-900/50 border border-gray-700 rounded-lg">
         <div className="text-sm font-medium text-gray-300 mb-3">Legend</div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-full bg-blue-500"></div>
             <span className="text-gray-400">Parent Company</span>
@@ -413,25 +413,25 @@ export default function NetworkGraph({
             <div className="text-2xl font-bold text-blue-400">
               {networkData.statistics.total_nodes}
             </div>
-            <div className="text-xs text-gray-400">Total Nodes</div>
+            <div className="text-sm text-gray-400">Total Nodes</div>
           </div>
           <div className="p-3 bg-gray-900/50 border border-gray-700 rounded-lg">
             <div className="text-2xl font-bold text-green-400">
               {networkData.statistics.companies}
             </div>
-            <div className="text-xs text-gray-400">Companies</div>
+            <div className="text-sm text-gray-400">Companies</div>
           </div>
           <div className="p-3 bg-gray-900/50 border border-gray-700 rounded-lg">
             <div className="text-2xl font-bold text-orange-400">
               {networkData.statistics.people}
             </div>
-            <div className="text-xs text-gray-400">People</div>
+            <div className="text-sm text-gray-400">People</div>
           </div>
           <div className="p-3 bg-gray-900/50 border border-gray-700 rounded-lg">
             <div className="text-2xl font-bold text-purple-400">
               {networkData.statistics.num_countries || 0}
             </div>
-            <div className="text-xs text-gray-400">Countries</div>
+            <div className="text-sm text-gray-400">Countries</div>
           </div>
         </div>
       )}

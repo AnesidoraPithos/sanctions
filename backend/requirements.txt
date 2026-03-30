@@ -40,6 +40,9 @@ googlesearch-python==1.2.3
 # Date/Time
 python-dateutil==2.8.2
 
+# WHOIS lookups (Phase 4 - infrastructure correlation)
+python-whois==0.9.4
+
 # Testing (optional for Phase 1D)
 pytest==7.4.4
 pytest-asyncio==0.23.3

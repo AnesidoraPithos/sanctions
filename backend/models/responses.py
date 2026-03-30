@@ -95,6 +95,52 @@ class FinancialFlow(BaseModel):
     date: Optional[str] = Field(None, description="Transaction date")
 
 
+class DirectorCompany(BaseModel):
+    """A company linked to a director via SEC EDGAR filings."""
+
+    company_name: str
+    role: Optional[str] = None
+    filing_date: Optional[str] = None
+    source_url: Optional[str] = None
+
+
+class DirectorPivot(BaseModel):
+    """Interlocking directorate pivot result."""
+
+    director_name: str
+    title: Optional[str] = None
+    companies: List[DirectorCompany] = []
+
+
+class InfrastructureHit(BaseModel):
+    """WHOIS-enriched domain intelligence hit."""
+
+    domain: str
+    registrant_org: Optional[str] = None
+    registrar: Optional[str] = None
+    creation_date: Optional[str] = None
+    nameservers: List[str] = []
+    related_entities: List[str] = []
+
+
+class BeneficialOwner(BaseModel):
+    """Beneficial ownership record from public registries."""
+
+    name: str
+    nationality: Optional[str] = None
+    ownership_pct: Optional[float] = None
+    source: str
+    source_url: Optional[str] = None
+    verification_date: Optional[str] = None
+
+
+class AdvancedOsintData(BaseModel):
+    """LittleSis + dork query results."""
+
+    littlesis_results: List[Dict[str, Any]] = []
+    dork_results: List[Dict[str, Any]] = []
+
+
 class SearchResponse(BaseModel):
     """Response model for entity search"""
 
@@ -190,6 +236,24 @@ class SearchResponse(BaseModel):
         description="Financial flows between entities (deep tier only)"
     )
 
+    # Phase 4 fields
+    director_pivots: Optional[List[DirectorPivot]] = Field(
+        None,
+        description="Interlocking directorate pivot results (deep tier only)"
+    )
+    infrastructure: Optional[List[InfrastructureHit]] = Field(
+        None,
+        description="Digital infrastructure correlation results (deep tier only)"
+    )
+    beneficial_owners: Optional[List[BeneficialOwner]] = Field(
+        None,
+        description="Beneficial ownership records (deep tier only)"
+    )
+    advanced_osint: Optional[AdvancedOsintData] = Field(
+        None,
+        description="Advanced OSINT reconnaissance data (deep tier only)"
+    )
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -231,6 +295,16 @@ class ResultsResponse(BaseModel):
     # Deep tier fields (Phase 3)
     financial_flows: Optional[List[Dict[str, Any]]] = Field(None, description="Financial flows (deep tier)")
 
+    # Phase 4 fields
+    director_pivots: Optional[List[Dict[str, Any]]] = Field(None, description="Director pivot results (deep tier)")
+    infrastructure: Optional[List[Dict[str, Any]]] = Field(None, description="Infrastructure correlation (deep tier)")
+    beneficial_owners: Optional[List[Dict[str, Any]]] = Field(None, description="Beneficial owners (deep tier)")
+    advanced_osint: Optional[Dict[str, Any]] = Field(None, description="Advanced OSINT data (deep tier)")
+
+    # Bookmark fields
+    is_saved: bool = Field(False, description="Whether this result has been bookmarked")
+    save_label: Optional[str] = Field(None, description="User label for the bookmark")
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -257,6 +331,17 @@ class HistoryEntry(BaseModel):
     risk_level: str
     sanctions_hits: int
     timestamp: str
+    is_saved: bool = False
+    save_label: Optional[str] = None
+    saved_at: Optional[str] = None
+
+
+class SaveResponse(BaseModel):
+    """Response for save/unsave operations"""
+
+    saved: bool
+    search_id: str
+    label: Optional[str] = None
 
 
 class HistoryResponse(BaseModel):
