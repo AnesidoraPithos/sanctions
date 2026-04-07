@@ -10,14 +10,8 @@ import uuid
 from datetime import datetime
 import logging
 import os
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
-# Add backend to path for imports
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
 
 # Import backend modules
 from models.requests import SearchRequest

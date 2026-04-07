@@ -5,24 +5,10 @@ Refactored from agents/usa_agent.py to work with FastAPI backend.
 Provides sanctions screening via USA Trade API and local database.
 """
 
-import os
-import sys
 from typing import List, Dict, Any, Optional
-import importlib.util
 
-# Path setup is done in services/__init__.py
-# This ensures project_root is in sys.path before imports
-
-# NOW import the existing USASanctionsAgent (after path is set up)
-from agents.usa_agent import USASanctionsAgent
-
-# Import backend config explicitly to avoid confusion with root config.py
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-config_path = os.path.join(backend_dir, 'config.py')
-spec = importlib.util.spec_from_file_location("backend_config", config_path)
-backend_config = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(backend_config)
-settings = backend_config.settings
+from services.usa_agent import USASanctionsAgent
+from config import settings
 
 
 class SanctionsService:

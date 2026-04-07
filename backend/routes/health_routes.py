@@ -6,12 +6,6 @@ Simple endpoints to verify API is operational and check dependencies.
 
 from fastapi import APIRouter
 from pydantic import BaseModel
-import os
-import sys
-
-# Import from backend config (not parent directory)
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, backend_dir)
 
 from config import settings, validate_settings
 

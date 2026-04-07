@@ -5,25 +5,7 @@ This is the main entry point for the REST API backend that replaces the Streamli
 Provides endpoints for sanctions screening, OSINT research, and intelligence reporting.
 """
 
-import os
-import sys
-
-# CRITICAL: Set up Python path BEFORE any other imports
-# This ensures all backend modules and parent project modules are accessible
-backend_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(backend_dir)
-
-# Add paths for backend modules
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
-
-# Add paths for existing project modules (agents, core, etc.)
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-sys.path.insert(0, os.path.join(project_root, 'core'))
-sys.path.insert(0, os.path.join(project_root, 'agents'))
-
-# NOW import FastAPI and backend modules
+# Import FastAPI and backend modules
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse

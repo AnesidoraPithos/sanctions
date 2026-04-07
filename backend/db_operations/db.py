@@ -56,6 +56,75 @@ def _ensure_columns_exist():
 _ensure_columns_exist()
 
 
+def _ensure_financial_tables_exist():
+    """
+    Ensure the SEC financial intelligence tables exist.
+    These store directors, shareholders, and transaction data from SEC EDGAR filings.
+    """
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    try:
+        c.execute('''CREATE TABLE IF NOT EXISTS directors_officers
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      company_name TEXT NOT NULL,
+                      cik TEXT,
+                      person_name TEXT NOT NULL,
+                      title TEXT,
+                      nationality TEXT,
+                      biography TEXT,
+                      other_positions TEXT,
+                      filing_type TEXT,
+                      filing_date TEXT,
+                      source_url TEXT,
+                      sanctions_hit INTEGER DEFAULT 0,
+                      date_added TEXT,
+                      last_updated TEXT)''')
+
+        c.execute('''CREATE TABLE IF NOT EXISTS major_shareholders
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      company_name TEXT NOT NULL,
+                      cik TEXT,
+                      shareholder_name TEXT NOT NULL,
+                      shareholder_type TEXT,
+                      ownership_percentage REAL,
+                      voting_rights REAL,
+                      jurisdiction TEXT,
+                      filing_type TEXT,
+                      filing_date TEXT,
+                      source_url TEXT,
+                      sanctions_hit INTEGER DEFAULT 0,
+                      date_added TEXT,
+                      last_updated TEXT)''')
+
+        c.execute('''CREATE TABLE IF NOT EXISTS related_party_transactions
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      company_name TEXT NOT NULL,
+                      cik TEXT,
+                      transaction_type TEXT,
+                      counterparty TEXT NOT NULL,
+                      relationship TEXT,
+                      amount REAL,
+                      currency TEXT,
+                      transaction_date TEXT,
+                      purpose TEXT,
+                      terms TEXT,
+                      filing_type TEXT,
+                      filing_date TEXT,
+                      source_url TEXT,
+                      date_added TEXT,
+                      last_updated TEXT)''')
+
+        conn.commit()
+    except Exception as e:
+        print(f"Error ensuring financial tables exist: {e}")
+    finally:
+        conn.close()
+
+
+_ensure_financial_tables_exist()
+
+
 def save_search_results(
     search_id: str,
     entity_name: str,
@@ -359,6 +428,155 @@ def search_local_entities(query: str) -> List[Dict[str, Any]]:
 
     except Exception as e:
         print(f"Error searching local entities: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def get_directors(company_name=None, cik=None):
+    """
+    Retrieve directors for a company.
+
+    Args:
+        company_name (str): Company name (optional)
+        cik (str): Company CIK (optional)
+
+    Returns:
+        list: List of director dictionaries
+    """
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    try:
+        if cik:
+            c.execute("SELECT * FROM directors_officers WHERE cik = ? ORDER BY person_name", (cik,))
+        elif company_name:
+            c.execute("SELECT * FROM directors_officers WHERE company_name = ? ORDER BY person_name", (company_name,))
+        else:
+            return []
+
+        rows = c.fetchall()
+        directors = []
+        for row in rows:
+            directors.append({
+                'id': row[0],
+                'company_name': row[1],
+                'cik': row[2],
+                'name': row[3],
+                'title': row[4],
+                'nationality': row[5],
+                'biography': row[6],
+                'other_positions': row[7],
+                'filing_type': row[8],
+                'filing_date': row[9],
+                'source_url': row[10],
+                'sanctions_hit': row[11],
+                'date_added': row[12],
+                'last_updated': row[13]
+            })
+        return directors
+    except Exception as e:
+        print(f"Error retrieving directors: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def get_shareholders(company_name=None, cik=None):
+    """
+    Retrieve major shareholders for a company.
+
+    Args:
+        company_name (str): Company name (optional)
+        cik (str): Company CIK (optional)
+
+    Returns:
+        list: List of shareholder dictionaries
+    """
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    try:
+        if cik:
+            c.execute("SELECT * FROM major_shareholders WHERE cik = ? ORDER BY ownership_percentage DESC", (cik,))
+        elif company_name:
+            c.execute("SELECT * FROM major_shareholders WHERE company_name = ? ORDER BY ownership_percentage DESC", (company_name,))
+        else:
+            return []
+
+        rows = c.fetchall()
+        shareholders = []
+        for row in rows:
+            shareholders.append({
+                'id': row[0],
+                'company_name': row[1],
+                'cik': row[2],
+                'name': row[3],
+                'type': row[4],
+                'ownership_percentage': row[5],
+                'voting_rights': row[6],
+                'jurisdiction': row[7],
+                'filing_type': row[8],
+                'filing_date': row[9],
+                'source_url': row[10],
+                'sanctions_hit': row[11],
+                'date_added': row[12],
+                'last_updated': row[13]
+            })
+        return shareholders
+    except Exception as e:
+        print(f"Error retrieving shareholders: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def get_transactions(company_name=None, cik=None):
+    """
+    Retrieve related party transactions for a company.
+
+    Args:
+        company_name (str): Company name (optional)
+        cik (str): Company CIK (optional)
+
+    Returns:
+        list: List of transaction dictionaries
+    """
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    try:
+        if cik:
+            c.execute("SELECT * FROM related_party_transactions WHERE cik = ? ORDER BY transaction_date DESC", (cik,))
+        elif company_name:
+            c.execute("SELECT * FROM related_party_transactions WHERE company_name = ? ORDER BY transaction_date DESC", (company_name,))
+        else:
+            return []
+
+        rows = c.fetchall()
+        transactions = []
+        for row in rows:
+            transactions.append({
+                'id': row[0],
+                'company_name': row[1],
+                'cik': row[2],
+                'transaction_type': row[3],
+                'counterparty': row[4],
+                'relationship': row[5],
+                'amount': row[6],
+                'currency': row[7],
+                'transaction_date': row[8],
+                'purpose': row[9],
+                'terms': row[10],
+                'filing_type': row[11],
+                'filing_date': row[12],
+                'source_url': row[13],
+                'date_added': row[14],
+                'last_updated': row[15]
+            })
+        return transactions
+    except Exception as e:
+        print(f"Error retrieving transactions: {e}")
         return []
     finally:
         conn.close()

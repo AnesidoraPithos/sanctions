@@ -11,25 +11,11 @@ Fallback Strategy:
 """
 
 import logging
-import os
-import sys
 from typing import Dict, Any, List, Optional
-import importlib.util
 
-# Path setup is done in services/__init__.py
-# This ensures project_root is in sys.path before imports
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-# NOW import existing modules (after path is set up)
-from agents.research_agent import SanctionsResearchAgent
-from core.database import get_directors, get_shareholders, get_transactions
-
-# Import backend config explicitly to avoid confusion with root config.py
-config_path = os.path.join(backend_dir, 'config.py')
-spec = importlib.util.spec_from_file_location("backend_config", config_path)
-backend_config = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(backend_config)
-settings = backend_config.settings
+from services.research_agent import SanctionsResearchAgent
+from db_operations.db import get_directors, get_shareholders, get_transactions
+from config import settings
 
 logger = logging.getLogger(__name__)
 

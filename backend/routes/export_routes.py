@@ -6,18 +6,11 @@ POST /api/export/{search_id}  — export results as JSON, Excel, or PDF.
 
 import io
 import logging
-import os
-import sys
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-
-# Ensure backend modules are importable
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
 
 from db_operations.db import get_search_results
 

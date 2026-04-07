@@ -14,7 +14,7 @@ from typing import Dict, Any, List, Optional
 # This ensures project_root is in sys.path before imports
 
 # NOW import existing modules (after path is set up)
-from visualizations.graph_builder import build_entity_graph, get_graph_statistics
+from utils.graph_builder import build_entity_graph, get_graph_statistics
 
 logger = logging.getLogger(__name__)
 
