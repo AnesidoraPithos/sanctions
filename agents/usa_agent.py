@@ -1,7 +1,10 @@
+import logging
 import requests
 import os
 import json
 from matching_utils import calculate_similarity_scores, get_composite_score, classify_match_quality, combine_scores
+
+logger = logging.getLogger(__name__)
 
 class USASanctionsAgent:
     API_URL = "https://data.trade.gov/consolidated_screening_list/v1/search"
@@ -9,7 +12,7 @@ class USASanctionsAgent:
     def __init__(self):
         self.API_KEY = os.getenv('USA_TRADE_GOV_API_KEY')
 
-    def search(self, search_params, query_name=None):
+    def search(self, search_params, query_name=None, score_threshold=0):
         """
         Fetches ALL results by handling pagination automatically.
         Now also searches local database for external sources.
@@ -17,9 +20,10 @@ class USASanctionsAgent:
         Args:
             search_params (dict): API search parameters
             query_name (str, optional): Original query name for local fuzzy matching
+            score_threshold (int): Stop fetching when API batch scores drop below this value
         """
         # 1. Query API (existing logic)
-        api_results = self._search_api(search_params, query_name)
+        api_results = self._search_api(search_params, query_name, score_threshold)
 
         # 2. Query local database (new logic)
         local_results = []
@@ -39,7 +43,7 @@ class USASanctionsAgent:
 
         return valid_results + error_results  # Errors at the end
 
-    def _search_api(self, search_params, query_name=None):
+    def _search_api(self, search_params, query_name=None, score_threshold=0):
         """
         Search USA Trade API with pagination.
 
@@ -88,7 +92,6 @@ class USASanctionsAgent:
                         data = response.json()
                         results = data.get('results', [])
                         total_matches = data.get('total', 0)
-
                         # Add this batch to our master list
                         formatted_batch = self._format_results(results, query_name)
                         all_results.extend(formatted_batch)
@@ -103,6 +106,13 @@ class USASanctionsAgent:
                         # 3. Safety break
                         if len(all_results) >= max_limit:
                             break
+                        # 4. Early termination: API results are sorted by score descending.
+                        # Once the lowest score in a batch drops below the threshold,
+                        # all subsequent pages will also be below it and get filtered out.
+                        if score_threshold > 0 and results:
+                            min_batch_score = min(float(r.get('score') or 0) for r in results)
+                            if min_batch_score < score_threshold:
+                                break
 
                         # Prepare for next page
                         offset += batch_size
@@ -112,6 +122,8 @@ class USASanctionsAgent:
                 elif response.status_code == 401:
                     return [{"error": "401 Unauthorized: API Key rejected."}]
                 else:
+                    if all_results:
+                        break  # pagination limit hit; return what we have
                     return [{"error": f"API Error {response.status_code}"}]
 
             if not all_results:
@@ -120,6 +132,8 @@ class USASanctionsAgent:
             return all_results
 
         except Exception as e:
+            if all_results:
+                return all_results
             return [{"error": f"Connection failed: {str(e)}"}]
 
     def _search_local_db(self, query_name):
@@ -233,49 +247,59 @@ class USASanctionsAgent:
         """
         formatted = []
         for r in results:
-            addresses = r.get('addresses', [])
-            first_addr = addresses[0].get('address') if addresses else "N/A"
-            city = addresses[0].get('city') if addresses else ""
-            country = addresses[0].get('country') if addresses else ""
+            try:
+                addresses = r.get('addresses', [])
+                addr_0 = next((a for a in addresses if isinstance(a, dict)), {})
+                first_addr = addr_0.get('address') or 'N/A'
+                city = addr_0.get('city', '')
+                country = addr_0.get('country', '')
 
-            full_loc = f"{first_addr}, {city} ({country})"
+                full_loc = f"{first_addr}, {city} ({country})"
 
-            # Get API score
-            api_score = float(r.get('score', 0))
+                # Get API score
+                api_score = float(r.get('score') or 0)
 
-            # Calculate local similarity if query_name provided
-            if query_name:
-                result_name = r.get('name', '')
-                try:
-                    local_score = get_composite_score(query_name, result_name)
-                    combined_score = combine_scores(api_score, local_score)
-                    match_quality = classify_match_quality(combined_score)
-                    similarity_breakdown = calculate_similarity_scores(query_name, result_name)
-                except Exception as e:
-                    # Fallback to API score only if local scoring fails
+                # Calculate local similarity if query_name provided
+                if query_name:
+                    result_name = r.get('name', '') or ''
+                    try:
+                        local_score = get_composite_score(query_name, result_name)
+                        for alt_name in (r.get('alt_names') or []):
+                            if alt_name:
+                                alt_score = get_composite_score(query_name, alt_name)
+                                local_score = max(local_score, alt_score)
+                        combined_score = combine_scores(api_score, local_score)
+                        match_quality = classify_match_quality(combined_score)
+                        similarity_breakdown = calculate_similarity_scores(query_name, result_name)
+                    except Exception:
+                        # Fallback to API score only if local scoring fails
+                        logger.warning("Local scoring failed for %r; falling back to API score", result_name, exc_info=True)
+                        local_score = api_score
+                        combined_score = api_score
+                        match_quality = classify_match_quality(api_score)
+                        similarity_breakdown = {}
+                else:
+                    # No query_name provided; use API score directly
                     local_score = api_score
                     combined_score = api_score
-                    match_quality = "EXACT" if api_score >= 100 else "HIGH" if api_score >= 90 else "MEDIUM"
+                    match_quality = classify_match_quality(api_score)
                     similarity_breakdown = {}
-            else:
-                # Fallback to API score only if no query_name provided
-                local_score = api_score
-                combined_score = api_score
-                match_quality = "EXACT" if api_score >= 100 else "HIGH" if api_score >= 90 else "MEDIUM"
-                similarity_breakdown = {}
 
-            formatted.append({
-                "Score": api_score,  # Keep original for backward compatibility
-                "api_score": api_score,  # New: explicit API score
-                "local_score": local_score,  # New: local fuzzy score
-                "combined_score": combined_score,  # New: weighted combination
-                "match_quality": match_quality,  # New: EXACT/HIGH/MEDIUM/LOW
-                "similarity_breakdown": similarity_breakdown,  # New: detailed algorithm scores
-                "Name": r.get('name'),
-                "List": r.get('source', 'USA'),
-                "Type": r.get('type', 'Entity'),
-                "Address": full_loc,
-                "Remark": r.get('remarks') or r.get('federal_register_notice', 'See official link'),
-                "Link": r.get('source_list_url')
-            })
+                formatted.append({
+                    "Score": api_score,  # Keep original for backward compatibility
+                    "api_score": api_score,  # New: explicit API score
+                    "local_score": local_score,  # New: local fuzzy score
+                    "combined_score": combined_score,  # New: weighted combination
+                    "match_quality": match_quality,  # New: EXACT/HIGH/MEDIUM/LOW
+                    "similarity_breakdown": similarity_breakdown,  # New: detailed algorithm scores
+                    "Name": r.get('name'),
+                    "List": r.get('source', 'USA'),
+                    "Type": r.get('type', 'Entity'),
+                    "Address": full_loc,
+                    "Remark": r.get('remarks') or r.get('federal_register_notice', 'See official link'),
+                    "Link": r.get('source_list_url')
+                })
+            except Exception:
+                logger.warning("Skipping malformed result entry: %r", r, exc_info=True)
+                continue
         return formatted

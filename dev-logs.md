@@ -2264,11 +2264,14 @@ cost of additional person using this
     d. tell them the core essentials of what they need to know about the product
     e. demo examples: luxuriate your life, a low key huawei subsidary company and BAAI
     f. have space for Q&A
-2. find out from Frank how to scale this solution up so that different minsitries can use this
+    g. how do you ensure there are no hallucination? how do you validate the results?
+2. find out from DTO how to scale this solution up so that different minsitries can use this
     a. what do we need?
     b. what steps are there?
     c. how much we need?
     d. what approvals we need?
+3. improvements
+    a. brave search api $5/1000 requests.
 
 ** todo list from 9 march discussions till big presentation occurs**
 1. demo uses: luxuriate your life, hidden huawei subsidary and BAAI. ensure that no bugs occur for these examples.

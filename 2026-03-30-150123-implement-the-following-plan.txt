@@ -1,0 +1,693 @@
+ ▐▛███▜▌   Claude Code v2.1.80
+▝▜█████▛▘  bedrock-claude-sonnet-4.6 · API Usage Billing
+  ▘▘ ▝▝    ~/Desktop/IMDA/International/sanctions free
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Plan to implement                                                            │
+│                                                                              │
+│ Fix: BAAI Not Returning Sanction Hit                                         │
+│                                                                              │
+│ Context                                                                      │
+│                                                                              │
+│ Searching "BAAI" (Beijing Academy of Artificial Intelligence) returns no     │
+│ sanction hit, even though BAAI is on the US BIS Entity List (available via   │
+│ the USA Trade API). The bug is in the scoring pipeline that bridges the API  │
+│ result and local fuzzy matching.                                             │
+│                                                                              │
+│ Root Cause (Two Compounding Bugs)                                            │
+│                                                                              │
+│ Bug 1 (Primary): api_weight=0.0 kills API results for abbreviation queries   │
+│                                                                              │
+│ In config.py:38:                                                             │
+│ "api_weight": 0.0,   # 0% API score (kept for reference only)                │
+│ "local_weight": 1.0  # 100% local score                                      │
+│                                                                              │
+│ When "BAAI" is sent to the USA Trade API with fuzzy_name=true, the API may   │
+│ return "Beijing Academy of Artificial Intelligence" with a reasonable        │
+│ api_score. However, combine_scores() in core/matching_utils.py:188 ignores   │
+│ the api_score entirely:                                                      │
+│ combined = (api_score * 0.0) + (local_score * 1.0)  # → local_score only     │
+│                                                                              │
+│ The local fuzzy score of "BAAI" vs "Beijing Academy of Artificial            │
+│ Intelligence" is ~5–15 — well below the 80% threshold in                     │
+│ backend/services/sanctions_service.py:72. Result is silently dropped.        │
+│                                                                              │
+│ Bug 2 (Secondary): _format_results doesn't check alt_names or acronyms       │
+│                                                                              │
+│ In agents/usa_agent.py:248, only r.get('name', '') is compared to the query  │
+│ when computing local_score. The alt_names array from the API response is     │
+│ never checked. The acronym expansion logic that exists in _search_local_db   │
+│ (checking parenthetical abbreviations) is absent from _format_results.       │
+│                                                                              │
+│ Why BAAI Specifically Fails                                                  │
+│                                                                              │
+│ BAAI is not in local_entities (only DOD_1260H and FCC_COVERED are loaded —   │
+│ 132 entities total). It exists only on the BIS Entity List via the API. The  │
+│ API entry is stored as "Beijing Academy of Artificial Intelligence" with no  │
+│ parenthetical "(BAAI)". So:                                                  │
+│ - API path: query "BAAI" → API returns entity → local_score("BAAI", "Beijing │
+│  Academy...") ≈ 10 → filtered out                                            │
+│ - Local path: not in DB → no result                                          │
+│                                                                              │
+│ Fix                                                                          │
+│                                                                              │
+│ The targeted fix is to add acronym matching to the scoring pipeline. This    │
+│ handles the case where a user queries an abbreviation and the sanctioned     │
+│ entity's full name is on the list.                                           │
+│                                                                              │
+│ Change 1: Add check_acronym_match() to core/matching_utils.py                │
+│                                                                              │
+│ Add a new function after classify_match_quality(). Key detail: common stop   │
+│ words ("of", "the", "and", etc.) must be excluded, because "Beijing Academy  │
+│ of Artificial Intelligence" → initials with "of" included would be "BAOAI",  │
+│ not "BAAI".                                                                  │
+│                                                                              │
+│ _STOP_WORDS = {'of', 'the', 'and', 'for', 'in', 'at', 'by', 'to', 'a', 'an'} │
+│                                                                              │
+│ def check_acronym_match(query: str, entity_name: str) -> bool:               │
+│     """                                                                      │
+│     Returns True if query is an acronym formed from the first letters        │
+│     of each significant word in entity_name (stop words excluded).           │
+│     Requires query length >= 3 to avoid false positives.                     │
+│                                                                              │
+│     Example: "BAAI" matches "Beijing Academy of Artificial Intelligence"     │
+│       words (stop words removed): Beijing, Academy, Artificial, Intelligence │
+│       initials: B-A-A-I = "BAAI" ✓                                           │
+│     """                                                                      │
+│     query = query.strip().upper()                                            │
+│     if len(query) < 3:                                                       │
+│         return False                                                         │
+│     words = entity_name.strip().split()                                      │
+│     initials = ''.join(                                                      │
+│         w[0].upper() for w in words                                          │
+│         if w.lower() not in _STOP_WORDS and len(w) >= 2                      │
+│     )                                                                        │
+│     return query == initials                                                 │
+│                                                                              │
+│ Change 2: Use acronym score in get_composite_score() in                      │
+│ core/matching_utils.py                                                       │
+│                                                                              │
+│ At the end of get_composite_score(), after computing composite_score, add:   │
+│ # Boost to 100 if query is an acronym of the entity name                     │
+│ if check_acronym_match(query_name, result_name):                             │
+│     return 100.0                                                             │
+│ return round(composite_score, 2)                                             │
+│                                                                              │
+│ This means if "BAAI" is an acronym of "Beijing Academy of Artificial         │
+│ Intelligence", get_composite_score() returns 100, and combined_score (which  │
+│ uses local_weight=1.0) becomes 100 — passing the 80% threshold.              │
+│                                                                              │
+│ Change 3: Also check alt_names in _format_results() in agents/usa_agent.py   │
+│                                                                              │
+│ After computing local_score = get_composite_score(query_name, result_name),  │
+│ iterate over API alt_names:                                                  │
+│ for alt_name in r.get('alt_names', []):                                      │
+│     if alt_name:                                                             │
+│         alt_score = get_composite_score(query_name, alt_name)                │
+│         local_score = max(local_score, alt_score)                            │
+│                                                                              │
+│ This handles cases where the abbreviation appears as an alternate name in    │
+│ the API response.                                                            │
+│                                                                              │
+│ Critical Files                                                               │
+│                                                                              │
+│ ┌────────────────────────┬─────────────────────────────────────────────────┐ │
+│ │          File          │                     Change                      │ │
+│ ├────────────────────────┼─────────────────────────────────────────────────┤ │
+│ │ core/matching_utils.py │ Add check_acronym_match(), use it in            │ │
+│ │                        │ get_composite_score()                           │ │
+│ ├────────────────────────┼─────────────────────────────────────────────────┤ │
+│ │ agents/usa_agent.py    │ Add alt_names check in _format_results()        │ │
+│ └────────────────────────┴─────────────────────────────────────────────────┘ │
+│                                                                              │
+│ _search_local_db() in agents/usa_agent.py already benefits automatically     │
+│ because it calls get_composite_score(), which will now include the acronym   │
+│ boost.                                                                       │
+│                                                                              │
+│ What Changes and What Doesn't                                                │
+│                                                                              │
+│ - api_weight: 0.0 stays unchanged — we fix at the local_score level instead  │
+│ - No database migrations needed                                              │
+│ - No changes to frontend, backend routes, or DB operations                   │
+│ - The fix is backward-compatible: existing full-name searches score exactly  │
+│ as before; only acronym queries are improved                                 │
+│                                                                              │
+│ Verification                                                                 │
+│                                                                              │
+│ 1. Start the backend server                                                  │
+│ 2. Search "BAAI" via the app → should return a sanctions hit for "Beijing    │
+│ Academy of Artificial Intelligence" with combined_score=100                  │
+│ 3. Confirm existing searches still work: "Huawei" → still returns            │
+│ HIGH/VERY_HIGH hits                                                          │
+│ 4. Optional unit test:                                                       │
+│ from core.matching_utils import check_acronym_match, get_composite_score     │
+│ assert check_acronym_match("BAAI", "Beijing Academy of Artificial            │
+│ Intelligence") == True                                                       │
+│ assert get_composite_score("BAAI", "Beijing Academy of Artificial            │
+│ Intelligence") == 100.0                                                      │
+│ assert check_acronym_match("AA", "Acme Analytics") == False  # too short (<  │
+│ 3)                                                                           │
+│ assert check_acronym_match("HUAWEI", "Huawei Technologies") == False  # not  │
+│ an acronym                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Now I'll implement both changes.
+
+⏺ Update(core/matching_utils.py)
+  ⎿  Added 24 lines
+      126      return round(composite_score, 2)
+      127  
+      128  
+      129 +_STOP_WORDS = {'of', 'the', 'and', 'for', 'in', 'at', 'by', 't
+          +o', 'a', 'an'}                                                
+      130 +                                                              
+      131 +                                                              
+      132 +def check_acronym_match(query: str, entity_name: str) -> bool:
+      133 +    """                                                       
+      134 +    Returns True if query is an acronym formed from the first 
+          +letters                                                       
+      135 +    of each significant word in entity_name (stop words exclud
+          +ed).                                                          
+      136 +    Requires query length >= 3 to avoid false positives.      
+      137 +                                                              
+      138 +    Example: "BAAI" matches "Beijing Academy of Artificial Int
+          +elligence"                                                    
+      139 +      words (stop words removed): Beijing, Academy, Artificial
+          +, Intelligence                                                
+      140 +      initials: B-A-A-I = "BAAI"                              
+      141 +    """                                                       
+      142 +    query = query.strip().upper()                             
+      143 +    if len(query) < 3:                                        
+      144 +        return False                                          
+      145 +    words = entity_name.strip().split()                       
+      146 +    initials = ''.join(                                       
+      147 +        w[0].upper() for w in words                           
+      148 +        if w.lower() not in _STOP_WORDS and len(w) >= 2       
+      149 +    )                                                         
+      150 +    return query == initials                                  
+      151 +                                                              
+      152 +                                                              
+      153  def classify_match_quality(combined_score, thresholds=None):
+      154      """
+      155      Classify match quality based on combined score.
+
+⏺ Update(core/matching_utils.py)
+  ⎿  Error editing file
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ The functions are defined in the right order (Python resolves at runtime). Now
+   add the acronym boost to get_composite_score:
+
+⏺ Update(core/matching_utils.py)
+  ⎿  Added 4 lines
+      123          (scores['phonetic'] * weights['phonetic'])
+      124      )
+      125  
+      126 +    # Boost to 100 if query is an acronym of the entity name  
+      127 +    if check_acronym_match(query_name, result_name):          
+      128 +        return 100.0                                          
+      129 +                                                              
+      130      return round(composite_score, 2)
+      131  
+      132  
+
+⏺ Now add the alt_names check in _format_results():
+
+⏺ Update(agents/usa_agent.py)
+  ⎿  Added 4 lines
+      248                  result_name = r.get('name', '')
+      249                  try:
+      250                      local_score = get_composite_score(query_na
+           me, result_name)
+      251 +                    for alt_name in r.get('alt_names', []):   
+      252 +                        if alt_name:                          
+      253 +                            alt_score = get_composite_score(qu
+          +ery_name, alt_name)                                           
+      254 +                            local_score = max(local_score, alt
+          +_score)                                                       
+      255                      combined_score = combine_scores(api_score,
+            local_score)
+      256                      match_quality = classify_match_quality(com
+           bined_score)
+      257                      similarity_breakdown = calculate_similarit
+           y_scores(query_name, result_name)
+
+⏺ Let me verify both changes look correct:
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Both changes are in place. Here's a summary:
+
+  core/matching_utils.py
+  - Added _STOP_WORDS set and check_acronym_match() function (lines 133–153)
+  - get_composite_score() now returns 100.0 early if the query is an acronym of
+  the entity name (lines 126–128)
+
+  agents/usa_agent.py
+  - _format_results() now iterates over alt_names from the API response and
+  takes the max score (lines 251–254)
+
+  How BAAI now works:
+  1. API returns "Beijing Academy of Artificial Intelligence"
+  2. get_composite_score("BAAI", "Beijing Academy of Artificial Intelligence") →
+   acronym check fires → returns 100.0
+  3. combine_scores(api_score, 100.0) with local_weight=1.0 → combined_score = 
+  100.0
+  4. Passes the 80% threshold → result is returned as EXACT match
+
+  Existing full-name searches (e.g. "Huawei") are unaffected —
+  check_acronym_match("HUAWEI", "Huawei Technologies") returns False since
+  "HUAWEI" ≠ "HT".
+
+✻ Worked for 1m 0s
+
+❯ BAAI still shows as 'no sanction matches found' in the base search            
+
+⏺ Let me trace the full search flow to find where BAAI is being dropped.
+  Read 2 files (ctrl+o to expand)
+
+⏺ Now let me check the sanctions service to see the full call chain:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Critical issue - usa_agent.py imports from matching_utils import ... without
+  core. prefix. Let me check where matching_utils.py actually lives:
+
+  Searched for 3 patterns, read 1 file (ctrl+o to expand)
+
+⏺ matching_utils.py only exists in core/. Let me check how core/ gets on the
+  Python path:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Bash(find "/Users/faith/Desktop/IMDA/International/sanctions
+      free/backend/services" -name "__init__.py" | xargs cat 2>/dev/null)
+  ⎿  Error: Exit code 1
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Let me check which config.py is being imported by matching_utils.py, and also
+  verify the current state of the edited file:
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Let me check the root config.py and see if there are any stale .pyc files:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Let me verify the code fix actually works by running a quick test:
+
+⏺ Bash(cd "/Users/faith/Desktop/IMDA/International/sanctions free" && python3 -c
+       "
+      import sys…)
+  ⎿  acronym match: True
+     composite score: 100.0
+     huawei test: False
+
+⏺ The code fix is confirmed working correctly. Two possible reasons BAAI is
+  still not showing:
+
+  1. Backend server needs restart — the running process has old code in memory.
+  The .pyc cache in core/__pycache__/ is stale but Python recompiles
+  automatically on restart.
+
+  2. The USA Trade API may not return BAAI for the query "BAAI" —
+  fuzzy_name=true uses the API's own fuzzy matcher, which compares character
+  similarity. "BAAI" looks nothing like "Beijing Academy of Artificial
+  Intelligence" to a character-based fuzzer, so the API may return zero results,
+   leaving our scoring fix with nothing to act on.
+
+  The quickest way to diagnose: restart the backend and check the server logs
+  for a line like Sanctions screening complete: 0 hits. If it's 0 hits, the API
+  is returning nothing — the scoring layer is never reached.
+
+  If that's the case, the reliable fix is to add BAAI directly to the local
+  local_entities table. Should I do that?
+
+⏺ Bash(cd "/Users/faith/Desktop/IMDA/International/sanctions free" && python3 -c
+       "
+      import sqlite3…)
+  ⎿  Found in local_entities: []
+     Total local entities: 132
+
+⏺ As expected, BAAI is not in local_entities. So the flow is entirely
+  API-dependent. If the API returns no results for "BAAI", the scoring fix is
+  never triggered.
+
+  First: restart the backend server. The old .pyc is stale and the running
+  process has old code.
+
+  If it's still not working after restart, the issue is the API returning zero
+  results for "BAAI". In that case, the fix needs to include adding BAAI to
+  local_entities so _search_local_db can find it and our acronym-matching score
+  boost handles the rest.
+
+  Do you want me to add BAAI to the local database as a fallback, or would you
+  prefer to restart the server first and report back?
+
+✻ Sautéed for 2m 47s
+❯ I have checked, the API does return a sanction result for BAAI on both fuzzy  
+matching on, and fuzzy matching off.                                            
+
+⏺ Good — so the API is returning the result, but it's being filtered out by the
+  scoring. This confirms our code fix is the right approach, but the backend 
+  server needs to be restarted to pick up the changes to core/matching_utils.py.
+
+  The server loaded the old matching_utils.py into memory when it started. Our
+  file changes are on disk, but Python doesn't hot-reload modules in a running
+  process.
+
+  Please restart the backend server (wherever you run it — likely uvicorn 
+  main:app or similar), then search BAAI again.
+
+❯ i restarted the backend server and rerun the result to get no sanctions hit   
+again.                                                                          
+
+⏺ Let me look at the backend entry point and add debug logging to trace exactly
+  what's happening:
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Let me run a diagnostic script that simulates exactly what the backend does
+  when processing BAAI results:
+
+⏺ Bash(cd "/Users/faith/Desktop/IMDA/International/sanctions free" && python3 -c
+       "
+      import os, sys…)
+  ⎿  sys.path[0:3]: ['/Users/faith/Desktop/IMDA/International/sanctions fre
+     e/core', '/Users/faith/Desktop/IMDA/International/sanctions free', '']
+     … +8 lines (ctrl+o to expand)
+
+⏺ Found it. The API is returning "Beijing Academy of Artificial Intelligence 
+  (BAAI)" — with the parenthetical. Our check_acronym_match computes initials
+  including "(" from "(BAAI)", giving "BAAI(" instead of "BAAI".
+
+  The fix: strip trailing parentheticals from the entity name before computing
+  initials.
+
+⏺ Update(core/matching_utils.py)
+  ⎿  Added 2 lines
+       7  See SCORING_SYSTEM.md for detailed documentation on how these a
+          lgorithms work.
+       8  """
+       9  
+      10 +import re                                                      
+      11 +                                                               
+      12  from rapidfuzz import fuzz
+      13  from rapidfuzz.distance import JaroWinkler
+      14  from metaphone import doublemetaphone
+
+⏺ Update(core/matching_utils.py)
+  ⎿  Added 3 lines, removed 1 line
+      148      query = query.strip().upper()
+      149      if len(query) < 3:
+      150          return False
+      151 -    words = entity_name.strip().split()                       
+      151 +    # Strip trailing parentheticals e.g. "(BAAI)" before compu
+          +ting initials                                                 
+      152 +    clean_name = re.sub(r'\s*\([^)]*\)\s*$', '', entity_name).
+          +strip()                                                       
+      153 +    words = clean_name.split()                                
+      154      initials = ''.join(
+      155          w[0].upper() for w in words
+      156          if w.lower() not in _STOP_WORDS and len(w) >= 2
+
+⏺ Now verify all three name formats work:
+
+⏺ Bash(cd "/Users/faith/Desktop/IMDA/International/sanctions free" && python3 -c
+       "
+      import sys…)
+  ⎿  'BAAI' vs 'Beijing Academy of Artificial Intelligence'
+       local=100.0, combined=100.0, passes_threshold=True
+     … +11 lines (ctrl+o to expand)
+
+⏺ All three variants now correctly return 100.0. Restart the backend server
+  again and BAAI should show up as a sanctions hit.
+
+  Root cause: The API stores the entity as "Beijing Academy of Artificial 
+  Intelligence (BAAI)" — with the parenthetical. Our original
+  check_acronym_match was treating "(BAAI)" as a word, so the computed initials
+  were "BAAI(" instead of "BAAI". The fix strips trailing parentheticals before
+  computing initials.
+
+✻ Worked for 2m 16s
+
+❯ i restarted the backend server and rerun the result to get no sanctions hit   
+again.                                                                          
+
+⏺ Let me add temporary debug logging to trace exactly what's happening inside
+  _format_results:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Good, import re is there. Let me delete the stale .pyc to force a fresh
+  compile, and add temporary debug prints to the agent to see what's actually
+  happening:
+
+⏺ Bash(rm "/Users/faith/Desktop/IMDA/International/sanctions
+      free/core/__pycache__/matching_utils.cpython-313.pyc" 2>/dev/null && echo
+      "deleted")
+  ⎿  deleted
+⏺ Now add a temporary debug print inside _format_results to capture exactly what
+   the API returns and what scores are computed:
+
+⏺ Update(agents/usa_agent.py)
+  ⎿  Added 2 lines
+      255                      combined_score = combine_scores(api_score,
+            local_score)
+      256                      match_quality = classify_match_quality(com
+           bined_score)
+      257                      similarity_breakdown = calculate_similarit
+           y_scores(query_name, result_name)
+      258 +                    print(f"[DEBUG] query={query_name!r} name=
+          +{result_name!r} api={api_score} local={local_score} combined={
+          +combined_score}")                                             
+      259                  except Exception as e:
+      260 +                    print(f"[DEBUG] EXCEPTION for query={query
+          +_name!r} name={result_name!r}: {e}")                          
+      261                      # Fallback to API score only if local scor
+           ing fails
+      262                      local_score = api_score
+      263                      combined_score = api_score
+
+⏺ Restart the backend server again, search "BAAI", then paste the [DEBUG] lines
+  printed in the server terminal. That will show us exactly what result_name,
+  local_score, and combined_score the agent is computing — and whether an
+  exception is being thrown.
+
+✻ Churned for 1m 3s
+
+❯ write the debug lines into a file because it is too long to copy over.        
+
+⏺ Update(agents/usa_agent.py)
+  ⎿  Added 4 lines, removed 2 lines
+      255                      combined_score = combine_scores(api_score,
+            local_score)
+      256                      match_quality = classify_match_quality(com
+           bined_score)
+      257                      similarity_breakdown = calculate_similarit
+           y_scores(query_name, result_name)
+      258 -                    print(f"[DEBUG] query={query_name!r} name=
+          -{result_name!r} api={api_score} local={local_score} combined={
+          -combined_score}")                                             
+      258 +                    with open("/tmp/sanctions_debug.log", "a")
+          + as _f:                                                       
+      259 +                        _f.write(f"query={query_name!r} name={
+          +result_name!r} api={api_score} local={local_score} combined={c
+          +ombined_score}\n")                                            
+      260                  except Exception as e:
+      260 -                    print(f"[DEBUG] EXCEPTION for query={query
+          -_name!r} name={result_name!r}: {e}")                          
+      261 +                    with open("/tmp/sanctions_debug.log", "a")
+          + as _f:                                                       
+      262 +                        _f.write(f"EXCEPTION query={query_name
+          +!r} name={result_name!r}: {e}\n")                             
+      263                      # Fallback to API score only if local scor
+           ing fails
+      264                      local_score = api_score
+      265                      combined_score = api_score
+
+⏺ Restart the backend, then:
+
+  rm -f /tmp/sanctions_debug.log
+
+  Search "BAAI", then read the log:
+
+  cat /tmp/sanctions_debug.log
+
+  Paste whatever is in that file and we'll see exactly what's going wrong.
+
+❯ what does this do:   rm -f /tmp/sanctions_debug.log                           
+
+⏺ It deletes the debug log file so it starts fresh before the next search.
+  Without it, results from a previous search would still be in the file and
+  mixed in with the new BAAI results.
+
+  - rm — remove a file
+  - -f — force (no error if the file doesn't exist yet)
+  - /tmp/sanctions_debug.log — the file path we're writing debug output to
+
+❯ cat /tmp/sanctions_debug.log the file is ready                                
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ The scoring is working — BAAI scores combined=100.0. The bug is downstream.
+  Let me check the frontend results display:
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Let me find where "no sanctions" is displayed in the frontend and check how
+  the results page fetches data:
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ The scoring is working (combined=100.0 confirmed in the log). The "No
+  sanctions matches found" is triggered by results.sanctions_data.length === 0
+  at line 549. Let me see how the results page fetches and loads that data:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ The results page fetches from GET /results/{id} (database). Scoring is
+  confirmed working. I need to check what actually gets filtered and saved. Let
+  me add debug to search_sanctions:
+
+  Read 1 file (ctrl+o to expand)
+⏺ Update(backend/services/sanctions_service.py)
+  ⎿  Added 7 lines
+      72              if result.get('combined_score', 0) >= fuzzy_thresho
+          ld
+      73          ]
+      74  
+      75 +        with open("/tmp/sanctions_debug.log", "a") as _f:      
+      76 +            _f.write(f"\n--- search_sanctions({entity_name!r}, 
+         +threshold={fuzzy_threshold}) ---\n")                           
+      77 +            _f.write(f"total results from agent: {len(results)}
+         +\n")                                                           
+      78 +            _f.write(f"after filtering (>={fuzzy_threshold}): {
+         +len(filtered_results)}\n")                                     
+      79 +            for r in results[:5]:                              
+      80 +                _f.write(f"  {r.get('Name','?')!r}: combined={r
+         +.get('combined_score','MISSING')}\n")                          
+      81 +                                                               
+      82          return filtered_results
+      83  
+      84      def calculate_risk_level(self, sanctions_hits: List[Dict[st
+          r, Any]]) -> str:
+
+⏺ Restart the backend again, then:
+
+  rm -f /tmp/sanctions_debug.log
+
+  Search "BAAI", then:
+
+  cat /tmp/sanctions_debug.log | grep -A 10 "search_sanctions"
+
+  This will show exactly how many results come back from the agent and what
+  their scores are after the filter.
+
+✻ Cooked for 3m 36s
+
+❯ this is the result shown: faith@Faiths-MacBook-Pro sanctions free % cat       
+/tmp/sanctions_debug.log | grep -A 10 "search_sanctions"                        
+--- search_sanctions('BAAI', threshold=80) ---                                  
+total results from agent: 1                                                     
+after filtering (>=80): 0                                                       
+  '?': combined=MISSING                                                         
+faith@Faiths-MacBook-Pro sanctions free %                                       
+
+⏺ The single result has no combined_score — that's an error dict slipping
+  through. Let me update the debug to show what it actually contains:
+
+⏺ Update(backend/services/sanctions_service.py)
+  ⎿  Added 1 line
+      77              _f.write(f"total results from agent: {len(results)}
+          \n")
+      78              _f.write(f"after filtering (>={fuzzy_threshold}): {
+          len(filtered_results)}\n")
+      79              for r in results[:5]:
+      80 +                _f.write(f"  keys={list(r.keys())}\n")         
+      81                  _f.write(f"  {r.get('Name','?')!r}: combined={r
+          .get('combined_score','MISSING')}\n")
+      82  
+      83          return filtered_results
+
+⏺ Restart the backend, then:
+
+  rm -f /tmp/sanctions_debug.log
+
+  Search "BAAI", then:
+
+  cat /tmp/sanctions_debug.log | grep -A 15 "search_sanctions"
+
+  The keys= line will tell us exactly what that mystery result actually is.
+
+✻ Worked for 1m 50s
+
+❯ --- search_sanctions('BAAI', threshold=80) ---                                
+total results from agent: 1                                                     
+after filtering (>=80): 0                                                       
+  keys=['error']                                                                
+  '?': combined=MISSING                                                         
+faith@Faiths-MacBook-Pro sanctions free %                                       
+                                                                                
+as I had this error in the backend: 2026-03-30 14:45:33,905 - primp - INFO -    
+response: https://yandex.com/search/site/?text=%22BAAI%22+%28sanctions+OR+%22tr 
+ade+restrictions%22+OR+%22export+controls%22%29&web=1&searchid=8439187 200      
+Python(46520,0x171ec7000) malloc: *** error for object 0xcac619f80: pointer     
+being freed was not allocated                                                   
+Python(46520,0x171ec7000) malloc: *** set a breakpoint in malloc_error_break to 
+ debug                                                                          
+
+⏺ The result is keys=['error'] — the entire API call failed and returned an
+  error dict. The malloc crash from primp is corrupting the process memory, but
+  that's happening in the OSINT step. The real question is why _search_api is
+  returning an error.
+
+  Let me show the actual error message:
+
+⏺ Update(backend/services/sanctions_service.py)
+  ⎿  Added 4 lines, removed 1 line
+      78              _f.write(f"after filtering (>={fuzzy_threshold}): {
+          len(filtered_results)}\n")
+      79              for r in results[:5]:
+      80                  _f.write(f"  keys={list(r.keys())}\n")
+      81 -                _f.write(f"  {r.get('Name','?')!r}: combined={r
+         -.get('combined_score','MISSING')}\n")                          
+      81 +                if 'error' in r:                               
+      82 +                    _f.write(f"  ERROR: {r['error']}\n")       
+      83 +                else:                                          
+      84 +                    _f.write(f"  {r.get('Name','?')!r}: combine
+         +d={r.get('combined_score','MISSING')}\n")                      
+      85  
+      86          return filtered_results
+      87  
+
+⏺ Restart, rm -f /tmp/sanctions_debug.log, search BAAI, then run the same grep.
+  The ERROR: line will tell us exactly what's failing in the API call.
+
+✻ Sautéed for 1m 3s
+
+❯ this is what i get when i rerun it: --- search_sanctions('BAAI',              
+threshold=80) ---                                                               
+total results from agent: 1                                                     
+after filtering (>=80): 0                                                       
+  keys=['error']                                                                
+  ERROR: API Error 400                                                          
+faith@Faiths-MacBook-Pro sanctions free %                                       
+  ⎿  API Error: 400 {"error":{"message":"Budget has been exceeded! Current cost:
+      200.10252794999994, Max budget: 
+     200.0","type":"budget_exceeded","param":null,"code":"400"}}
+
+❯ this is what i get when i rerun it: --- search_sanctions('BAAI',              
+threshold=80) ---                                                               
+total results from agent: 1                                                     
+after filtering (>=80): 0                                                       
+  keys=['error']                                                                
+  ERROR: API Error 400                                                          
+faith@Faiths-MacBook-Pro sanctions free %                                       
+  ⎿  API Error: 400 {"error":{"message":"Budget has been exceeded! Current cost:
+      200.10252794999994, Max budget: 
+     200.0","type":"budget_exceeded","param":null,"code":"400"}}

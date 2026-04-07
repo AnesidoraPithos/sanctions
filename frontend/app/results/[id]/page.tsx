@@ -1,0 +1,1147 @@
+/**
+ * Results Page - Display Entity Background Research Results
+ *
+ * Shows sanctions hits, media intelligence, risk level, and AI-generated report.
+ */
+
+'use client';
+
+import { use, useEffect, useState } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
+import { ResultsResponse, SanctionsHit, MediaHit, NetworkData, FinancialIntelligence, FinancialFlow, DirectorPivot, InfrastructureHit, BeneficialOwner } from '@/lib/types';
+import ManagementNetworkTab from '@/components/ManagementNetworkTab';
+import InfrastructureTab from '@/components/InfrastructureTab';
+import BeneficialOwnershipTab from '@/components/BeneficialOwnershipTab';
+import { api } from '@/lib/api-client';
+import RiskBadge from '@/components/RiskBadge';
+import TierBadge from '@/components/TierBadge';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import NetworkGraph from '@/components/NetworkGraph';
+import ExportControls from '@/components/ExportControls';
+import SaveButton from '@/components/SaveButton';
+import { format } from 'date-fns';
+
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+function renderMarkdown(text: string): string {
+  const lines = text.split('\n');
+  let html = '';
+  let inOl = false;
+  let inUl = false;
+
+  const closeList = () => {
+    if (inOl) { html += '</ol>'; inOl = false; }
+    if (inUl) { html += '</ul>'; inUl = false; }
+  };
+
+  const processInline = (s: string): string => {
+    // [Source: https://...] → compact citation link
+    s = s.replace(/\[Source:\s*(https?:\/\/[^\]]+)\]/g, '<a href="$1" target="_blank">[Source]</a>');
+    // [text](url) → hyperlink
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+    // **text** → bold
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // bare URLs (not already inside href="...")
+    s = s.replace(/(?<!['"=])(https?:\/\/[^\s<"]+)/g, '<a href="$1" target="_blank">$1</a>');
+    return s;
+  };
+
+  for (const line of lines) {
+    if (line.startsWith('### ')) {
+      closeList();
+      html += `<h3>${processInline(line.slice(4))}</h3>\n`;
+    } else if (line.startsWith('## ')) {
+      closeList();
+      html += `<h2>${processInline(line.slice(3))}</h2>\n`;
+    } else if (line.startsWith('# ')) {
+      closeList();
+      html += `<h1>${processInline(line.slice(2))}</h1>\n`;
+    } else if (/^\d+\.\s/.test(line)) {
+      if (inUl) { html += '</ul>'; inUl = false; }
+      if (!inOl) { html += '<ol>'; inOl = true; }
+      html += `<li>${processInline(line.replace(/^\d+\.\s/, ''))}</li>\n`;
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      if (inOl) { html += '</ol>'; inOl = false; }
+      if (!inUl) { html += '<ul>'; inUl = true; }
+      html += `<li>${processInline(line.slice(2))}</li>\n`;
+    } else if (line.trim() === '') {
+      closeList();
+      html += '<br/>\n';
+    } else if (line.startsWith('Risk Level:')) {
+      closeList();
+      const parts = line.split('|');
+      const riskHeader = parts[0].trim();
+      const scoreComponents = parts.slice(1);
+      html += `<div style="background:#1a1f2e;border-left:4px solid #f59e0b;padding:12px 16px;margin:12px 0;border-radius:4px">`;
+      html += `<div style="color:#f59e0b;font-weight:bold;margin-bottom:8px">${processInline(riskHeader)}</div>`;
+      for (const comp of scoreComponents) {
+        if (comp.trim()) {
+          html += `<div style="color:#d1d5db;margin:2px 0">&bull; ${processInline(comp.trim())}</div>`;
+        }
+      }
+      html += `</div>\n`;
+    } else {
+      closeList();
+      html += `<p>${processInline(line)}</p>\n`;
+    }
+  }
+
+  closeList();
+  return html;
+}
+
+export default function ResultsPage({ params }: PageProps) {
+  const resolvedParams = use(params);
+  const searchId = resolvedParams.id;
+
+  const [results, setResults] = useState<ResultsResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  type TabType = 'sanctions' | 'media' | 'report' | 'financial' | 'network-relations' | 'financial-flows' | 'management-network' | 'infrastructure' | 'beneficial-ownership';
+  const [activeTab, setActiveTab] = useState<TabType>('sanctions');
+
+  useEffect(() => {
+    const fetchResults = async () => {
+      try {
+        const data = await api.getResults(searchId);
+        setResults(data);
+        setIsLoading(false);
+      } catch (err: unknown) {
+        console.error('Error fetching results:', err);
+        const errorMessage =
+          (err as { data?: { message?: string } })?.data?.message ||
+          'Failed to load results';
+        setError(errorMessage);
+        setIsLoading(false);
+      }
+    };
+
+    fetchResults();
+  }, [searchId]);
+
+  // Set default active tab based on tier
+  useEffect(() => {
+    if (results && (results.tier === 'network' || results.tier === 'deep')) {
+      setActiveTab('network-relations');
+    }
+  }, [results]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0b1121] text-white flex items-center justify-center">
+        <LoadingSpinner size="lg" message="Loading results..." />
+      </div>
+    );
+  }
+
+  if (error || !results) {
+    return (
+      <div className="min-h-screen bg-[#0b1121] text-white">
+        <div className="max-w-4xl mx-auto px-4 py-16">
+          <div className="bg-red-900/20 border border-red-700 rounded-lg p-8 text-center">
+            <h1 className="text-2xl font-bold text-red-400 mb-4">Error Loading Results</h1>
+            <p className="text-red-300 mb-6">{error}</p>
+            <Link
+              href="/"
+              className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+            >
+              Return to Search
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Extract media data
+  const mediaData: MediaHit[] = results.research_data.media_data || [];
+  const officialSources = results.research_data.media_intelligence?.official_sources || [];
+  const generalMedia = results.research_data.media_intelligence?.general_media || [];
+  const allMedia = [...officialSources, ...generalMedia, ...mediaData];
+
+  return (
+    <div className="min-h-screen bg-[#0b1121] text-white">
+      {/* Header */}
+      <header className="border-b border-gray-800 bg-[#0d1425]">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-4 lg:px-6 py-6">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+            <Link href="/" className="flex items-center gap-3">
+              <Image src="/bear-logo.png" alt="BEAR² Logo" width={144} height={144} className="rounded" />
+              <div>
+                <h1 className="text-2xl font-bold font-mono tracking-tight text-blue-400">
+                  BEAR<sup>2</sup>
+                </h1>
+                <p className="text-sm text-gray-400">
+                  Background Entity Assessment &amp; Risk Research
+                </p>
+              </div>
+            </Link>
+            <div className="flex flex-wrap items-center gap-3">
+              <SaveButton
+                searchId={searchId}
+                initialSaved={results.is_saved ?? false}
+                initialLabel={results.save_label}
+              />
+              <ExportControls searchId={searchId} />
+              <Link
+                href="/"
+                className="text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap"
+              >
+                ← New Search
+              </Link>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-screen-2xl mx-auto px-4 sm:px-4 lg:px-6 py-8">
+        {/* Summary Card */}
+        <div className="bg-[#0d1425] border border-gray-800 rounded-xl p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div>
+              <p className="text-sm text-gray-400 mb-2">Entity Name</p>
+              <p className="text-lg font-semibold">{results.entity_name}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-400 mb-2">Risk Level</p>
+              <RiskBadge
+                level={results.risk_level}
+                size="lg"
+                explanation={results.risk_explanation}
+              />
+            </div>
+            <div>
+              <p className="text-sm text-gray-400 mb-2">Tier</p>
+              <div className="flex items-center gap-2">
+                <TierBadge tier={results.tier} />
+                {(results.tier === 'network' || results.tier === 'deep') && (
+                  <span className="text-sm text-blue-400">
+                    {results.metadata?.network_depth ? `(${results.metadata.network_depth}L)` : ''}
+                  </span>
+                )}
+                {results.tier === 'deep' && (
+                  <span className="text-sm px-2 py-0.5 bg-purple-900/40 border border-purple-600 text-purple-300 rounded font-semibold">
+                    DEEP RESEARCH
+                  </span>
+                )}
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-gray-400 mb-2">Timestamp</p>
+              <p className="text-sm">{format(new Date(results.timestamp), 'PPpp')}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-800">
+            <div>
+              <p className="text-2xl font-bold text-blue-400">{results.sanctions_hits}</p>
+              <p className="text-sm text-gray-400">Sanctions Hits</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-purple-400">{allMedia.length}</p>
+              <p className="text-sm text-gray-400">Media Hits</p>
+            </div>
+
+            {/* Show network/deep tier stats if available */}
+            {(results.tier === 'network' || results.tier === 'deep') ? (
+              <>
+                <div>
+                  <p className="text-2xl font-bold text-green-400">
+                    {results.subsidiaries?.length || 0}
+                  </p>
+                  <p className="text-sm text-gray-400">Subsidiaries</p>
+                </div>
+                {results.tier === 'deep' ? (
+                  <>
+                    <div>
+                      <p className="text-2xl font-bold text-purple-400">
+                        {results.financial_flows?.length || 0}
+                      </p>
+                      <p className="text-sm text-gray-400">Financial Flows</p>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <p className="text-2xl font-bold text-orange-400">
+                      {((results.financial_intelligence as FinancialIntelligence)?.directors?.length || 0) +
+                       ((results.financial_intelligence as FinancialIntelligence)?.shareholders?.length || 0)}
+                    </p>
+                    <p className="text-sm text-gray-400">People</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div>
+                  <p className="text-2xl font-bold text-green-400">{officialSources.length}</p>
+                  <p className="text-sm text-gray-400">Official Sources</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-yellow-400">{generalMedia.length}</p>
+                  <p className="text-sm text-gray-400">General Media</p>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Phase 4 stats row — deep tier only */}
+          {results.tier === 'deep' && (results.director_pivots?.length || results.infrastructure?.length || results.beneficial_owners?.length) ? (
+            <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-800">
+              <div>
+                <p className="text-2xl font-bold text-violet-400">
+                  {(results.director_pivots || []).reduce((sum, p) => sum + ((p as DirectorPivot).companies?.length || 0), 0)}
+                </p>
+                <p className="text-sm text-gray-400">Interlocked Companies</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-cyan-400">
+                  {results.infrastructure?.length || 0}
+                </p>
+                <p className="text-sm text-gray-400">Domains Analysed</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-emerald-400">
+                  {results.beneficial_owners?.length || 0}
+                </p>
+                <p className="text-sm text-gray-400">UBOs Found</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Network / Deep Tier Confirmation Banner */}
+        {(results.tier === 'network' || results.tier === 'deep') && (
+          <div className="mb-6 bg-blue-900/20 border border-blue-700 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-blue-400 text-xl">🔬</span>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-blue-400 mb-1">
+                  {results.tier === 'deep' ? 'Deep Tier Research Completed' : 'Network Tier Research Completed'}
+                </h4>
+                <p className="text-sm text-blue-300">
+                  {results.metadata?.network_depth && (results.metadata.network_depth as number) > 1
+                    ? `Multi-level corporate structure analysis performed (${results.metadata.network_depth} levels deep).`
+                    : 'Corporate structure analysis performed.'
+                  }
+                  {' '}
+                  {results.subsidiaries && results.subsidiaries.length > 0 ? (
+                    <>
+                      Discovered {results.subsidiaries.length} {results.subsidiaries.length === 1 ? 'entity' : 'entities'}
+                      {results.network_data && (results.network_data as NetworkData).statistics && (() => {
+                        const stats = (results.network_data as NetworkData).statistics;
+                        const depth = results.metadata?.network_depth as number || 1;
+                        const parts = [];
+
+                        if (stats.level_1_count !== undefined && stats.level_1_count > 0) {
+                          parts.push(`${stats.level_1_count} level 1`);
+                        }
+                        if (depth >= 2 && stats.level_2_count !== undefined) {
+                          if (stats.level_2_count > 0) {
+                            parts.push(`${stats.level_2_count} level 2`);
+                          } else {
+                            parts.push(`0 level 2`);
+                          }
+                        }
+                        if (depth >= 3 && stats.level_3_count !== undefined) {
+                          if (stats.level_3_count > 0) {
+                            parts.push(`${stats.level_3_count} level 3`);
+                          } else {
+                            parts.push(`0 level 3`);
+                          }
+                        }
+
+                        return parts.length > 0 ? ` (${parts.join(', ')})` : '';
+                      })()}.
+                    </>
+                  ) : (
+                    <>
+                      No subsidiaries discovered for this entity.
+                      {results.metadata?.network_depth && (results.metadata.network_depth as number) > 1 && (
+                        <> Searched {results.metadata.network_depth} level(s) deep.</>
+                      )}
+                    </>
+                  )}
+                  {' '}
+                  {(results.financial_intelligence as FinancialIntelligence)?.directors && (results.financial_intelligence as FinancialIntelligence).directors.length > 0
+                    ? `Found ${(results.financial_intelligence as FinancialIntelligence).directors.length} director(s) and ${(results.financial_intelligence as FinancialIntelligence)?.shareholders?.length || 0} shareholder(s).`
+                    : ''
+                  }
+                </p>
+                {Array.isArray(results.metadata?.data_sources_used) && (
+                  <p className="text-sm text-blue-300/70 mt-1">
+                    <strong>Data sources checked:</strong>{' '}
+                    {(results.metadata.data_sources_used as string[]).map((source: string) => {
+                      const displayName = source === 'opencorporates_api' ? 'OpenCorporates API' :
+                                          source === 'sec_edgar' ? 'SEC EDGAR' :
+                                          source === 'wikipedia' ? 'Wikipedia' :
+                                          source === 'duckduckgo' ? 'DuckDuckGo' : source;
+                      return displayName;
+                    }).join(', ')}
+                  </p>
+                )}
+                {results.metadata?.network_depth && (results.metadata.network_depth as number) > 1 ? (
+                  <p className="text-sm text-blue-300/70 mt-2">
+                    <strong>Search limits:</strong>{' '}
+                    {(results.metadata.network_depth as number) >= 2 && (
+                      <>Top {results.metadata.max_level_2_searches || 20} subsidiaries searched for level 2</>
+                    )}
+                    {(results.metadata.network_depth as number) >= 3 && (
+                      <>, top {results.metadata.max_level_3_searches || 10} for level 3</>
+                    )}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Warnings Banner (Network Tier) */}
+        {results.warnings && results.warnings.length > 0 && (
+          <div className="mb-6 bg-yellow-900/20 border border-yellow-700 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-yellow-400 text-xl">⚠️</span>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-yellow-400 mb-2">
+                  Data Source Limitations
+                </h4>
+                <ul className="text-sm text-yellow-300 space-y-1">
+                  {results.warnings.map((warning, idx) => (
+                    <li key={idx}>• {warning.message}</li>
+                  ))}
+                </ul>
+                {results.data_sources_used && results.data_sources_used.length > 0 && (
+                  <p className="text-sm text-yellow-300/70 mt-2">
+                    Data sources used: {results.data_sources_used.join(', ')}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="border-b border-gray-800 mb-6">
+          <nav className="flex gap-6">
+            <button
+              onClick={() => setActiveTab('sanctions')}
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'sanctions'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-gray-400 hover:text-white'
+              }`}
+            >
+              Sanctions Hits ({results.sanctions_hits})
+            </button>
+            <button
+              onClick={() => setActiveTab('media')}
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'media'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-gray-400 hover:text-white'
+              }`}
+            >
+              Media Intelligence ({allMedia.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('report')}
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'report'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-gray-400 hover:text-white'
+              }`}
+            >
+              Intelligence Report
+            </button>
+
+            {/* Network / Deep Tier Tabs */}
+            {(results.tier === 'network' || results.tier === 'deep') && results.network_data && (
+              <>
+                <button
+                  onClick={() => setActiveTab('financial')}
+                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'financial'
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-transparent text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Financial Intelligence
+                </button>
+                <button
+                  onClick={() => setActiveTab('network-relations')}
+                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'network-relations'
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-transparent text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Network Relations (
+                    {(results.network_data?.parent_info ? 1 : 0) +
+                     (results.subsidiaries?.length || 0) +
+                     ((results.network_data as any)?.sisters?.length || 0)}
+                  )
+                </button>
+
+                {/* Financial Flows tab — deep tier only */}
+                {results.tier === 'deep' && (
+                  <button
+                    onClick={() => setActiveTab('financial-flows')}
+                    className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'financial-flows'
+                        ? 'border-purple-500 text-purple-400'
+                        : 'border-transparent text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Financial Flows ({results.financial_flows?.length || 0})
+                  </button>
+                )}
+
+                {/* Phase 4 tabs — deep tier only */}
+                {results.tier === 'deep' && results.director_pivots && (
+                  <button
+                    onClick={() => setActiveTab('management-network')}
+                    className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                      activeTab === 'management-network'
+                        ? 'border-violet-500 text-violet-400'
+                        : 'border-transparent text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Management Network ({results.director_pivots.length})
+                  </button>
+                )}
+                {results.tier === 'deep' && results.infrastructure && (
+                  <button
+                    onClick={() => setActiveTab('infrastructure')}
+                    className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'infrastructure'
+                        ? 'border-cyan-500 text-cyan-400'
+                        : 'border-transparent text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Infrastructure ({results.infrastructure.length})
+                  </button>
+                )}
+                {results.tier === 'deep' && results.beneficial_owners && (
+                  <button
+                    onClick={() => setActiveTab('beneficial-ownership')}
+                    className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                      activeTab === 'beneficial-ownership'
+                        ? 'border-emerald-500 text-emerald-400'
+                        : 'border-transparent text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Beneficial Ownership ({results.beneficial_owners.length})
+                  </button>
+                )}
+              </>
+            )}
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        <div>
+          {/* Sanctions Tab */}
+          {activeTab === 'sanctions' && (
+            <div className="space-y-4">
+              {results.sanctions_data.length === 0 ? (
+                <div className="bg-green-900/20 border border-green-700 rounded-lg p-8 text-center">
+                  <p className="text-green-400">✓ No sanctions matches found</p>
+                </div>
+              ) : (
+                results.sanctions_data.map((hit: SanctionsHit, idx: number) => (
+                  <div key={idx} className="bg-[#0d1425] border border-gray-800 rounded-lg p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-lg font-semibold">{hit.name}</h3>
+                          <span className={`text-sm px-2 py-1 rounded ${
+                            hit.match_quality === 'EXACT' ? 'bg-red-600' :
+                            hit.match_quality === 'HIGH' ? 'bg-orange-600' :
+                            hit.match_quality === 'MEDIUM' ? 'bg-yellow-600' :
+                            'bg-gray-600'
+                          }`}>
+                            {hit.match_quality} ({hit.combined_score.toFixed(0)}%)
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                          <div>
+                            <span className="text-gray-400">List:</span>
+                            <span className="ml-2 text-white">{hit.list}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Type:</span>
+                            <span className="ml-2 text-white">{hit.type}</span>
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-400 mb-2">
+                          <span className="font-medium">Address:</span> {hit.address}
+                        </p>
+                        <p className="text-sm text-gray-300">{hit.remark}</p>
+                      </div>
+                    </div>
+                    {hit.link && (
+                      <a
+                        href={hit.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300 text-sm mt-3 inline-block"
+                      >
+                        View Source →
+                      </a>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Media Tab */}
+          {activeTab === 'media' && (
+            <div className="space-y-4">
+              {allMedia.length === 0 ? (
+                <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-8 text-center">
+                  <p className="text-gray-400">No media intelligence found</p>
+                </div>
+              ) : (
+                allMedia.map((hit: MediaHit, idx: number) => (
+                  <div key={idx} className="bg-[#0d1425] border border-gray-800 rounded-lg p-5">
+                    <div className="flex items-start gap-3 mb-2">
+                      <span className={`text-sm px-2 py-1 rounded flex-shrink-0 ${
+                        hit.source_type === 'official' ? 'bg-green-600' : 'bg-blue-600'
+                      }`}>
+                        {hit.source_type === 'official' ? 'OFFICIAL' : 'MEDIA'}
+                      </span>
+                      <h3 className="text-base font-semibold flex-1">{hit.title}</h3>
+                    </div>
+                    <p className="text-sm text-gray-400 mb-3">{hit.snippet}</p>
+                    {hit.relevance && (
+                      <p className="text-sm text-green-400 mb-2">✓ {hit.relevance}</p>
+                    )}
+                    <a
+                      href={hit.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 text-sm"
+                    >
+                      Read More →
+                    </a>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Intelligence Report Tab */}
+          {activeTab === 'report' && (
+            <div className="bg-[#0d1425] border border-gray-800 rounded-lg p-6">
+              {results.intelligence_report ? (
+                <div
+                  className="prose prose-invert max-w-none prose-headings:text-white prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-p:text-gray-300 prose-a:text-blue-400 prose-strong:text-white prose-ul:text-gray-300"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(results.intelligence_report) }}
+                />
+              ) : (
+                <p className="text-gray-400 text-center py-8">
+                  No intelligence report available
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Financial Intelligence Tab */}
+          {activeTab === 'financial' && results.financial_intelligence && (() => {
+            const financialIntel = results.financial_intelligence as FinancialIntelligence;
+            return (
+              <div className="space-y-6">
+                {/* Directors & Officers */}
+                {financialIntel.directors && financialIntel.directors.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4">
+                      Directors & Officers ({financialIntel.directors.length})
+                    </h3>
+                    <div className="bg-[#0d1425] border border-gray-800 rounded-lg overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-900/50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Name</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Title</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Nationality</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Sanctions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-800">
+                            {financialIntel.directors.map((director, idx) => (
+                              <tr key={idx} className="hover:bg-gray-900/30">
+                                <td className="px-4 py-3 text-white">{director.name}</td>
+                                <td className="px-4 py-3 text-gray-300">{director.title || '-'}</td>
+                                <td className="px-4 py-3 text-gray-300">{director.nationality || '-'}</td>
+                                <td className="px-4 py-3">
+                                  {director.sanctions_hits && director.sanctions_hits > 0 ? (
+                                    <span className="text-sm px-2 py-1 bg-red-900/30 text-red-400 rounded">
+                                      {director.sanctions_hits} hit(s)
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-500 text-sm">None</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Shareholders */}
+                {financialIntel.shareholders && financialIntel.shareholders.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4">
+                      Major Shareholders ({financialIntel.shareholders.length})
+                    </h3>
+                    <div className="bg-[#0d1425] border border-gray-800 rounded-lg overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-900/50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Name</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Type</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Ownership %</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Jurisdiction</th>
+                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Sanctions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-800">
+                            {financialIntel.shareholders.map((shareholder, idx) => (
+                              <tr key={idx} className="hover:bg-gray-900/30">
+                                <td className="px-4 py-3 text-white">{shareholder.name}</td>
+                                <td className="px-4 py-3 text-gray-300">{shareholder.type || '-'}</td>
+                                <td className="px-4 py-3 text-gray-300">{shareholder.ownership_percentage || 0}%</td>
+                                <td className="px-4 py-3 text-gray-300">{shareholder.jurisdiction || '-'}</td>
+                                <td className="px-4 py-3">
+                                  {shareholder.sanctions_hits && shareholder.sanctions_hits > 0 ? (
+                                    <span className="text-sm px-2 py-1 bg-red-900/30 text-red-400 rounded">
+                                      {shareholder.sanctions_hits} hit(s)
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-500 text-sm">None</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Transactions */}
+                {financialIntel.transactions && financialIntel.transactions.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4">
+                      Related Party Transactions ({financialIntel.transactions.length})
+                    </h3>
+                    <div className="space-y-3">
+                      {financialIntel.transactions.map((transaction, idx) => (
+                        <div key={idx} className="bg-[#0d1425] border border-gray-800 rounded-lg p-4">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-400 text-sm">Type:</span>
+                              <p className="text-white">{transaction.transaction_type || '-'}</p>
+                            </div>
+                            <div>
+                              <span className="text-gray-400 text-sm">Counterparty:</span>
+                              <p className="text-white">{transaction.counterparty || '-'}</p>
+                            </div>
+                            <div>
+                              <span className="text-gray-400 text-sm">Amount:</span>
+                              <p className="text-white">
+                                {transaction.currency} {transaction.amount?.toLocaleString() || '-'}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-gray-400 text-sm">Date:</span>
+                              <p className="text-white">{transaction.transaction_date || '-'}</p>
+                            </div>
+                          </div>
+                          {transaction.purpose && (
+                            <p className="text-sm text-gray-400 mt-3">
+                              <span className="font-medium">Purpose:</span> {transaction.purpose}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* No Financial Intelligence */}
+                {(!financialIntel.directors || financialIntel.directors.length === 0) &&
+                 (!financialIntel.shareholders || financialIntel.shareholders.length === 0) &&
+                 (!financialIntel.transactions || financialIntel.transactions.length === 0) && (
+                  <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-8 text-center">
+                    <p className="text-gray-400">
+                      No financial intelligence data found. This is normal for private companies or non-US entities.
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Financial Flows Tab (deep tier only) */}
+          {activeTab === 'financial-flows' && (
+            <div className="space-y-4">
+              {results.financial_flows && results.financial_flows.length > 0 ? (
+                <>
+                  <p className="text-sm text-gray-400">
+                    {results.financial_flows.length} financial flow{results.financial_flows.length !== 1 ? 's' : ''} identified
+                    from federal procurement records and related-party transactions.
+                  </p>
+                  <div className="bg-[#0d1425] border border-gray-800 rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-900/50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Source</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Target</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Type</th>
+                            <th className="px-4 py-3 text-right text-sm font-medium text-gray-400 uppercase">Amount</th>
+                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-800">
+                          {(results.financial_flows as FinancialFlow[]).map((flow, idx) => (
+                            <tr key={idx} className="hover:bg-gray-900/30">
+                              <td className="px-4 py-3 text-white max-w-[200px] truncate" title={flow.source}>
+                                {flow.source}
+                              </td>
+                              <td className="px-4 py-3 text-gray-300 max-w-[200px] truncate" title={flow.target}>
+                                {flow.target}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="text-sm px-2 py-0.5 bg-purple-900/30 text-purple-300 rounded capitalize">
+                                  {flow.type.replace(/_/g, ' ')}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right text-gray-300 font-mono text-sm">
+                                {flow.amount != null
+                                  ? `${flow.currency || 'USD'} ${Number(flow.amount).toLocaleString()}`
+                                  : '—'}
+                              </td>
+                              <td className="px-4 py-3 text-gray-400 text-sm">{flow.date || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-8 text-center">
+                  <p className="text-gray-400">
+                    No financial flows found. This may be normal for private or non-US entities.
+                  </p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Sources checked: USAspending.gov (federal procurement) and SEC EDGAR related-party transactions.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Management Network Tab (Phase 4) */}
+          {activeTab === 'management-network' && (
+            <ManagementNetworkTab
+              directorPivots={(results.director_pivots || []) as DirectorPivot[]}
+            />
+          )}
+
+          {/* Infrastructure Tab (Phase 4) */}
+          {activeTab === 'infrastructure' && (
+            <InfrastructureTab
+              infrastructure={(results.infrastructure || []) as InfrastructureHit[]}
+            />
+          )}
+
+          {/* Beneficial Ownership Tab (Phase 4) */}
+          {activeTab === 'beneficial-ownership' && (
+            <BeneficialOwnershipTab
+              beneficialOwners={(results.beneficial_owners || []) as BeneficialOwner[]}
+            />
+          )}
+
+          {/* Network Relations Tab (unified Network Graph + Subsidiaries) */}
+          {activeTab === 'network-relations' && results.network_data && (() => {
+            // Entity Card Component (reusable for subsidiaries/sisters)
+            const EntityCard = ({ entity, showOwnership = false }: { entity: any; showOwnership?: boolean }) => {
+              // Helper function to format source name
+              const formatSourceName = (source: string) => {
+                switch (source) {
+                  case 'sec_edgar': return 'SEC EDGAR';
+                  case 'opencorporates_api': return 'OpenCorporates';
+                  case 'wikipedia': return 'Wikipedia';
+                  case 'duckduckgo': return 'DuckDuckGo';
+                  case 'google': return 'Google';
+                  default: return source || 'Unknown';
+                }
+              };
+
+              return (
+                <div className="bg-[#0d1425] border border-gray-800 rounded-lg p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-semibold text-white">{entity.name}</h3>
+                        {entity.level && (
+                          <span className="text-sm px-2 py-1 bg-blue-900/30 text-blue-300 rounded">
+                            Level {entity.level}
+                          </span>
+                        )}
+                        {entity.relationship === 'sister' && (
+                          <span className="text-sm px-2 py-1 bg-purple-900/30 text-purple-300 rounded">
+                            Sister Company
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Data grid - removed ownership, added source */}
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm mb-3">
+                        <div>
+                          <span className="text-gray-400">Jurisdiction:</span>
+                          <span className="ml-2 text-white">{entity.jurisdiction || '-'}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Status:</span>
+                          <span className="ml-2 text-white">{entity.status || '-'}</span>
+                        </div>
+                        {/* Source with link */}
+                        <div>
+                          <span className="text-gray-400">Source:</span>
+                          {entity.reference_url ? (
+                            <a
+                              href={entity.reference_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ml-2 text-blue-400 hover:underline text-sm"
+                            >
+                              {formatSourceName(entity.source)}
+                            </a>
+                          ) : (
+                            <span className="ml-2 text-white">
+                              {formatSourceName(entity.source)}
+                            </span>
+                          )}
+                        </div>
+                        {/* Optional: Only show ownership if explicitly requested and not null */}
+                        {showOwnership && entity.ownership_percentage !== undefined && entity.ownership_percentage > 0 && (
+                          <div>
+                            <span className="text-gray-400">Ownership:</span>
+                            <span className="ml-2 text-white">{entity.ownership_percentage}%</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Sanctions warning */}
+                      {entity.sanctions_hits !== undefined && entity.sanctions_hits > 0 && (
+                        <div className="mt-3 p-2 bg-red-900/20 border border-red-700 rounded">
+                          <span className="text-red-400 font-semibold text-sm">
+                            ⚠️ {entity.sanctions_hits} sanctions hit(s)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            };
+
+            // Determine entity type
+            const hasParent = results.network_data?.parent_info;
+            const hasSubsidiaries = results.subsidiaries && results.subsidiaries.length > 0;
+            const hasSisters = (results.network_data as any)?.sisters?.length > 0;
+            const hasNetworkGraph = (results.network_data as NetworkData).nodes && (results.network_data as NetworkData).nodes.length > 0;
+
+            return (
+              <div className="space-y-6">
+                {/* Section 1: Network Graph (always at top if available) */}
+                {hasNetworkGraph && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4">
+                      Network Visualization
+                    </h3>
+                    <NetworkGraph
+                      networkData={results.network_data as NetworkData}
+                      height={600}
+                    />
+                  </div>
+                )}
+
+                {/* Section 2: Smart entity display based on type */}
+                {/* Case 1: Entity is a CHILD (has parent company) */}
+                {hasParent ? (
+                  <>
+                    {/* Display parent company first */}
+                    <div className="bg-purple-900/20 border border-purple-700 rounded-lg p-5">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-purple-400 mb-3">
+                            Parent Company Discovered
+                          </h3>
+                          <div className="bg-[#0d1425] border border-purple-800 rounded-lg p-4">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h4 className="text-xl font-semibold text-white">
+                                {(results.network_data.parent_info as any).name}
+                              </h4>
+                              <span className="text-sm px-2 py-1 bg-purple-900/30 text-purple-300 rounded">
+                                Parent
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <span className="text-gray-400">Jurisdiction:</span>
+                                <span className="ml-2 text-white">
+                                  {(results.network_data.parent_info as any).jurisdiction || '-'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Relationship:</span>
+                                <span className="ml-2 text-white capitalize">
+                                  {(results.network_data.parent_info as any).relationship || 'Parent'}
+                                </span>
+                              </div>
+                              {(results.network_data.parent_info as any).confidence && (
+                                <div>
+                                  <span className="text-gray-400">Confidence:</span>
+                                  <span className="ml-2 text-white capitalize">
+                                    {(results.network_data.parent_info as any).confidence}
+                                  </span>
+                                </div>
+                              )}
+                              {((results.network_data.parent_info as any).reference_url ||
+                                (results.network_data.parent_info as any).source) && (
+                                <div className="col-span-2">
+                                  <span className="text-gray-400">Source:</span>
+                                  {(results.network_data.parent_info as any).reference_url ? (
+                                    <a
+                                      href={(results.network_data.parent_info as any).reference_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="ml-2 text-blue-400 hover:underline text-sm"
+                                    >
+                                      {(results.network_data.parent_info as any).source === 'sec_edgar' ? 'SEC EDGAR' :
+                                       (results.network_data.parent_info as any).source === 'opencorporates_api' ? 'OpenCorporates' :
+                                       (results.network_data.parent_info as any).source === 'wikipedia' ? 'Wikipedia' :
+                                       (results.network_data.parent_info as any).source === 'duckduckgo' ? 'DuckDuckGo' :
+                                       (results.network_data.parent_info as any).source || 'View Source'}
+                                    </a>
+                                  ) : (
+                                    <span className="ml-2 text-gray-300 text-sm capitalize">
+                                      {(results.network_data.parent_info as any).source === 'intelligence_report'
+                                        ? 'Intelligence Report (no direct URL available)'
+                                        : (results.network_data.parent_info as any).source}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-500 mt-3">
+                              This entity is owned by or is a subsidiary of the parent company shown above.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Display sister companies */}
+                    {hasSisters ? (
+                      <div>
+                        <h3 className="text-lg font-semibold text-white mb-4">
+                          Sister Companies ({(results.network_data as any).sisters.length})
+                        </h3>
+                        <p className="text-sm text-gray-400 mb-4">
+                          Companies owned by the same parent company ({(results.network_data.parent_info as any).name})
+                        </p>
+                        <div className="space-y-3">
+                          {(results.network_data as any).sisters.map((sister: any, idx: number) => (
+                            <EntityCard key={idx} entity={sister} showOwnership={false} />
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-6 text-center">
+                        <p className="text-gray-400">
+                          No sister companies discovered. This may be the only subsidiary of {(results.network_data.parent_info as any).name}.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Display subsidiaries of this entity, if any */}
+                    {hasSubsidiaries && (
+                      <div>
+                        <h3 className="text-lg font-semibold text-white mb-4">
+                          Subsidiaries ({results.subsidiaries!.length})
+                        </h3>
+                        <p className="text-sm text-gray-400 mb-4">
+                          Companies owned or controlled by {results.entity_name}
+                        </p>
+                        <div className="space-y-3">
+                          {results.subsidiaries!.map((subsidiary: any, idx: number) => (
+                            <EntityCard key={idx} entity={subsidiary} showOwnership={false} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : hasSubsidiaries ? (
+                  /* Case 2: Entity is a PARENT (has subsidiaries but no parent) */
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-4">
+                      Subsidiaries ({results.subsidiaries!.length})
+                    </h3>
+                    <p className="text-sm text-gray-400 mb-4">
+                      Companies owned or controlled by {results.entity_name}
+                    </p>
+                    <div className="space-y-3">
+                      {results.subsidiaries!.map((subsidiary: any, idx: number) => (
+                        <EntityCard key={idx} entity={subsidiary} showOwnership={false} />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  /* Case 3: STANDALONE entity (no parent, no subsidiaries) */
+                  <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-8">
+                    <div className="text-center">
+                      <h3 className="text-lg font-semibold text-white mb-2">
+                        Standalone Entity
+                      </h3>
+                      <p className="text-gray-400 mb-4">
+                        {results.entity_name} appears to be a standalone entity with no parent company or subsidiaries in public records.
+                      </p>
+                      <div className="text-sm text-gray-500 space-y-2">
+                        <p><strong>Data sources checked:</strong></p>
+                        <ul className="list-none text-left max-w-md mx-auto space-y-1">
+                          <li>• SEC EDGAR filings (Exhibit 21.1)</li>
+                          <li>• OpenCorporates database</li>
+                          <li>• Wikipedia corporate structure data</li>
+                          <li>• DuckDuckGo web search</li>
+                        </ul>
+                        <p className="mt-4 text-sm">
+                          This is normal for private companies, small businesses, or individuals.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      </main>
+    </div>
+  );
+}

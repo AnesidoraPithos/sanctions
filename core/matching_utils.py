@@ -7,6 +7,8 @@ scoring system. It combines 5 different algorithms to create a composite similar
 See SCORING_SYSTEM.md for detailed documentation on how these algorithms work.
 """
 
+import re
+
 from rapidfuzz import fuzz
 from rapidfuzz.distance import JaroWinkler
 from metaphone import doublemetaphone
@@ -123,7 +125,37 @@ def get_composite_score(query_name, result_name, weights=None):
         (scores['phonetic'] * weights['phonetic'])
     )
 
+    # Boost to 100 if query is an acronym of the entity name
+    if check_acronym_match(query_name, result_name):
+        return 100.0
+
     return round(composite_score, 2)
+
+
+_STOP_WORDS = {'of', 'the', 'and', 'for', 'in', 'at', 'by', 'to', 'a', 'an'}
+
+
+def check_acronym_match(query: str, entity_name: str) -> bool:
+    """
+    Returns True if query is an acronym formed from the first letters
+    of each significant word in entity_name (stop words excluded).
+    Requires query length >= 3 to avoid false positives.
+
+    Example: "BAAI" matches "Beijing Academy of Artificial Intelligence"
+      words (stop words removed): Beijing, Academy, Artificial, Intelligence
+      initials: B-A-A-I = "BAAI"
+    """
+    query = query.strip().upper()
+    if len(query) < 3:
+        return False
+    # Strip trailing parentheticals e.g. "(BAAI)" before computing initials
+    clean_name = re.sub(r'\s*\([^)]*\)\s*$', '', entity_name).strip()
+    words = clean_name.split()
+    initials = ''.join(
+        w[0].upper() for w in words
+        if w.lower() not in _STOP_WORDS and len(w) >= 2
+    )
+    return query == initials
 
 
 def classify_match_quality(combined_score, thresholds=None):
