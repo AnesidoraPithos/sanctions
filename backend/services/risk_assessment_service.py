@@ -25,7 +25,7 @@ class RiskAssessmentService:
         Returns:
             {
                 'level': 'HIGH' | 'MEDIUM' | 'LOW' | None,
-                'score': int (0-100) | None,
+                'score': int (0-100, capped from raw sum) | None,
                 'breakdown': str | None
             }
         """
@@ -41,7 +41,7 @@ class RiskAssessmentService:
         risk_match = re.search(risk_pattern, search_text, re.IGNORECASE)
 
         # Pattern 2: Extract "Scoring Breakdown: ..." on next line
-        breakdown_pattern = r'Scoring Breakdown:\s*(.+?)(?:\n\n|\n[A-Z]|$)'
+        breakdown_pattern = r'Scoring Breakdown:\s*(.+?)(?:\n\n|$)'
         breakdown_match = re.search(breakdown_pattern, search_text, re.IGNORECASE | re.DOTALL)
 
         if risk_match:
@@ -49,7 +49,7 @@ class RiskAssessmentService:
             score = int(risk_match.group(2))
             breakdown = breakdown_match.group(1).strip() if breakdown_match else None
 
-            logger.info(f"Extracted AI risk assessment: {level} ({score}/100)")
+            logger.info(f"Extracted AI risk assessment: {level} (Score: {score}/100)")
 
             return {
                 'level': level,

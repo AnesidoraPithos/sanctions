@@ -6,8 +6,58 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { RiskLevel, RiskExplanation } from '@/lib/types';
+
+const SCORING_METHODOLOGY = [
+  {
+    title: 'Regulatory & Legal Indicators',
+    range: '0–50 pts',
+    note: 'Highest applicable item only',
+    items: [
+      { label: 'Active sanctions listings', pts: 50 },
+      { label: 'Criminal investigations/charges', pts: 40 },
+      { label: 'Civil enforcement actions', pts: 30 },
+      { label: 'Regulatory violations/fines', pts: 25 },
+      { label: 'Pending investigations', pts: 15 },
+      { label: 'Past resolved issues (>3 years)', pts: 5 },
+    ],
+  },
+  {
+    title: 'Media Signal Strength',
+    range: '0–20 pts',
+    note: 'Additive up to category max',
+    items: [
+      { label: 'Official gov sources (treasury.gov, justice.gov, state.gov)', pts: 10, suffix: 'each, max 20' },
+      { label: 'Major credible news (Reuters, Bloomberg, WSJ, AP)', pts: 3, suffix: 'each, max 15' },
+      { label: 'General media/blogs', pts: 1, suffix: 'each, max 5' },
+    ],
+  },
+  {
+    title: 'Severity Factors',
+    range: '0–30 pts',
+    note: 'Highest applicable item only',
+    items: [
+      { label: 'National security concerns', pts: 30 },
+      { label: 'Financial crimes (money laundering, fraud)', pts: 15 },
+      { label: 'Export control violations', pts: 15 },
+      { label: 'Corruption/bribery', pts: 12 },
+      { label: 'Environmental/labor violations', pts: 8 },
+      { label: 'Civil disputes', pts: 5 },
+    ],
+  },
+  {
+    title: 'Temporal Relevance',
+    range: '0–10 pts',
+    note: 'Highest applicable item only',
+    items: [
+      { label: 'Issues within last 6 months', pts: 10 },
+      { label: 'Issues within last 1 year', pts: 8 },
+      { label: 'Issues within last 3 years', pts: 5 },
+      { label: 'Older than 3 years', pts: 2 },
+    ],
+  },
+];
 
 interface RiskBadgeProps {
   level: RiskLevel;
@@ -29,9 +79,39 @@ const sizeClasses = {
   lg: 'text-base px-4 py-2',
 };
 
+const RAW_SCORE_RE = /RAW:\s*(\d+)\s*→\s*SCORE:\s*(\d+)/;
+
+function parseBreakdown(breakdown: string) {
+  const rawScoreMatch = breakdown.match(RAW_SCORE_RE);
+  const rawTotal = rawScoreMatch ? rawScoreMatch[1] : null;
+  const cappedTotal = rawScoreMatch ? rawScoreMatch[2] : null;
+  const wasCapped = rawTotal && cappedTotal && rawTotal !== cappedTotal;
+
+  const segments = breakdown
+    .replace(/\s*\|\s*RAW:.*$/, '')
+    .split(' | ')
+    .filter(Boolean);
+
+  const rows = segments.map(seg => {
+    const colonIdx = seg.indexOf(':');
+    if (colonIdx === -1) return { category: seg.trim(), detail: '' };
+    return {
+      category: seg.slice(0, colonIdx).trim(),
+      detail: seg.slice(colonIdx + 1).trim(),
+    };
+  });
+
+  return { rows, rawTotal, cappedTotal, wasCapped };
+}
+
 export default function RiskBadge({ level, size = 'md', explanation }: RiskBadgeProps) {
   const [showExplanation, setShowExplanation] = useState(false);
+  const [showMethodology, setShowMethodology] = useState(false);
   const config = riskConfig[level];
+  const parsedBreakdown = useMemo(
+    () => explanation?.intelligence_breakdown ? parseBreakdown(explanation.intelligence_breakdown) : null,
+    [explanation?.intelligence_breakdown],
+  );
 
   return (
     <div className="flex items-center gap-2 relative">
@@ -128,14 +208,29 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                     </div>
 
                     {/* Scoring Breakdown */}
-                    {explanation.intelligence_breakdown && (
+                    {parsedBreakdown && (
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-1">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
                           Scoring Breakdown:
                         </label>
-                        <p className="text-gray-900 font-mono text-sm bg-gray-50 p-3 rounded border border-gray-200">
-                          {explanation.intelligence_breakdown}
-                        </p>
+                        <div className="bg-gray-50 rounded border border-gray-200 divide-y divide-gray-100">
+                          {parsedBreakdown.rows.map((row, i) => (
+                            <div key={i} className="px-3 py-2 flex items-start justify-between gap-4">
+                              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                                {row.category}
+                              </span>
+                              <span className="text-sm text-gray-800 font-mono text-right">
+                                {row.detail}
+                              </span>
+                            </div>
+                          ))}
+                          {parsedBreakdown.rawTotal && (
+                            <div className="px-3 py-2 bg-gray-100 flex justify-between font-bold text-gray-900 text-sm">
+                              <span>{parsedBreakdown.wasCapped ? `Raw: ${parsedBreakdown.rawTotal} → Capped` : 'Total Score'}</span>
+                              <span>{parsedBreakdown.cappedTotal}/100</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -148,8 +243,69 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                     </div>
                   </div>
 
-                  {/* Footer */}
+                  {/* Scoring Methodology */}
                   <div className="mt-6 pt-4 border-t border-gray-200">
+                    <button
+                      onClick={() => setShowMethodology(!showMethodology)}
+                      className="flex items-center justify-between w-full text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+                    >
+                      <span>Scoring Methodology</span>
+                      <svg
+                        className={`w-4 h-4 transition-transform ${showMethodology ? 'rotate-180' : ''}`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {showMethodology && (
+                      <div className="mt-3 space-y-4">
+                        <p className="text-xs text-gray-500">
+                          Total score is capped at 100. If the raw sum of all categories exceeds 100, the displayed score is capped at 100.
+                        </p>
+                        {SCORING_METHODOLOGY.map(category => (
+                          <div key={category.title} className="bg-gray-50 rounded border border-gray-200">
+                            <div className="px-3 py-2 bg-gray-100 rounded-t border-b border-gray-200 flex items-center justify-between">
+                              <span className="text-xs font-bold text-gray-800 uppercase tracking-wide">
+                                {category.title}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-indigo-600">{category.range}</span>
+                                <span className="text-xs text-gray-500 italic">{category.note}</span>
+                              </div>
+                            </div>
+                            <div className="divide-y divide-gray-100">
+                              {category.items.map(item => (
+                                <div key={item.label} className="px-3 py-1.5 flex items-center justify-between gap-4">
+                                  <span className="text-xs text-gray-700">{item.label}</span>
+                                  <span className="text-xs font-mono font-semibold text-gray-900 whitespace-nowrap">
+                                    {item.pts} pts{'suffix' in item ? ` (${item.suffix})` : ''}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+
+                        <div className="bg-gray-50 rounded border border-gray-200 divide-y divide-gray-100">
+                          {[
+                            { label: 'Low', range: '0–35', color: 'bg-blue-500' },
+                            { label: 'Medium', range: '36–65', color: 'bg-yellow-500' },
+                            { label: 'High', range: '66–100', color: 'bg-red-500' },
+                          ].map(tier => (
+                            <div key={tier.label} className="px-3 py-1.5 flex items-center gap-3">
+                              <span className={`w-2 h-2 rounded-full ${tier.color} flex-shrink-0`} />
+                              <span className="text-xs font-semibold text-gray-800">{tier.label}</span>
+                              <span className="text-xs text-gray-500">{tier.range} points</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
                     <p className="text-sm text-gray-500">
                       This risk assessment combines sanctions screening results with AI-generated
                       intelligence analysis for a comprehensive evaluation.

@@ -328,7 +328,7 @@ REPORT REQUIREMENTS:
 
      **Risk Assessment Framework - Calculate total score (0-100):**
 
-     1. **Regulatory & Legal Indicators (0-50 points)**:
+     1. **Regulatory & Legal Indicators (0-50 points)** — take the HIGHEST applicable item only (not additive):
         - Active sanctions listings: 50 points
         - Criminal investigations/charges: 40 points
         - Civil enforcement actions: 30 points
@@ -336,12 +336,12 @@ REPORT REQUIREMENTS:
         - Pending investigations: 15 points
         - Past resolved issues (>3 years): 5 points
 
-     2. **Media Signal Strength (0-20 points)**:
+     2. **Media Signal Strength (0-20 points)** — ADDITIVE up to category max of 20, count each qualifying source:
         - Official government sources (treasury.gov, justice.gov, state.gov): 10 points each (max 20)
         - Major credible news (Reuters, Bloomberg, WSJ, AP): 3 points each (max 15)
         - General media/blogs: 1 point each (max 5)
 
-     3. **Severity Factors (0-30 points)**:
+     3. **Severity Factors (0-30 points)** — take the HIGHEST applicable item only (not additive):
         - National security concerns: 30 points
         - Financial crimes (money laundering, fraud): 15 points
         - Export control violations: 15 points
@@ -349,7 +349,7 @@ REPORT REQUIREMENTS:
         - Environmental/labor violations: 8 points
         - Civil disputes: 5 points
 
-     4. **Temporal Relevance (0-10 points)**:
+     4. **Temporal Relevance (0-10 points)** — take the HIGHEST applicable item only (not additive):
         - Issues within last 6 months: 10 points
         - Issues within last 1 year: 8 points
         - Issues within last 3 years: 5 points
@@ -359,14 +359,27 @@ REPORT REQUIREMENTS:
      - **Low (0-35 points)**: Limited concerns, minor historical issues, sparse media coverage
      - **Medium (36-65 points)**: Moderate regulatory concerns, ongoing investigations, notable media attention
      - **High (66-100 points)**: Active sanctions/enforcement, serious violations, extensive official documentation
+     NOTE: If the raw sum of all 4 categories exceeds 100, cap the displayed score at 100.
 
      **Required Output Format:**
      Line 1: "Risk Level: [High/Medium/Low] (Score: XX/100)"
-     Line 2: "Scoring Breakdown: [Component 1: X pts] | [Component 2: Y pts] | [Component 3: Z pts]"
+     Line 2: "Scoring Breakdown: [Category]: [Highest item] (+pts) | [Category]: [Highest item] (+pts) | ... | RAW: XX → SCORE: XX"
 
-     Example:
-     "Risk Level: High (Score: 78/100)
-     Scoring Breakdown: Criminal investigation (30 pts) | 8 official sources (25 pts) | National security (30 pts) | Recent activity (15 pts)"
+     Rules:
+     - For each category, state the single highest-scoring item that applies and its point value in (+pts) notation
+     - If multiple items apply in a category, note the top one and mention others in brackets, e.g. "Active sanctions (+50) [criminal charges also present]"
+     - For Media Signal Strength, list each source type that contributed and its subtotal since it is additive, e.g. "2 Reuters (+6) + 1 gov source (+10) = 16"
+     - Omit a category entirely if no items in it apply (score = 0)
+     - RAW is the arithmetic sum of all category scores before capping; SCORE is min(RAW, 100)
+     - Always end the breakdown line with "| RAW: XX → SCORE: XX"
+
+     Example (score capped at 100):
+     "Risk Level: High (Score: 100/100)
+     Scoring Breakdown: Regulatory & Legal: Active sanctions (+50) [criminal charges also present] | Severity: National security (+30) | Media: 1 gov source (+10) = 10 | Temporal: Last 6 months (+10) | RAW: 100 → SCORE: 100"
+
+     Example (score not capped):
+     "Risk Level: High (Score: 69/100)
+     Scoring Breakdown: Regulatory & Legal: Civil enforcement actions (+30) | Severity: Financial crimes (+15) | Media: 2 Reuters (+6) + 1 gov source (+10) = 16 | Temporal: Last 1 year (+8) | RAW: 69 → SCORE: 69"
 
    - Follow with 2-3 paragraphs explaining:
      * Summary of most significant findings

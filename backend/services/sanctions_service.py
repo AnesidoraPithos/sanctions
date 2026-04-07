@@ -56,7 +56,7 @@ class SanctionsService:
         """
         # Build search parameters for USA Trade API
         search_params = {
-            "q": entity_name,
+            "name": entity_name,
             "fuzzy_name": "true"
         }
 
@@ -64,7 +64,7 @@ class SanctionsService:
             search_params["countries"] = country
 
         # Call existing agent logic
-        results = self.agent.search(search_params, query_name=entity_name)
+        results = self.agent.search(search_params, query_name=entity_name, score_threshold=fuzzy_threshold)
 
         # Filter by fuzzy threshold
         filtered_results = [
