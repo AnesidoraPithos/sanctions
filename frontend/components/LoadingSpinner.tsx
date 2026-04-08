@@ -1,28 +1,38 @@
-/**
- * LoadingSpinner Component
- *
- * Animated loading spinner for async operations.
- */
-
 interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg';
   message?: string;
 }
 
-const sizeClasses = {
-  sm: 'h-4 w-4',
-  md: 'h-8 w-8',
-  lg: 'h-12 w-12',
-};
+const spinnerSize = { sm: 20, md: 32, lg: 44 };
 
 export default function LoadingSpinner({ size = 'md', message }: LoadingSpinnerProps) {
+  const s = spinnerSize[size];
   return (
-    <div className="flex flex-col items-center justify-center gap-3">
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
       <div
-        className={`${sizeClasses[size]} animate-spin rounded-full border-4 border-gray-300 border-t-blue-500`}
+        style={{
+          width: s,
+          height: s,
+          border: `${size === 'lg' ? 2 : 2}px solid var(--border-main)`,
+          borderTopColor: 'var(--amber-main)',
+          borderRadius: '50%',
+          animation: 'spin 0.9s linear infinite',
+          boxShadow: '0 0 10px rgba(196, 140, 12, 0.2)',
+        }}
       />
       {message && (
-        <p className="text-sm text-gray-400 animate-pulse">{message}</p>
+        <p
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.72rem',
+            letterSpacing: '0.1em',
+            color: 'var(--text-muted)',
+            animation: 'data-pulse 2s ease-in-out infinite',
+            textTransform: 'uppercase',
+          }}
+        >
+          {message}
+        </p>
       )}
     </div>
   );

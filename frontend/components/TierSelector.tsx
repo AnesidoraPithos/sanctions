@@ -1,14 +1,7 @@
-"use client";
+'use client';
 
-import React, { useState } from "react";
-import { ResearchTier, TierSelectorProps } from "@/lib/types";
-
-/**
- * TierSelector Component
- *
- * Allows users to select research tier (base/network/deep) and configure
- * tier-specific parameters (network depth, ownership threshold, etc.)
- */
+import React from 'react';
+import { ResearchTier, TierSelectorProps } from '@/lib/types';
 
 interface TierOption {
   tier: ResearchTier;
@@ -20,44 +13,218 @@ interface TierOption {
 
 const TIER_OPTIONS: TierOption[] = [
   {
-    tier: "base",
-    label: "Base Tier",
-    duration: "30-60 seconds",
+    tier: 'base',
+    label: 'Base',
+    duration: '30–60s',
     features: [
-      "Sanctions screening (10+ databases)",
-      "OSINT media intelligence",
-      "Risk scoring",
-      "AI-powered intelligence report",
+      'Sanctions screening (10+ DBs)',
+      'OSINT media intelligence',
+      'Risk scoring',
+      'AI intelligence report',
     ],
     disabled: false,
   },
   {
-    tier: "network",
-    label: "Network Tier",
-    duration: "2-10 minutes",
+    tier: 'network',
+    label: 'Network',
+    duration: '2–10 min',
     features: [
-      "All base tier features",
-      "Conglomerate discovery (multi-source)",
-      "Directors & shareholders extraction",
-      "Cross-entity sanctions screening",
-      "Interactive network graph visualization",
+      'All base features',
+      'Conglomerate discovery',
+      'Directors & shareholders',
+      'Cross-entity sanctions',
+      'Network graph visualization',
     ],
     disabled: false,
   },
   {
-    tier: "deep",
-    label: "Deep Tier",
-    duration: "5-15 minutes",
+    tier: 'deep',
+    label: 'Deep',
+    duration: '5–15 min',
     features: [
-      "All network tier features",
-      "Financial flow analysis (USAspending + transactions)",
-      "Federal procurement records",
-      "Enhanced AI intelligence report",
-      "Advanced risk scoring",
+      'All network features',
+      'Financial flow analysis',
+      'Federal procurement records',
+      'Director pivot analysis',
+      'Beneficial ownership tracing',
     ],
     disabled: false,
   },
 ];
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="label-stamp"
+      style={{ display: 'block', marginBottom: '0.5rem' }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ConfigSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        marginTop: '1.25rem',
+        padding: '1.25rem',
+        background: 'var(--bg-panel)',
+        border: '1px solid var(--border-dim)',
+        borderLeft: '2px solid var(--amber-deep)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1.25rem',
+      }}
+    >
+      <div className="label-stamp-bright" style={{ fontSize: '0.6rem' }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function SliderField({
+  id,
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  leftLabel,
+  rightLabel,
+  note,
+  noteHighlight,
+}: {
+  id: string;
+  label: React.ReactNode;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  leftLabel: string;
+  rightLabel: string;
+  note?: string;
+  noteHighlight?: string;
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '0.5rem',
+        }}
+      >
+        <label htmlFor={id} className="label-stamp">
+          {label}
+        </label>
+        <span
+          className="font-data"
+          style={{ fontSize: '0.85rem', color: 'var(--amber-light)' }}
+        >
+          {value}
+          {typeof value === 'number' && id.includes('threshold') ? '%' : ''}
+        </span>
+      </div>
+      <input
+        id={id}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value))}
+        className="amber-range"
+      />
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.6rem',
+          color: 'var(--text-faint)',
+          marginTop: '0.25rem',
+          letterSpacing: '0.05em',
+        }}
+      >
+        <span>{leftLabel}</span>
+        <span>{rightLabel}</span>
+      </div>
+      {note && (
+        <p
+          style={{
+            marginTop: '0.375rem',
+            fontSize: '0.7rem',
+            color: 'var(--text-muted)',
+            fontFamily: 'var(--font-mono)',
+            lineHeight: 1.5,
+          }}
+        >
+          {note}
+          {noteHighlight && (
+            <span style={{ color: 'var(--risk-mid-bright)' }}> {noteHighlight}</span>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ToggleField({
+  id,
+  checked,
+  onChange,
+  label,
+  description,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  description: string;
+}) {
+  return (
+    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="amber-check"
+      />
+      <div>
+        <label
+          htmlFor={id}
+          style={{
+            fontSize: '0.8rem',
+            color: 'var(--text-main)',
+            fontFamily: 'var(--font-mono)',
+            cursor: 'pointer',
+            letterSpacing: '0.02em',
+          }}
+        >
+          {label}
+        </label>
+        <p
+          style={{
+            margin: '0.2rem 0 0',
+            fontSize: '0.7rem',
+            color: 'var(--text-muted)',
+            fontFamily: 'var(--font-mono)',
+            lineHeight: 1.5,
+          }}
+        >
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function TierSelector({
   selectedTier,
@@ -82,354 +249,250 @@ export default function TierSelector({
   onIncludeBeneficialOwnershipChange,
 }: TierSelectorProps) {
   return (
-    <div className="space-y-6">
-      {/* Tier Selection Cards */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-3">
-          Research Tier
-        </label>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {TIER_OPTIONS.map((option) => (
+    <div>
+      <FieldLabel>Research Tier</FieldLabel>
+
+      {/* Tier cards */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '1px',
+          background: 'var(--border-void)',
+        }}
+      >
+        {TIER_OPTIONS.map((option, idx) => {
+          const isActive = selectedTier === option.tier;
+          return (
             <button
               key={option.tier}
               type="button"
               disabled={option.disabled}
               onClick={() => !option.disabled && onTierChange(option.tier)}
-              className={`
-                relative p-4 rounded-lg border-2 text-left transition-all
-                ${
-                  selectedTier === option.tier
-                    ? "border-blue-500 bg-blue-950/30"
-                    : "border-gray-700 bg-gray-900/50 hover:border-gray-600"
-                }
-                ${option.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
-              `}
+              className={`tier-card ${isActive ? 'tier-card-active bracket-corners bracket-corners-active' : 'bracket-corners'}`}
+              style={{
+                position: 'relative',
+                opacity: option.disabled ? 0.4 : 1,
+                cursor: option.disabled ? 'not-allowed' : 'pointer',
+              }}
             >
-              {/* Tier Label */}
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-semibold text-white">
-                  {option.label}
-                </span>
-                {option.disabled && (
-                  <span className="text-sm text-gray-500 bg-gray-800 px-2 py-1 rounded">
-                    Phase 3
-                  </span>
-                )}
+              {/* Tier number */}
+              <div
+                className="font-data"
+                style={{
+                  fontSize: '0.6rem',
+                  color: isActive ? 'var(--amber-primary)' : 'var(--text-faint)',
+                  letterSpacing: '0.12em',
+                  marginBottom: '0.4rem',
+                }}
+              >
+                [{String(idx + 1).padStart(2, '0')}]
               </div>
 
-              {/* Duration */}
-              <div className="text-sm text-gray-400 mb-3">{option.duration}</div>
+              {/* Label + duration */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  justifyContent: 'space-between',
+                  marginBottom: '0.75rem',
+                  flexWrap: 'wrap',
+                  gap: '0.25rem',
+                }}
+              >
+                <span
+                  className="font-display"
+                  style={{
+                    fontSize: '1.15rem',
+                    color: isActive ? 'var(--amber-light)' : 'var(--text-bright)',
+                    letterSpacing: '0.08em',
+                  }}
+                >
+                  {option.label}
+                </span>
+                <span
+                  className="font-data"
+                  style={{
+                    fontSize: '0.62rem',
+                    color: isActive ? 'var(--amber-primary)' : 'var(--text-muted)',
+                  }}
+                >
+                  {option.duration}
+                </span>
+              </div>
 
-              {/* Features */}
-              <ul className="space-y-1">
-                {option.features.map((feature, idx) => (
-                  <li key={idx} className="flex items-start text-sm text-gray-400">
-                    <span className="text-blue-400 mr-2">•</span>
-                    <span>{feature}</span>
+              {/* Feature list */}
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                {option.features.map((feature, fIdx) => (
+                  <li
+                    key={fIdx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.4rem',
+                      fontSize: '0.72rem',
+                      color: isActive ? 'var(--text-main)' : 'var(--text-muted)',
+                      fontFamily: 'var(--font-mono)',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <span style={{ color: isActive ? 'var(--amber-primary)' : 'var(--text-faint)', flexShrink: 0 }}>
+                      {isActive ? '▸' : '·'}
+                    </span>
+                    {feature}
                   </li>
                 ))}
               </ul>
 
-              {/* Selected Indicator */}
-              {selectedTier === option.tier && (
-                <div className="absolute top-2 right-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                </div>
+              {/* Active indicator bar */}
+              {isActive && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '2px',
+                    background: 'var(--amber-primary)',
+                    boxShadow: '0 0 8px var(--amber-primary)',
+                  }}
+                />
               )}
             </button>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
-      {/* Network Tier Configuration */}
-      {selectedTier === "network" && (
-        <div className="space-y-4 p-4 bg-gray-900/50 border border-gray-700 rounded-lg">
-          <div className="text-sm font-medium text-gray-300 mb-3">
-            Network Tier Configuration
-          </div>
-
-          {/* Search Depth Slider */}
-          <div>
-            <label
-              htmlFor="network-depth"
-              className="block text-sm text-gray-400 mb-2"
-            >
-              Search Depth: <span className="text-blue-400 font-semibold">{networkDepth}</span>{" "}
-              {networkDepth === 1 ? "level" : "levels"}
-            </label>
-            <input
-              id="network-depth"
-              type="range"
-              min="1"
-              max="3"
-              step="1"
-              value={networkDepth}
-              onChange={(e) =>
-                onNetworkDepthChange?.(parseInt(e.target.value))
-              }
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-            />
-            <div className="flex justify-between text-sm text-gray-500 mt-1">
-              <span>Level 1 (fastest)</span>
-              <span>Level 2</span>
-              <span>Level 3 (most comprehensive)</span>
-            </div>
-            <p className="text-sm text-gray-500 mt-2">
-              Higher depth discovers more subsidiaries but takes longer
-            </p>
-          </div>
-
-          {/* Ownership Threshold Slider */}
-          <div>
-            <label
-              htmlFor="ownership-threshold"
-              className="block text-sm text-gray-400 mb-2"
-            >
-              Ownership Threshold:{" "}
-              <span className="text-blue-400 font-semibold">{ownershipThreshold}%</span>
-            </label>
-            <input
-              id="ownership-threshold"
-              type="range"
-              min="0"
-              max="100"
-              step="10"
-              value={ownershipThreshold}
-              onChange={(e) =>
-                onOwnershipThresholdChange?.(parseInt(e.target.value))
-              }
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-            />
-            <div className="flex justify-between text-sm text-gray-500 mt-1">
-              <span>0% (all)</span>
-              <span>50%</span>
-              <span>100% (wholly-owned)</span>
-            </div>
-            <p className="text-sm text-gray-500 mt-2">
-              Minimum ownership percentage to include subsidiaries
-            </p>
-          </div>
-
-          {/* Include Sisters Checkbox */}
-          <div className="flex items-start space-x-3">
-            <input
-              id="include-sisters"
-              type="checkbox"
-              checked={includeSisters}
-              onChange={(e) =>
-                onIncludeSistersChange?.(e.target.checked)
-              }
-              className="mt-1 h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-offset-gray-900"
-            />
-            <div>
-              <label
-                htmlFor="include-sisters"
-                className="text-sm text-gray-400 cursor-pointer"
-              >
-                Include sister companies
-              </label>
-              <p className="text-sm text-gray-500 mt-1">
-                Include entities with the same parent company
-              </p>
-            </div>
-          </div>
-
-          {/* Max Level 2 Searches Slider */}
+      {/* ── Network Config ──────────────────────────────────────── */}
+      {selectedTier === 'network' && (
+        <ConfigSection title="Network Tier Configuration">
+          <SliderField
+            id="network-depth"
+            label="Search Depth"
+            value={networkDepth}
+            min={1}
+            max={3}
+            step={1}
+            onChange={(v) => onNetworkDepthChange?.(v)}
+            leftLabel="Level 1 — fastest"
+            rightLabel="Level 3 — comprehensive"
+          />
+          <SliderField
+            id="ownership-threshold"
+            label="Ownership Threshold"
+            value={ownershipThreshold}
+            min={0}
+            max={100}
+            step={10}
+            onChange={(v) => onOwnershipThresholdChange?.(v)}
+            leftLabel="0% (all)"
+            rightLabel="100% (wholly-owned)"
+            note="Minimum ownership % to include subsidiaries"
+          />
+          <ToggleField
+            id="include-sisters"
+            checked={includeSisters}
+            onChange={(v) => onIncludeSistersChange?.(v)}
+            label="Include sister companies"
+            description="Entities sharing the same parent company"
+          />
           {networkDepth >= 2 && (
-            <div>
-              <label
-                htmlFor="max-level-2"
-                className="block text-sm text-gray-400 mb-2"
-              >
-                Max Level 2 Searches:{" "}
-                <span className="text-blue-400 font-semibold">{maxLevel2Searches}</span>
-              </label>
-              <input
-                id="max-level-2"
-                type="range"
-                min="5"
-                max="50"
-                step="5"
-                value={maxLevel2Searches}
-                onChange={(e) =>
-                  onMaxLevel2SearchesChange?.(parseInt(e.target.value))
-                }
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-              />
-              <div className="flex justify-between text-sm text-gray-500 mt-1">
-                <span>5 (fastest)</span>
-                <span>25 (balanced)</span>
-                <span>50 (comprehensive)</span>
-              </div>
-              <p className="text-sm text-gray-500 mt-2">
-                To prevent timeouts, only the top N subsidiaries by ownership % will be searched for level 2.
-                <span className="text-yellow-400"> Higher values may timeout for large companies.</span>
-              </p>
-            </div>
+            <SliderField
+              id="max-level-2"
+              label="Max Level 2 Searches"
+              value={maxLevel2Searches}
+              min={5}
+              max={50}
+              step={5}
+              onChange={(v) => onMaxLevel2SearchesChange?.(v)}
+              leftLabel="5 — fast"
+              rightLabel="50 — comprehensive"
+              note="Top N subsidiaries searched by ownership %. Higher values may timeout."
+              noteHighlight="Caution with large conglomerates."
+            />
           )}
-
-          {/* Max Level 3 Searches Slider */}
           {networkDepth >= 3 && (
-            <div>
-              <label
-                htmlFor="max-level-3"
-                className="block text-sm text-gray-400 mb-2"
-              >
-                Max Level 3 Searches:{" "}
-                <span className="text-blue-400 font-semibold">{maxLevel3Searches}</span>
-              </label>
-              <input
-                id="max-level-3"
-                type="range"
-                min="5"
-                max="30"
-                step="5"
-                value={maxLevel3Searches}
-                onChange={(e) =>
-                  onMaxLevel3SearchesChange?.(parseInt(e.target.value))
-                }
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-              />
-              <div className="flex justify-between text-sm text-gray-500 mt-1">
-                <span>5 (fastest)</span>
-                <span>15 (balanced)</span>
-                <span>30 (comprehensive)</span>
-              </div>
-              <p className="text-sm text-gray-500 mt-2">
-                To prevent timeouts, only the top N level 2 subsidiaries will be searched for level 3.
-                <span className="text-yellow-400"> Higher values significantly increase search time.</span>
-              </p>
-            </div>
+            <SliderField
+              id="max-level-3"
+              label="Max Level 3 Searches"
+              value={maxLevel3Searches}
+              min={5}
+              max={30}
+              step={5}
+              onChange={(v) => onMaxLevel3SearchesChange?.(v)}
+              leftLabel="5 — fast"
+              rightLabel="30 — comprehensive"
+              note="Significantly increases search time at depth 3."
+              noteHighlight="Plan for extended duration."
+            />
           )}
-        </div>
+        </ConfigSection>
       )}
 
-      {/* Deep Tier Configuration */}
-      {selectedTier === "deep" && (
-        <div className="space-y-4 p-4 bg-gray-900/50 border border-gray-700 rounded-lg">
-          <div className="text-sm font-medium text-gray-300 mb-3">
-            Deep Tier Configuration
-          </div>
-
-          {/* Reuse network depth slider */}
+      {/* ── Deep Config ─────────────────────────────────────────── */}
+      {selectedTier === 'deep' && (
+        <ConfigSection title="Deep Tier Configuration">
+          <SliderField
+            id="deep-network-depth"
+            label="Network Search Depth"
+            value={networkDepth}
+            min={1}
+            max={3}
+            step={1}
+            onChange={(v) => onNetworkDepthChange?.(v)}
+            leftLabel="Level 1 — fastest"
+            rightLabel="Level 3 — comprehensive"
+          />
+          <ToggleField
+            id="include-financial-flows"
+            checked={includeFinancialFlows}
+            onChange={(v) => onIncludeFinancialFlowsChange?.(v)}
+            label="Financial flow analysis"
+            description="USAspending.gov federal procurement records and related-party transactions"
+          />
           <div>
-            <label
-              htmlFor="deep-network-depth"
-              className="block text-sm text-gray-400 mb-2"
-            >
-              Search Depth:{" "}
-              <span className="text-blue-400 font-semibold">{networkDepth}</span>{" "}
-              {networkDepth === 1 ? "level" : "levels"}
-            </label>
-            <input
-              id="deep-network-depth"
-              type="range"
-              min="1"
-              max="3"
-              step="1"
-              value={networkDepth}
-              onChange={(e) => onNetworkDepthChange?.(parseInt(e.target.value))}
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-            />
-            <div className="flex justify-between text-sm text-gray-500 mt-1">
-              <span>Level 1 (fastest)</span>
-              <span>Level 2</span>
-              <span>Level 3 (most comprehensive)</span>
+            <div className="label-stamp-bright" style={{ fontSize: '0.58rem', marginBottom: '0.75rem', paddingTop: '0.25rem' }}>
+              Phase 4 — Advanced Intelligence Modules
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+              <ToggleField
+                id="include-director-pivot"
+                checked={includeDirectorPivot}
+                onChange={(v) => onIncludeDirectorPivotChange?.(v)}
+                label="Director pivot analysis"
+                description="Interlocking directorates via SEC EDGAR full-text search"
+              />
+              <ToggleField
+                id="include-infrastructure"
+                checked={includeInfrastructure}
+                onChange={(v) => onIncludeInfrastructureChange?.(v)}
+                label="Infrastructure correlation"
+                description="WHOIS lookups on media-extracted domains, shared registrant detection"
+              />
+              <ToggleField
+                id="include-beneficial-ownership"
+                checked={includeBeneficialOwnership}
+                onChange={(v) => onIncludeBeneficialOwnershipChange?.(v)}
+                label="Beneficial ownership tracing"
+                description="UBO identification via OCCRP Aleph and Open Ownership Register"
+              />
             </div>
           </div>
-
-          {/* Include Financial Flows toggle */}
-          <div className="flex items-start space-x-3">
-            <input
-              id="include-financial-flows"
-              type="checkbox"
-              checked={includeFinancialFlows}
-              onChange={(e) => onIncludeFinancialFlowsChange?.(e.target.checked)}
-              className="mt-1 h-4 w-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-offset-gray-900"
-            />
-            <div>
-              <label
-                htmlFor="include-financial-flows"
-                className="text-sm text-gray-400 cursor-pointer"
-              >
-                Include financial flows
-              </label>
-              <p className="text-sm text-gray-500 mt-1">
-                Analyse federal procurement records (USAspending.gov) and related-party transactions
-              </p>
-            </div>
+          <div
+            style={{
+              padding: '0.625rem 0.875rem',
+              background: 'var(--risk-mid-bg)',
+              border: '1px solid var(--risk-mid)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.7rem',
+              color: 'var(--risk-mid-bright)',
+              lineHeight: 1.5,
+            }}
+          >
+            ⚠ Deep Tier runs all Network Tier steps plus advanced intelligence modules.
+            Expect 5–15 minutes for large conglomerates.
           </div>
-
-          {/* Phase 4 toggles */}
-          <div className="border-t border-gray-700/50 pt-4 mt-4">
-            <p className="text-sm font-medium text-gray-400 mb-3">
-              Phase 4 — Advanced Intelligence
-            </p>
-
-            <div className="space-y-3">
-              {/* Director pivot */}
-              <div className="flex items-start space-x-3">
-                <input
-                  id="include-director-pivot"
-                  type="checkbox"
-                  checked={includeDirectorPivot}
-                  onChange={(e) => onIncludeDirectorPivotChange?.(e.target.checked)}
-                  className="mt-1 h-4 w-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500 focus:ring-offset-gray-900"
-                />
-                <div>
-                  <label htmlFor="include-director-pivot" className="text-sm text-gray-400 cursor-pointer">
-                    Include director pivoting
-                  </label>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    Discover interlocking directorates via SEC EDGAR full-text search
-                  </p>
-                </div>
-              </div>
-
-              {/* Infrastructure correlation */}
-              <div className="flex items-start space-x-3">
-                <input
-                  id="include-infrastructure"
-                  type="checkbox"
-                  checked={includeInfrastructure}
-                  onChange={(e) => onIncludeInfrastructureChange?.(e.target.checked)}
-                  className="mt-1 h-4 w-4 text-cyan-600 bg-gray-700 border-gray-600 rounded focus:ring-cyan-500 focus:ring-offset-gray-900"
-                />
-                <div>
-                  <label htmlFor="include-infrastructure" className="text-sm text-gray-400 cursor-pointer">
-                    Include infrastructure correlation
-                  </label>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    WHOIS lookups on media-extracted domains; detect shared registrants
-                  </p>
-                </div>
-              </div>
-
-              {/* Beneficial ownership */}
-              <div className="flex items-start space-x-3">
-                <input
-                  id="include-beneficial-ownership"
-                  type="checkbox"
-                  checked={includeBeneficialOwnership}
-                  onChange={(e) => onIncludeBeneficialOwnershipChange?.(e.target.checked)}
-                  className="mt-1 h-4 w-4 text-emerald-600 bg-gray-700 border-gray-600 rounded focus:ring-emerald-500 focus:ring-offset-gray-900"
-                />
-                <div>
-                  <label htmlFor="include-beneficial-ownership" className="text-sm text-gray-400 cursor-pointer">
-                    Include beneficial ownership lookup
-                  </label>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    Trace UBOs via OCCRP Aleph and Open Ownership Register
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-sm text-yellow-400/80">
-            Deep Tier runs all Network Tier steps plus financial flow analysis. Expect 5–15 minutes for large companies.
-          </p>
-        </div>
+        </ConfigSection>
       )}
     </div>
   );

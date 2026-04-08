@@ -1,9 +1,3 @@
-/**
- * RiskBadge Component
- *
- * Displays risk level with appropriate color coding and optional explanation.
- */
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -13,12 +7,12 @@ const SCORING_METHODOLOGY = [
   {
     title: 'Regulatory & Legal Indicators',
     range: '0–50 pts',
-    note: 'Highest applicable item only',
+    note: 'Highest item only',
     items: [
       { label: 'Active sanctions listings', pts: 50 },
-      { label: 'Criminal investigations/charges', pts: 40 },
+      { label: 'Criminal investigations / charges', pts: 40 },
       { label: 'Civil enforcement actions', pts: 30 },
-      { label: 'Regulatory violations/fines', pts: 25 },
+      { label: 'Regulatory violations / fines', pts: 25 },
       { label: 'Pending investigations', pts: 15 },
       { label: 'Past resolved issues (>3 years)', pts: 5 },
     ],
@@ -26,30 +20,30 @@ const SCORING_METHODOLOGY = [
   {
     title: 'Media Signal Strength',
     range: '0–20 pts',
-    note: 'Additive up to category max',
+    note: 'Additive up to max',
     items: [
       { label: 'Official gov sources (treasury.gov, justice.gov, state.gov)', pts: 10, suffix: 'each, max 20' },
       { label: 'Major credible news (Reuters, Bloomberg, WSJ, AP)', pts: 3, suffix: 'each, max 15' },
-      { label: 'General media/blogs', pts: 1, suffix: 'each, max 5' },
+      { label: 'General media / blogs', pts: 1, suffix: 'each, max 5' },
     ],
   },
   {
     title: 'Severity Factors',
     range: '0–30 pts',
-    note: 'Highest applicable item only',
+    note: 'Highest item only',
     items: [
       { label: 'National security concerns', pts: 30 },
       { label: 'Financial crimes (money laundering, fraud)', pts: 15 },
       { label: 'Export control violations', pts: 15 },
-      { label: 'Corruption/bribery', pts: 12 },
-      { label: 'Environmental/labor violations', pts: 8 },
+      { label: 'Corruption / bribery', pts: 12 },
+      { label: 'Environmental / labor violations', pts: 8 },
       { label: 'Civil disputes', pts: 5 },
     ],
   },
   {
     title: 'Temporal Relevance',
     range: '0–10 pts',
-    note: 'Highest applicable item only',
+    note: 'Highest item only',
     items: [
       { label: 'Issues within last 6 months', pts: 10 },
       { label: 'Issues within last 1 year', pts: 8 },
@@ -65,18 +59,12 @@ interface RiskBadgeProps {
   explanation?: RiskExplanation;
 }
 
-const riskConfig: Record<RiskLevel, { color: string; label: string }> = {
-  SAFE: { color: 'bg-green-500', label: 'Safe' },
-  LOW: { color: 'bg-blue-500', label: 'Low Risk' },
-  MID: { color: 'bg-yellow-500', label: 'Medium Risk' },
-  HIGH: { color: 'bg-orange-500', label: 'High Risk' },
-  VERY_HIGH: { color: 'bg-red-500', label: 'Very High Risk' },
-};
-
-const sizeClasses = {
-  sm: 'text-sm px-2 py-1',
-  md: 'text-sm px-3 py-1.5',
-  lg: 'text-base px-4 py-2',
+const riskConfig: Record<RiskLevel, { label: string; clearance: string }> = {
+  SAFE:      { label: 'Safe',           clearance: 'CLEARED' },
+  LOW:       { label: 'Low Risk',       clearance: 'LOW RISK' },
+  MID:       { label: 'Medium Risk',    clearance: 'MODERATE' },
+  HIGH:      { label: 'High Risk',      clearance: 'HIGH RISK' },
+  VERY_HIGH: { label: 'Very High Risk', clearance: 'CRITICAL' },
 };
 
 const RAW_SCORE_RE = /RAW:\s*(\d+)\s*→\s*SCORE:\s*(\d+)/;
@@ -86,13 +74,11 @@ function parseBreakdown(breakdown: string) {
   const rawTotal = rawScoreMatch ? rawScoreMatch[1] : null;
   const cappedTotal = rawScoreMatch ? rawScoreMatch[2] : null;
   const wasCapped = rawTotal && cappedTotal && rawTotal !== cappedTotal;
-
   const segments = breakdown
     .replace(/\s*\|\s*RAW:.*$/, '')
     .split(' | ')
     .filter(Boolean);
-
-  const rows = segments.map(seg => {
+  const rows = segments.map((seg) => {
     const colonIdx = seg.indexOf(':');
     if (colonIdx === -1) return { category: seg.trim(), detail: '' };
     return {
@@ -100,8 +86,75 @@ function parseBreakdown(breakdown: string) {
       detail: seg.slice(colonIdx + 1).trim(),
     };
   });
-
   return { rows, rawTotal, cappedTotal, wasCapped };
+}
+
+function ScoreBar({ score }: { score: number }) {
+  const color =
+    score >= 66
+      ? 'var(--risk-critical)'
+      : score >= 36
+      ? 'var(--risk-mid)'
+      : 'var(--risk-low)';
+
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginBottom: '0.375rem',
+        }}
+      >
+        <span
+          className="label-stamp"
+          style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}
+        >
+          Intelligence Score
+        </span>
+        <span
+          className="font-data"
+          style={{ fontSize: '0.8rem', color: 'var(--amber-light)' }}
+        >
+          {score}
+          <span style={{ fontSize: '0.6rem', color: 'var(--amber-primary)' }}>/100</span>
+        </span>
+      </div>
+      <div
+        style={{
+          height: '4px',
+          background: 'var(--bg-deep)',
+          border: '1px solid var(--border-dim)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: `${score}%`,
+            height: '100%',
+            background: color,
+            boxShadow: `0 0 8px ${color}`,
+            transition: 'width 0.8s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+        />
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.58rem',
+          color: 'var(--text-faint)',
+          marginTop: '0.25rem',
+          letterSpacing: '0.06em',
+        }}
+      >
+        <span>Low (0–35)</span>
+        <span>Medium (36–65)</span>
+        <span>High (66–100)</span>
+      </div>
+    </div>
+  );
 }
 
 export default function RiskBadge({ level, size = 'md', explanation }: RiskBadgeProps) {
@@ -109,212 +162,491 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
   const [showMethodology, setShowMethodology] = useState(false);
   const config = riskConfig[level];
   const parsedBreakdown = useMemo(
-    () => explanation?.intelligence_breakdown ? parseBreakdown(explanation.intelligence_breakdown) : null,
+    () =>
+      explanation?.intelligence_breakdown
+        ? parseBreakdown(explanation.intelligence_breakdown)
+        : null,
     [explanation?.intelligence_breakdown],
   );
 
+  const badgeSize = {
+    sm: { fontSize: '0.58rem', padding: '0.18rem 0.5rem' },
+    md: { fontSize: '0.65rem', padding: '0.22rem 0.65rem' },
+    lg: { fontSize: '0.75rem', padding: '0.3rem 0.85rem' },
+  }[size];
+
   return (
-    <div className="flex items-center gap-2 relative">
-      {/* Risk Badge */}
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+      {/* Classification badge */}
       <span
-        className={`${config.color} ${sizeClasses[size]} text-white font-semibold rounded-md inline-block`}
+        className={`risk-badge risk-badge-${level}`}
+        style={{ ...badgeSize, cursor: explanation ? 'pointer' : 'default' }}
+        onClick={explanation ? () => setShowExplanation(true) : undefined}
+        title={explanation ? 'Click to view risk assessment breakdown' : config.label}
       >
-        {config.label}
+        {config.clearance}
       </span>
 
-      {/* Info Button (only show if explanation exists) */}
+      {/* Info trigger */}
       {explanation && (
+        <button
+          onClick={() => setShowExplanation(true)}
+          style={{
+            width: '18px',
+            height: '18px',
+            background: 'var(--bg-panel)',
+            border: '1px solid var(--border-main)',
+            color: 'var(--text-muted)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.6rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            letterSpacing: 0,
+            transition: 'border-color 0.2s, color 0.2s',
+            flexShrink: 0,
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = 'var(--amber-primary)';
+            e.currentTarget.style.color = 'var(--amber-light)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = 'var(--border-main)';
+            e.currentTarget.style.color = 'var(--text-muted)';
+          }}
+          title="View risk assessment breakdown"
+          aria-label="Show risk explanation"
+        >
+          ?
+        </button>
+      )}
+
+      {/* ── Modal ──────────────────────────────────────────────── */}
+      {showExplanation && explanation && (
         <>
-          <button
-            onClick={() => setShowExplanation(!showExplanation)}
-            className="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-700 font-bold text-sm transition-colors"
-            title="How was this risk level determined?"
-            aria-label="Show risk explanation"
+          {/* Backdrop */}
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(4, 8, 15, 0.85)',
+              zIndex: 40,
+              backdropFilter: 'blur(2px)',
+            }}
+            onClick={() => setShowExplanation(false)}
+          />
+
+          {/* Panel */}
+          <div
+            className="animate-fadeInUp"
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-main)',
+              zIndex: 50,
+              width: 'min(680px, 95vw)',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              boxShadow: '0 0 60px rgba(0,0,0,0.6), 0 0 0 1px var(--border-dim)',
+            }}
           >
-            ?
-          </button>
-
-          {/* Explanation Modal */}
-          {showExplanation && (
-            <>
-              {/* Backdrop */}
-              <div
-                className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            {/* Modal header */}
+            <div
+              style={{
+                borderBottom: '1px solid var(--border-dim)',
+                padding: '1rem 1.25rem',
+                background: 'var(--bg-panel)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                position: 'sticky',
+                top: 0,
+                zIndex: 1,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span className={`risk-badge risk-badge-${level}`} style={{ fontSize: '0.65rem' }}>
+                  {config.clearance}
+                </span>
+                <span
+                  className="font-editorial"
+                  style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-bright)' }}
+                >
+                  Risk Assessment Breakdown
+                </span>
+              </div>
+              <button
                 onClick={() => setShowExplanation(false)}
-              />
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--border-dim)',
+                  color: 'var(--text-muted)',
+                  width: '28px',
+                  height: '28px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1rem',
+                  transition: 'border-color 0.2s, color 0.2s',
+                  flexShrink: 0,
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = 'var(--risk-critical)';
+                  e.currentTarget.style.color = 'var(--risk-critical-bright)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = 'var(--border-dim)';
+                  e.currentTarget.style.color = 'var(--text-muted)';
+                }}
+                aria-label="Close modal"
+              >
+                ×
+              </button>
+            </div>
 
-              {/* Modal */}
-              <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl z-50 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-                <div className="p-6">
-                  {/* Header */}
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-gray-900">
-                      Risk Assessment Breakdown
-                    </h3>
-                    <button
-                      onClick={() => setShowExplanation(false)}
-                      className="text-gray-400 hover:text-gray-600"
-                      aria-label="Close modal"
-                    >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
+            {/* Modal body */}
+            <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {/* Sanctions signal */}
+              <div>
+                <div className="label-stamp" style={{ marginBottom: '0.4rem' }}>
+                  Sanctions Screening
+                </div>
+                <p
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.8rem',
+                    color: 'var(--text-main)',
+                    margin: 0,
+                    lineHeight: 1.6,
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  {explanation.sanctions_signal}
+                </p>
+              </div>
 
-                  {/* Content */}
-                  <div className="space-y-4">
-                    {/* Sanctions Signal */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">
-                        Sanctions Screening:
-                      </label>
-                      <p className="text-gray-900">{explanation.sanctions_signal}</p>
+              <div style={{ borderTop: '1px solid var(--border-dim)' }} />
+
+              {/* Intelligence signal */}
+              <div>
+                <div className="label-stamp" style={{ marginBottom: '0.4rem' }}>
+                  Intelligence Analysis
+                </div>
+                <p
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.8rem',
+                    color: 'var(--text-main)',
+                    margin: '0 0 0.875rem',
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {explanation.intelligence_signal}
+                </p>
+                {explanation.intelligence_score !== null && (
+                  <ScoreBar score={explanation.intelligence_score} />
+                )}
+              </div>
+
+              {/* Scoring breakdown */}
+              {parsedBreakdown && parsedBreakdown.rows.length > 0 && (
+                <>
+                  <div style={{ borderTop: '1px solid var(--border-dim)' }} />
+                  <div>
+                    <div className="label-stamp" style={{ marginBottom: '0.625rem' }}>
+                      Score Breakdown
                     </div>
-
-                    {/* Intelligence Analysis */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">
-                        Intelligence Analysis:
-                      </label>
-                      <p className="text-gray-900 mb-2">{explanation.intelligence_signal}</p>
-
-                      {/* Score Bar (if score available) */}
-                      {explanation.intelligence_score !== null && (
-                        <div className="mt-2">
-                          <div className="flex justify-between text-sm text-gray-600 mb-1">
-                            <span>Intelligence Score</span>
-                            <span>{explanation.intelligence_score}/100</span>
-                          </div>
-                          <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full transition-all ${
-                                explanation.intelligence_score >= 66
-                                  ? 'bg-red-500'
-                                  : explanation.intelligence_score >= 36
-                                  ? 'bg-yellow-500'
-                                  : 'bg-blue-500'
-                              }`}
-                              style={{ width: `${explanation.intelligence_score}%` }}
-                            />
-                          </div>
-                          <div className="flex justify-between text-sm text-gray-500 mt-1">
-                            <span>Low (0-35)</span>
-                            <span>Medium (36-65)</span>
-                            <span>High (66-100)</span>
-                          </div>
+                    <div
+                      style={{
+                        border: '1px solid var(--border-dim)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {parsedBreakdown.rows.map((row, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            gap: '1rem',
+                            padding: '0.5rem 0.875rem',
+                            borderBottom:
+                              i < parsedBreakdown.rows.length - 1
+                                ? '1px solid var(--border-void)'
+                                : 'none',
+                            background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
+                          }}
+                        >
+                          <span
+                            className="label-stamp"
+                            style={{ fontSize: '0.58rem', color: 'var(--text-muted)' }}
+                          >
+                            {row.category}
+                          </span>
+                          <span
+                            className="font-data"
+                            style={{ fontSize: '0.75rem', color: 'var(--text-main)', textAlign: 'right', whiteSpace: 'nowrap' }}
+                          >
+                            {row.detail}
+                          </span>
+                        </div>
+                      ))}
+                      {parsedBreakdown.rawTotal && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            padding: '0.5rem 0.875rem',
+                            background: 'var(--bg-panel)',
+                            borderTop: '1px solid var(--border-main)',
+                          }}
+                        >
+                          <span
+                            className="font-data"
+                            style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}
+                          >
+                            {parsedBreakdown.wasCapped
+                              ? `Raw: ${parsedBreakdown.rawTotal} → Capped`
+                              : 'Total Score'}
+                          </span>
+                          <span
+                            className="font-data"
+                            style={{ fontSize: '0.875rem', color: 'var(--amber-light)', fontWeight: 600 }}
+                          >
+                            {parsedBreakdown.cappedTotal}
+                            <span style={{ fontSize: '0.6rem', color: 'var(--amber-primary)' }}>/100</span>
+                          </span>
                         </div>
                       )}
                     </div>
-
-                    {/* Scoring Breakdown */}
-                    {parsedBreakdown && (
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Scoring Breakdown:
-                        </label>
-                        <div className="bg-gray-50 rounded border border-gray-200 divide-y divide-gray-100">
-                          {parsedBreakdown.rows.map((row, i) => (
-                            <div key={i} className="px-3 py-2 flex items-start justify-between gap-4">
-                              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                                {row.category}
-                              </span>
-                              <span className="text-sm text-gray-800 font-mono text-right">
-                                {row.detail}
-                              </span>
-                            </div>
-                          ))}
-                          {parsedBreakdown.rawTotal && (
-                            <div className="px-3 py-2 bg-gray-100 flex justify-between font-bold text-gray-900 text-sm">
-                              <span>{parsedBreakdown.wasCapped ? `Raw: ${parsedBreakdown.rawTotal} → Capped` : 'Total Score'}</span>
-                              <span>{parsedBreakdown.cappedTotal}/100</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Final Reasoning */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">
-                        Final Assessment:
-                      </label>
-                      <p className="text-gray-900">{explanation.final_reasoning}</p>
-                    </div>
                   </div>
+                </>
+              )}
 
-                  {/* Scoring Methodology */}
-                  <div className="mt-6 pt-4 border-t border-gray-200">
-                    <button
-                      onClick={() => setShowMethodology(!showMethodology)}
-                      className="flex items-center justify-between w-full text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+              <div style={{ borderTop: '1px solid var(--border-dim)' }} />
+
+              {/* Final reasoning */}
+              <div>
+                <div className="label-stamp" style={{ marginBottom: '0.4rem' }}>
+                  Final Assessment
+                </div>
+                <p
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.8rem',
+                    color: 'var(--text-main)',
+                    margin: 0,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {explanation.final_reasoning}
+                </p>
+              </div>
+
+              {/* Methodology accordion */}
+              <div
+                style={{
+                  borderTop: '1px solid var(--border-dim)',
+                  paddingTop: '1rem',
+                }}
+              >
+                <button
+                  onClick={() => setShowMethodology(!showMethodology)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    transition: 'opacity 0.2s',
+                  }}
+                >
+                  <span
+                    className="label-stamp-bright"
+                    style={{ fontSize: '0.62rem' }}
+                  >
+                    Scoring Methodology
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.65rem',
+                      color: 'var(--amber-primary)',
+                      transition: 'transform 0.2s',
+                      display: 'inline-block',
+                      transform: showMethodology ? 'rotate(180deg)' : 'none',
+                    }}
+                  >
+                    ▾
+                  </span>
+                </button>
+
+                {showMethodology && (
+                  <div
+                    className="animate-fadeIn"
+                    style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
+                  >
+                    <p
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.7rem',
+                        color: 'var(--text-muted)',
+                        margin: 0,
+                        lineHeight: 1.5,
+                      }}
                     >
-                      <span>Scoring Methodology</span>
-                      <svg
-                        className={`w-4 h-4 transition-transform ${showMethodology ? 'rotate-180' : ''}`}
-                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      Total score is capped at 100. Raw sums exceeding 100 are displayed as capped.
+                    </p>
+                    {SCORING_METHODOLOGY.map((category) => (
+                      <div
+                        key={category.title}
+                        style={{ border: '1px solid var(--border-dim)', overflow: 'hidden' }}
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-
-                    {showMethodology && (
-                      <div className="mt-3 space-y-4">
-                        <p className="text-xs text-gray-500">
-                          Total score is capped at 100. If the raw sum of all categories exceeds 100, the displayed score is capped at 100.
-                        </p>
-                        {SCORING_METHODOLOGY.map(category => (
-                          <div key={category.title} className="bg-gray-50 rounded border border-gray-200">
-                            <div className="px-3 py-2 bg-gray-100 rounded-t border-b border-gray-200 flex items-center justify-between">
-                              <span className="text-xs font-bold text-gray-800 uppercase tracking-wide">
-                                {category.title}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-semibold text-indigo-600">{category.range}</span>
-                                <span className="text-xs text-gray-500 italic">{category.note}</span>
-                              </div>
-                            </div>
-                            <div className="divide-y divide-gray-100">
-                              {category.items.map(item => (
-                                <div key={item.label} className="px-3 py-1.5 flex items-center justify-between gap-4">
-                                  <span className="text-xs text-gray-700">{item.label}</span>
-                                  <span className="text-xs font-mono font-semibold text-gray-900 whitespace-nowrap">
-                                    {item.pts} pts{'suffix' in item ? ` (${item.suffix})` : ''}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
+                        <div
+                          style={{
+                            background: 'var(--bg-panel)',
+                            borderBottom: '1px solid var(--border-dim)',
+                            padding: '0.5rem 0.875rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '0.5rem',
+                          }}
+                        >
+                          <span
+                            className="label-stamp"
+                            style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}
+                          >
+                            {category.title}
+                          </span>
+                          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexShrink: 0 }}>
+                            <span className="font-data" style={{ fontSize: '0.65rem', color: 'var(--amber-primary)' }}>
+                              {category.range}
+                            </span>
+                            <span
+                              style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '0.6rem',
+                                color: 'var(--text-faint)',
+                                fontStyle: 'italic',
+                              }}
+                            >
+                              {category.note}
+                            </span>
+                          </div>
+                        </div>
+                        {category.items.map((item) => (
+                          <div
+                            key={item.label}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: '1rem',
+                              padding: '0.375rem 0.875rem',
+                              borderBottom: '1px solid var(--border-void)',
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '0.7rem',
+                                color: 'var(--text-secondary)',
+                              }}
+                            >
+                              {item.label}
+                            </span>
+                            <span
+                              className="font-data"
+                              style={{
+                                fontSize: '0.72rem',
+                                color: 'var(--text-main)',
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {item.pts} pts
+                              {'suffix' in item ? (
+                                <span style={{ color: 'var(--text-muted)', marginLeft: '0.25rem' }}>
+                                  ({item.suffix})
+                                </span>
+                              ) : null}
+                            </span>
                           </div>
                         ))}
-
-                        <div className="bg-gray-50 rounded border border-gray-200 divide-y divide-gray-100">
-                          {[
-                            { label: 'Low', range: '0–35', color: 'bg-blue-500' },
-                            { label: 'Medium', range: '36–65', color: 'bg-yellow-500' },
-                            { label: 'High', range: '66–100', color: 'bg-red-500' },
-                          ].map(tier => (
-                            <div key={tier.label} className="px-3 py-1.5 flex items-center gap-3">
-                              <span className={`w-2 h-2 rounded-full ${tier.color} flex-shrink-0`} />
-                              <span className="text-xs font-semibold text-gray-800">{tier.label}</span>
-                              <span className="text-xs text-gray-500">{tier.range} points</span>
-                            </div>
-                          ))}
-                        </div>
                       </div>
-                    )}
-                  </div>
+                    ))}
 
-                  {/* Footer */}
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <p className="text-sm text-gray-500">
-                      This risk assessment combines sanctions screening results with AI-generated
-                      intelligence analysis for a comprehensive evaluation.
-                    </p>
+                    {/* Scale reference */}
+                    <div style={{ border: '1px solid var(--border-dim)', overflow: 'hidden' }}>
+                      {[
+                        { label: 'LOW / SAFE',  range: '0–35',   color: 'var(--risk-low)' },
+                        { label: 'MEDIUM',       range: '36–65',  color: 'var(--risk-mid)' },
+                        { label: 'HIGH / CRITICAL', range: '66–100', color: 'var(--risk-critical)' },
+                      ].map((tier, i, arr) => (
+                        <div
+                          key={tier.label}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.75rem',
+                            padding: '0.375rem 0.875rem',
+                            borderBottom: i < arr.length - 1 ? '1px solid var(--border-void)' : 'none',
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              background: tier.color,
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span
+                            className="font-data"
+                            style={{ fontSize: '0.68rem', color: 'var(--text-main)', letterSpacing: '0.1em' }}
+                          >
+                            {tier.label}
+                          </span>
+                          <span
+                            className="font-data"
+                            style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: 'auto' }}
+                          >
+                            {tier.range}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
-            </>
-          )}
+
+              {/* Footer */}
+              <p
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.68rem',
+                  color: 'var(--text-faint)',
+                  margin: 0,
+                  lineHeight: 1.6,
+                  borderTop: '1px solid var(--border-void)',
+                  paddingTop: '0.875rem',
+                }}
+              >
+                Risk assessment combines sanctions screening with AI-powered intelligence analysis for a
+                comprehensive compliance evaluation.
+              </p>
+            </div>
+          </div>
         </>
       )}
     </div>

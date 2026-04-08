@@ -131,7 +131,7 @@ export default function ResultsPage({ params }: PageProps) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0b1121] text-white flex items-center justify-center">
+      <div style={{ minHeight: '100vh', background: 'var(--bg-void)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <LoadingSpinner size="lg" message="Loading results..." />
       </div>
     );
@@ -139,16 +139,24 @@ export default function ResultsPage({ params }: PageProps) {
 
   if (error || !results) {
     return (
-      <div className="min-h-screen bg-[#0b1121] text-white">
-        <div className="max-w-4xl mx-auto px-4 py-16">
-          <div className="bg-red-900/20 border border-red-700 rounded-lg p-8 text-center">
-            <h1 className="text-2xl font-bold text-red-400 mb-4">Error Loading Results</h1>
-            <p className="text-red-300 mb-6">{error}</p>
-            <Link
-              href="/"
-              className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-            >
-              Return to Search
+      <div style={{ minHeight: '100vh', background: 'var(--bg-void)', color: 'var(--text-main)' }}>
+        <div style={{ maxWidth: '720px', margin: '0 auto', padding: '4rem 1.5rem' }}>
+          <div
+            style={{
+              background: 'var(--risk-critical-bg)',
+              border: '1px solid var(--risk-critical)',
+              padding: '2rem',
+              textAlign: 'center',
+            }}
+          >
+            <div className="label-stamp" style={{ color: 'var(--risk-critical-bright)', marginBottom: '1rem', fontSize: '0.8rem' }}>
+              Error Loading Results
+            </div>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--risk-critical-bright)', opacity: 0.8, marginBottom: '1.5rem' }}>
+              {error}
+            </p>
+            <Link href="/" className="btn-secondary" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              ← Return to Search
             </Link>
           </div>
         </div>
@@ -163,165 +171,139 @@ export default function ResultsPage({ params }: PageProps) {
   const allMedia = [...officialSources, ...generalMedia, ...mediaData];
 
   return (
-    <div className="min-h-screen bg-[#0b1121] text-white">
+    <div style={{ minHeight: '100vh', background: 'var(--bg-void)', color: 'var(--text-main)' }}>
       {/* Header */}
-      <header className="border-b border-gray-800 bg-[#0d1425]">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-4 lg:px-6 py-6">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-            <Link href="/" className="flex items-center gap-3">
-              <Image src="/bear-logo.png" alt="BEAR² Logo" width={144} height={144} className="rounded" />
-              <div>
-                <h1 className="text-2xl font-bold font-mono tracking-tight text-blue-400">
-                  BEAR<sup>2</sup>
-                </h1>
-                <p className="text-sm text-gray-400">
-                  Background Entity Assessment &amp; Risk Research
-                </p>
+      <header style={{ borderBottom: '1px solid var(--border-dim)', background: 'var(--bg-deep)', position: 'relative', zIndex: 10 }}>
+        <div style={{ height: '2px', background: 'linear-gradient(90deg, transparent, var(--amber-primary), transparent)' }} />
+        <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1rem 1.5rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', textDecoration: 'none' }}>
+            <Image src="/bear-logo.png" alt="BEAR²" width={36} height={36} style={{ display: 'block', opacity: 0.9 }} />
+            <div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem' }}>
+                <span className="font-display" style={{ fontSize: '1.7rem', lineHeight: 1, color: 'var(--amber-light)', letterSpacing: '0.08em' }}>BEAR</span>
+                <span className="font-display" style={{ fontSize: '0.9rem', color: 'var(--amber-primary)', verticalAlign: 'super' }}>2</span>
               </div>
-            </Link>
-            <div className="flex flex-wrap items-center gap-3">
-              <SaveButton
-                searchId={searchId}
-                initialSaved={results.is_saved ?? false}
-                initialLabel={results.save_label}
-              />
-              <ExportControls searchId={searchId} />
-              <Link
-                href="/"
-                className="text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap"
-              >
-                ← New Search
-              </Link>
+              <div className="label-stamp" style={{ fontSize: '0.5rem', marginTop: '0.1rem', color: 'var(--text-faint)' }}>
+                Intelligence Dossier
+              </div>
             </div>
+          </Link>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.625rem' }}>
+            <SaveButton
+              searchId={searchId}
+              initialSaved={results.is_saved ?? false}
+              initialLabel={results.save_label}
+            />
+            <ExportControls searchId={searchId} />
+            <Link
+              href="/"
+              className="btn-secondary"
+              style={{ fontSize: '0.65rem', textDecoration: 'none', whiteSpace: 'nowrap' }}
+            >
+              ← New Search
+            </Link>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-screen-2xl mx-auto px-4 sm:px-4 lg:px-6 py-8">
+      <main style={{ maxWidth: '1600px', margin: '0 auto', padding: '2rem 1.5rem 4rem' }}>
         {/* Summary Card */}
-        <div className="bg-[#0d1425] border border-gray-800 rounded-xl p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div
+          className="bracket-corners bracket-corners-active animate-fadeInUp"
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-main)',
+            marginBottom: '1.5rem',
+          }}
+        >
+          {/* Panel label */}
+          <div style={{ borderBottom: '1px solid var(--border-dim)', padding: '0.75rem 1.25rem', background: 'var(--bg-panel)', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+            <div style={{ width: '6px', height: '6px', background: 'var(--amber-main)', boxShadow: '0 0 6px var(--amber-primary)' }} />
+            <span className="label-stamp-bright" style={{ fontSize: '0.6rem' }}>Entity Intelligence Dossier</span>
+          </div>
+
+          {/* Top metadata */}
+          <div style={{ padding: '1.25rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem' }}>
             <div>
-              <p className="text-sm text-gray-400 mb-2">Entity Name</p>
-              <p className="text-lg font-semibold">{results.entity_name}</p>
+              <div className="label-stamp" style={{ marginBottom: '0.375rem' }}>Target Entity</div>
+              <p className="font-editorial" style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-bright)', margin: 0, lineHeight: 1.3 }}>
+                {results.entity_name}
+              </p>
             </div>
             <div>
-              <p className="text-sm text-gray-400 mb-2">Risk Level</p>
-              <RiskBadge
-                level={results.risk_level}
-                size="lg"
-                explanation={results.risk_explanation}
-              />
+              <div className="label-stamp" style={{ marginBottom: '0.375rem' }}>Risk Classification</div>
+              <RiskBadge level={results.risk_level} size="lg" explanation={results.risk_explanation} />
             </div>
             <div>
-              <p className="text-sm text-gray-400 mb-2">Tier</p>
-              <div className="flex items-center gap-2">
+              <div className="label-stamp" style={{ marginBottom: '0.375rem' }}>Research Tier</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <TierBadge tier={results.tier} />
-                {(results.tier === 'network' || results.tier === 'deep') && (
-                  <span className="text-sm text-blue-400">
-                    {results.metadata?.network_depth ? `(${results.metadata.network_depth}L)` : ''}
-                  </span>
-                )}
-                {results.tier === 'deep' && (
-                  <span className="text-sm px-2 py-0.5 bg-purple-900/40 border border-purple-600 text-purple-300 rounded font-semibold">
-                    DEEP RESEARCH
+                {(results.tier === 'network' || results.tier === 'deep') && results.metadata?.network_depth != null && (
+                  <span className="font-data" style={{ fontSize: '0.72rem', color: 'var(--cyan-main)' }}>
+                    depth-{String(results.metadata.network_depth)}
                   </span>
                 )}
               </div>
             </div>
             <div>
-              <p className="text-sm text-gray-400 mb-2">Timestamp</p>
-              <p className="text-sm">{format(new Date(results.timestamp), 'PPpp')}</p>
+              <div className="label-stamp" style={{ marginBottom: '0.375rem' }}>Timestamp</div>
+              <span className="font-data" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                {format(new Date(results.timestamp), 'PPpp')}
+              </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-gray-800">
-            <div>
-              <p className="text-2xl font-bold text-blue-400">{results.sanctions_hits}</p>
-              <p className="text-sm text-gray-400">Sanctions Hits</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-purple-400">{allMedia.length}</p>
-              <p className="text-sm text-gray-400">Media Hits</p>
-            </div>
-
-            {/* Show network/deep tier stats if available */}
-            {(results.tier === 'network' || results.tier === 'deep') ? (
-              <>
-                <div>
-                  <p className="text-2xl font-bold text-green-400">
-                    {results.subsidiaries?.length || 0}
-                  </p>
-                  <p className="text-sm text-gray-400">Subsidiaries</p>
+          {/* Stats row */}
+          <div style={{ borderTop: '1px solid var(--border-dim)', padding: '1rem 1.25rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem' }}>
+            {[
+              { value: results.sanctions_hits, label: 'Sanctions Hits', color: results.sanctions_hits > 0 ? 'var(--risk-critical-bright)' : 'var(--risk-safe-bright)' },
+              { value: allMedia.length, label: 'Media Hits', color: 'var(--amber-light)' },
+              ...(results.tier === 'network' || results.tier === 'deep' ? [
+                { value: results.subsidiaries?.length || 0, label: 'Subsidiaries', color: 'var(--cyan-bright)' },
+                results.tier === 'deep'
+                  ? { value: results.financial_flows?.length || 0, label: 'Financial Flows', color: 'var(--risk-mid-bright)' }
+                  : { value: ((results.financial_intelligence as FinancialIntelligence)?.directors?.length || 0) + ((results.financial_intelligence as FinancialIntelligence)?.shareholders?.length || 0), label: 'People', color: 'var(--risk-mid-bright)' },
+              ] : [
+                { value: officialSources.length, label: 'Official Sources', color: 'var(--risk-safe-bright)' },
+                { value: generalMedia.length, label: 'General Media', color: 'var(--text-secondary)' },
+              ]),
+            ].map((stat) => (
+              <div key={stat.label}>
+                <div className="font-display" style={{ fontSize: '2rem', lineHeight: 1, color: stat.color, letterSpacing: '0.04em' }}>
+                  {stat.value}
                 </div>
-                {results.tier === 'deep' ? (
-                  <>
-                    <div>
-                      <p className="text-2xl font-bold text-purple-400">
-                        {results.financial_flows?.length || 0}
-                      </p>
-                      <p className="text-sm text-gray-400">Financial Flows</p>
-                    </div>
-                  </>
-                ) : (
-                  <div>
-                    <p className="text-2xl font-bold text-orange-400">
-                      {((results.financial_intelligence as FinancialIntelligence)?.directors?.length || 0) +
-                       ((results.financial_intelligence as FinancialIntelligence)?.shareholders?.length || 0)}
-                    </p>
-                    <p className="text-sm text-gray-400">People</p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <div>
-                  <p className="text-2xl font-bold text-green-400">{officialSources.length}</p>
-                  <p className="text-sm text-gray-400">Official Sources</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-yellow-400">{generalMedia.length}</p>
-                  <p className="text-sm text-gray-400">General Media</p>
-                </div>
-              </>
-            )}
+                <div className="label-stamp" style={{ marginTop: '0.25rem', color: 'var(--text-muted)' }}>{stat.label}</div>
+              </div>
+            ))}
           </div>
 
           {/* Phase 4 stats row — deep tier only */}
           {results.tier === 'deep' && (results.director_pivots?.length || results.infrastructure?.length || results.beneficial_owners?.length) ? (
-            <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-800">
-              <div>
-                <p className="text-2xl font-bold text-violet-400">
-                  {(results.director_pivots || []).reduce((sum, p) => sum + ((p as DirectorPivot).companies?.length || 0), 0)}
-                </p>
-                <p className="text-sm text-gray-400">Interlocked Companies</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-cyan-400">
-                  {results.infrastructure?.length || 0}
-                </p>
-                <p className="text-sm text-gray-400">Domains Analysed</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-emerald-400">
-                  {results.beneficial_owners?.length || 0}
-                </p>
-                <p className="text-sm text-gray-400">UBOs Found</p>
-              </div>
+            <div style={{ borderTop: '1px solid var(--border-void)', padding: '0.875rem 1.25rem', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', background: 'var(--bg-panel)' }}>
+              {[
+                { value: (results.director_pivots || []).reduce((s, p) => s + ((p as DirectorPivot).companies?.length || 0), 0), label: 'Interlocked Companies', color: 'var(--cyan-main)' },
+                { value: results.infrastructure?.length || 0, label: 'Domains Analysed', color: 'var(--cyan-main)' },
+                { value: results.beneficial_owners?.length || 0, label: 'UBOs Found', color: 'var(--risk-safe-bright)' },
+              ].map((stat) => (
+                <div key={stat.label}>
+                  <div className="font-display" style={{ fontSize: '1.6rem', lineHeight: 1, color: stat.color, letterSpacing: '0.04em' }}>{stat.value}</div>
+                  <div className="label-stamp" style={{ marginTop: '0.2rem', color: 'var(--text-muted)' }}>{stat.label}</div>
+                </div>
+              ))}
             </div>
           ) : null}
         </div>
 
         {/* Network / Deep Tier Confirmation Banner */}
         {(results.tier === 'network' || results.tier === 'deep') && (
-          <div className="mb-6 bg-blue-900/20 border border-blue-700 rounded-lg p-4">
+          <div style={{ marginBottom: '1.25rem', background: 'var(--bg-panel)', border: '1px solid var(--border-main)', borderLeft: '2px solid var(--cyan-main)', padding: '1rem 1.25rem' }}>
             <div className="flex items-start gap-3">
-              <span className="text-blue-400 text-xl">🔬</span>
+              <span style={{ color: 'var(--cyan-bright)', flexShrink: 0 }}>◈</span>
               <div className="flex-1">
-                <h4 className="text-sm font-semibold text-blue-400 mb-1">
+                <div className="label-stamp-bright" style={{ marginBottom: '0.375rem' }}>
                   {results.tier === 'deep' ? 'Deep Tier Research Completed' : 'Network Tier Research Completed'}
-                </h4>
+                </div>
                 <p className="text-sm text-blue-300">
                   {results.metadata?.network_depth && (results.metadata.network_depth as number) > 1
                     ? `Multi-level corporate structure analysis performed (${results.metadata.network_depth} levels deep).`
@@ -372,8 +354,8 @@ export default function ResultsPage({ params }: PageProps) {
                   }
                 </p>
                 {Array.isArray(results.metadata?.data_sources_used) && (
-                  <p className="text-sm text-blue-300/70 mt-1">
-                    <strong>Data sources checked:</strong>{' '}
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.375rem' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Sources: </span>
                     {(results.metadata.data_sources_used as string[]).map((source: string) => {
                       const displayName = source === 'opencorporates_api' ? 'OpenCorporates API' :
                                           source === 'sec_edgar' ? 'SEC EDGAR' :
@@ -383,161 +365,77 @@ export default function ResultsPage({ params }: PageProps) {
                     }).join(', ')}
                   </p>
                 )}
-                {results.metadata?.network_depth && (results.metadata.network_depth as number) > 1 ? (
-                  <p className="text-sm text-blue-300/70 mt-2">
-                    <strong>Search limits:</strong>{' '}
-                    {(results.metadata.network_depth as number) >= 2 && (
-                      <>Top {results.metadata.max_level_2_searches || 20} subsidiaries searched for level 2</>
-                    )}
-                    {(results.metadata.network_depth as number) >= 3 && (
-                      <>, top {results.metadata.max_level_3_searches || 10} for level 3</>
-                    )}
-                  </p>
-                ) : null}
               </div>
             </div>
           </div>
         )}
 
-        {/* Warnings Banner (Network Tier) */}
+        {/* Warnings Banner */}
         {results.warnings && results.warnings.length > 0 && (
-          <div className="mb-6 bg-yellow-900/20 border border-yellow-700 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <span className="text-yellow-400 text-xl">⚠️</span>
-              <div className="flex-1">
-                <h4 className="text-sm font-semibold text-yellow-400 mb-2">
+          <div style={{ marginBottom: '1.25rem', background: 'var(--risk-mid-bg)', border: '1px solid var(--risk-mid)', borderLeft: '2px solid var(--risk-mid-bright)', padding: '1rem 1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+              <span style={{ color: 'var(--risk-mid-bright)', flexShrink: 0 }}>⚠</span>
+              <div>
+                <div className="label-stamp" style={{ color: 'var(--risk-mid-bright)', marginBottom: '0.5rem' }}>
                   Data Source Limitations
-                </h4>
-                <ul className="text-sm text-yellow-300 space-y-1">
+                </div>
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                   {results.warnings.map((warning, idx) => (
-                    <li key={idx}>• {warning.message}</li>
+                    <li key={idx} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--risk-mid-bright)', opacity: 0.85 }}>
+                      · {warning.message}
+                    </li>
                   ))}
                 </ul>
-                {results.data_sources_used && results.data_sources_used.length > 0 && (
-                  <p className="text-sm text-yellow-300/70 mt-2">
-                    Data sources used: {results.data_sources_used.join(', ')}
-                  </p>
-                )}
               </div>
             </div>
           </div>
         )}
 
         {/* Tabs */}
-        <div className="border-b border-gray-800 mb-6">
-          <nav className="flex gap-6">
-            <button
-              onClick={() => setActiveTab('sanctions')}
-              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'sanctions'
-                  ? 'border-blue-500 text-blue-400'
-                  : 'border-transparent text-gray-400 hover:text-white'
-              }`}
-            >
-              Sanctions Hits ({results.sanctions_hits})
-            </button>
-            <button
-              onClick={() => setActiveTab('media')}
-              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'media'
-                  ? 'border-blue-500 text-blue-400'
-                  : 'border-transparent text-gray-400 hover:text-white'
-              }`}
-            >
-              Media Intelligence ({allMedia.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('report')}
-              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'report'
-                  ? 'border-blue-500 text-blue-400'
-                  : 'border-transparent text-gray-400 hover:text-white'
-              }`}
-            >
-              Intelligence Report
-            </button>
-
-            {/* Network / Deep Tier Tabs */}
-            {(results.tier === 'network' || results.tier === 'deep') && results.network_data && (
-              <>
+        <div style={{ borderBottom: '1px solid var(--border-dim)', marginBottom: '1.5rem', overflowX: 'auto' }}>
+          <nav style={{ display: 'flex', gap: 0, minWidth: 'max-content' }}>
+            {([
+              { key: 'sanctions', label: `Sanctions (${results.sanctions_hits})`, always: true },
+              { key: 'media', label: `Media (${allMedia.length})`, always: true },
+              { key: 'report', label: 'Intel Report', always: true },
+              ...(results.tier === 'network' || results.tier === 'deep') && results.network_data ? [
+                { key: 'network-relations', label: `Network (${(results.network_data?.parent_info ? 1 : 0) + (results.subsidiaries?.length || 0) + ((results.network_data as any)?.sisters?.length || 0)})`, always: false },
+                { key: 'financial', label: 'Financial Intel', always: false },
+                ...(results.tier === 'deep' ? [
+                  { key: 'financial-flows', label: `Flows (${results.financial_flows?.length || 0})`, always: false },
+                  ...(results.director_pivots ? [{ key: 'management-network', label: `Directors (${results.director_pivots.length})`, always: false }] : []),
+                  ...(results.infrastructure ? [{ key: 'infrastructure', label: `Infra (${results.infrastructure.length})`, always: false }] : []),
+                  ...(results.beneficial_owners ? [{ key: 'beneficial-ownership', label: `UBOs (${results.beneficial_owners.length})`, always: false }] : []),
+                ] : []),
+              ] : [],
+            ] as { key: TabType; label: string; always: boolean }[]).map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
                 <button
-                  onClick={() => setActiveTab('financial')}
-                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === 'financial'
-                      ? 'border-blue-500 text-blue-400'
-                      : 'border-transparent text-gray-400 hover:text-white'
-                  }`}
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.7rem',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    padding: '0.75rem 1rem',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: isActive ? '2px solid var(--amber-main)' : '2px solid transparent',
+                    color: isActive ? 'var(--amber-light)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'color 0.15s, border-color 0.15s',
+                    marginBottom: '-1px',
+                  }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = 'var(--text-main)'; }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = 'var(--text-muted)'; }}
                 >
-                  Financial Intelligence
+                  {tab.label}
                 </button>
-                <button
-                  onClick={() => setActiveTab('network-relations')}
-                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === 'network-relations'
-                      ? 'border-blue-500 text-blue-400'
-                      : 'border-transparent text-gray-400 hover:text-white'
-                  }`}
-                >
-                  Network Relations (
-                    {(results.network_data?.parent_info ? 1 : 0) +
-                     (results.subsidiaries?.length || 0) +
-                     ((results.network_data as any)?.sisters?.length || 0)}
-                  )
-                </button>
-
-                {/* Financial Flows tab — deep tier only */}
-                {results.tier === 'deep' && (
-                  <button
-                    onClick={() => setActiveTab('financial-flows')}
-                    className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                      activeTab === 'financial-flows'
-                        ? 'border-purple-500 text-purple-400'
-                        : 'border-transparent text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    Financial Flows ({results.financial_flows?.length || 0})
-                  </button>
-                )}
-
-                {/* Phase 4 tabs — deep tier only */}
-                {results.tier === 'deep' && results.director_pivots && (
-                  <button
-                    onClick={() => setActiveTab('management-network')}
-                    className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                      activeTab === 'management-network'
-                        ? 'border-violet-500 text-violet-400'
-                        : 'border-transparent text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    Management Network ({results.director_pivots.length})
-                  </button>
-                )}
-                {results.tier === 'deep' && results.infrastructure && (
-                  <button
-                    onClick={() => setActiveTab('infrastructure')}
-                    className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                      activeTab === 'infrastructure'
-                        ? 'border-cyan-500 text-cyan-400'
-                        : 'border-transparent text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    Infrastructure ({results.infrastructure.length})
-                  </button>
-                )}
-                {results.tier === 'deep' && results.beneficial_owners && (
-                  <button
-                    onClick={() => setActiveTab('beneficial-ownership')}
-                    className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                      activeTab === 'beneficial-ownership'
-                        ? 'border-emerald-500 text-emerald-400'
-                        : 'border-transparent text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    Beneficial Ownership ({results.beneficial_owners.length})
-                  </button>
-                )}
-              </>
-            )}
+              );
+            })}
           </nav>
         </div>
 
@@ -545,50 +443,42 @@ export default function ResultsPage({ params }: PageProps) {
         <div>
           {/* Sanctions Tab */}
           {activeTab === 'sanctions' && (
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {results.sanctions_data.length === 0 ? (
-                <div className="bg-green-900/20 border border-green-700 rounded-lg p-8 text-center">
-                  <p className="text-green-400">✓ No sanctions matches found</p>
+                <div style={{ background: 'var(--risk-safe-bg)', border: '1px solid var(--risk-safe)', padding: '2.5rem', textAlign: 'center' }}>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--risk-safe-bright)', letterSpacing: '0.08em' }}>
+                    ✓ No sanctions matches found
+                  </p>
                 </div>
               ) : (
                 results.sanctions_data.map((hit: SanctionsHit, idx: number) => (
-                  <div key={idx} className="bg-[#0d1425] border border-gray-800 rounded-lg p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold">{hit.name}</h3>
-                          <span className={`text-sm px-2 py-1 rounded ${
-                            hit.match_quality === 'EXACT' ? 'bg-red-600' :
-                            hit.match_quality === 'HIGH' ? 'bg-orange-600' :
-                            hit.match_quality === 'MEDIUM' ? 'bg-yellow-600' :
-                            'bg-gray-600'
-                          }`}>
-                            {hit.match_quality} ({hit.combined_score.toFixed(0)}%)
+                  <div key={idx} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-main)', padding: '1.25rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.875rem' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.625rem' }}>
+                          <span className="font-editorial" style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-bright)' }}>{hit.name}</span>
+                          <span style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.62rem',
+                            letterSpacing: '0.12em',
+                            padding: '0.15rem 0.5rem',
+                            background: hit.match_quality === 'EXACT' ? 'var(--risk-critical-bg)' : hit.match_quality === 'HIGH' ? 'var(--risk-high-bg)' : 'var(--risk-mid-bg)',
+                            color: hit.match_quality === 'EXACT' ? 'var(--risk-critical-bright)' : hit.match_quality === 'HIGH' ? 'var(--risk-high-bright)' : 'var(--risk-mid-bright)',
+                            border: `1px solid ${hit.match_quality === 'EXACT' ? 'var(--risk-critical)' : hit.match_quality === 'HIGH' ? 'var(--risk-high)' : 'var(--risk-mid)'}`,
+                          }}>
+                            {hit.match_quality} — {hit.combined_score.toFixed(0)}%
                           </span>
                         </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm mb-3">
-                          <div>
-                            <span className="text-gray-400">List:</span>
-                            <span className="ml-2 text-white">{hit.list}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400">Type:</span>
-                            <span className="ml-2 text-white">{hit.type}</span>
-                          </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.5rem', marginBottom: '0.625rem' }}>
+                          <div><span className="label-stamp">List: </span><span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-main)' }}>{hit.list}</span></div>
+                          <div><span className="label-stamp">Type: </span><span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-main)' }}>{hit.type}</span></div>
                         </div>
-                        <p className="text-sm text-gray-400 mb-2">
-                          <span className="font-medium">Address:</span> {hit.address}
-                        </p>
-                        <p className="text-sm text-gray-300">{hit.remark}</p>
+                        {hit.address && <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-secondary)', margin: '0 0 0.375rem' }}><span style={{ color: 'var(--text-muted)' }}>Address: </span>{hit.address}</p>}
+                        {hit.remark && <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-secondary)', margin: 0 }}>{hit.remark}</p>}
                       </div>
                     </div>
                     {hit.link && (
-                      <a
-                        href={hit.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 text-sm mt-3 inline-block"
-                      >
+                      <a href={hit.link} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.08em', color: 'var(--amber-primary)', textDecoration: 'none', display: 'inline-block' }}>
                         View Source →
                       </a>
                     )}
@@ -600,32 +490,32 @@ export default function ResultsPage({ params }: PageProps) {
 
           {/* Media Tab */}
           {activeTab === 'media' && (
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {allMedia.length === 0 ? (
-                <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-8 text-center">
-                  <p className="text-gray-400">No media intelligence found</p>
+                <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-dim)', padding: '2.5rem', textAlign: 'center' }}>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>No media intelligence found</p>
                 </div>
               ) : (
                 allMedia.map((hit: MediaHit, idx: number) => (
-                  <div key={idx} className="bg-[#0d1425] border border-gray-800 rounded-lg p-5">
-                    <div className="flex items-start gap-3 mb-2">
-                      <span className={`text-sm px-2 py-1 rounded flex-shrink-0 ${
-                        hit.source_type === 'official' ? 'bg-green-600' : 'bg-blue-600'
-                      }`}>
+                  <div key={idx} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-dim)', padding: '1rem 1.25rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                      <span style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.58rem',
+                        letterSpacing: '0.15em',
+                        padding: '0.15rem 0.5rem',
+                        flexShrink: 0,
+                        background: hit.source_type === 'official' ? 'var(--risk-safe-bg)' : 'var(--bg-panel)',
+                        color: hit.source_type === 'official' ? 'var(--risk-safe-bright)' : 'var(--text-secondary)',
+                        border: `1px solid ${hit.source_type === 'official' ? 'var(--risk-safe)' : 'var(--border-dim)'}`,
+                      }}>
                         {hit.source_type === 'official' ? 'OFFICIAL' : 'MEDIA'}
                       </span>
-                      <h3 className="text-base font-semibold flex-1">{hit.title}</h3>
+                      <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-bright)', margin: 0, lineHeight: 1.4 }}>{hit.title}</h3>
                     </div>
-                    <p className="text-sm text-gray-400 mb-3">{hit.snippet}</p>
-                    {hit.relevance && (
-                      <p className="text-sm text-green-400 mb-2">✓ {hit.relevance}</p>
-                    )}
-                    <a
-                      href={hit.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:text-blue-300 text-sm"
-                    >
+                    {hit.snippet && <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', lineHeight: 1.6 }}>{hit.snippet}</p>}
+                    {hit.relevance && <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--risk-safe-bright)', marginBottom: '0.5rem' }}>✓ {hit.relevance}</p>}
+                    <a href={hit.url} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.08em', color: 'var(--amber-primary)', textDecoration: 'none' }}>
                       Read More →
                     </a>
                   </div>
@@ -636,14 +526,14 @@ export default function ResultsPage({ params }: PageProps) {
 
           {/* Intelligence Report Tab */}
           {activeTab === 'report' && (
-            <div className="bg-[#0d1425] border border-gray-800 rounded-lg p-6">
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-dim)', padding: '1.5rem' }}>
               {results.intelligence_report ? (
                 <div
-                  className="prose prose-invert max-w-none prose-headings:text-white prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-p:text-gray-300 prose-a:text-blue-400 prose-strong:text-white prose-ul:text-gray-300"
+                  className="prose-intel"
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(results.intelligence_report) }}
                 />
               ) : (
-                <p className="text-gray-400 text-center py-8">
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', padding: '2.5rem 0' }}>
                   No intelligence report available
                 </p>
               )}
