@@ -511,6 +511,100 @@ export default function NetworkGraph({
           ))}
         </div>
       )}
+
+      {/* Node Table */}
+      {networkData.nodes && networkData.nodes.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--border-dim)', marginTop: '1px' }}>
+          <div style={{
+            padding: '0.625rem 1rem',
+            background: 'var(--bg-deep)',
+            borderBottom: '1px solid var(--border-void)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.65rem',
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            color: 'var(--text-muted)',
+          }}>
+            Network Nodes
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr>
+                  {[
+                    'Name', 'Type', 'Entity', 'Jurisdiction', 'Status',
+                    'Ownership %', 'Role / Title', 'Nationality', 'Sanctions',
+                  ].map((col) => (
+                    <th
+                      key={col}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        textAlign: 'left',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.65rem',
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        color: 'var(--text-muted)',
+                        background: 'var(--bg-panel)',
+                        borderBottom: '1px solid var(--border-dim)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {networkData.nodes.map((node, idx) => {
+                  const d = node.data;
+                  const isSubShareholder = d.node_type === 'subsidiary' || d.node_type === 'shareholder';
+                  const isDirector = d.node_type === 'director';
+                  const isPerson = d.entity_type === 'person';
+                  const hasSanctions = typeof d.sanctions_hit === 'number' && d.sanctions_hit > 0;
+                  return (
+                    <tr
+                      key={d.id}
+                      style={{
+                        background: idx % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-panel)',
+                        borderBottom: '1px solid var(--border-void)',
+                      }}
+                    >
+                      <td style={{ padding: '0.5rem 1rem', color: 'var(--text-bright)', fontWeight: 500, fontFamily: 'var(--font-mono)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                        {d.label}
+                      </td>
+                      <td style={{ padding: '0.5rem 1rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', textTransform: 'capitalize' }}>
+                        {d.node_type}
+                      </td>
+                      <td style={{ padding: '0.5rem 1rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', textTransform: 'capitalize' }}>
+                        {d.entity_type}
+                      </td>
+                      <td style={{ padding: '0.5rem 1rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                        {d.jurisdiction || '—'}
+                      </td>
+                      <td style={{ padding: '0.5rem 1rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                        {d.status || '—'}
+                      </td>
+                      <td style={{ padding: '0.5rem 1rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                        {isSubShareholder && d.ownership_pct != null ? `${d.ownership_pct}%` : '—'}
+                      </td>
+                      <td style={{ padding: '0.5rem 1rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                        {isDirector && d.title ? String(d.title) : '—'}
+                      </td>
+                      <td style={{ padding: '0.5rem 1rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                        {isPerson && d.nationality ? String(d.nationality) : '—'}
+                      </td>
+                      <td style={{ padding: '0.5rem 1rem', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: hasSanctions ? 'var(--red-alert, #e53e3e)' : 'var(--text-secondary)', fontWeight: hasSanctions ? 700 : 400 }}>
+                        {typeof d.sanctions_hit === 'number' ? d.sanctions_hit : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

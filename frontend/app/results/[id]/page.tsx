@@ -177,8 +177,9 @@ export default function ResultsPage({ params }: PageProps) {
   const mediaData: MediaHit[] = results.research_data.media_data || [];
   const officialSources = results.research_data.media_intelligence?.official_sources || [];
   const generalMedia = results.research_data.media_intelligence?.general_media || [];
+  const IRRELEVANT_PATTERNS = /does not (explicitly )?mention|is not (explicitly )?mentioned|not explicitly mention/i;
   const allMedia = [...officialSources, ...generalMedia, ...mediaData].filter(
-    (hit: MediaHit) => !hit.relevance || !/not explicitly mention/i.test(hit.relevance)
+    (hit: MediaHit) => hit.relevance && !IRRELEVANT_PATTERNS.test(hit.relevance)
   );
 
   return (

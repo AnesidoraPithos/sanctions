@@ -17,6 +17,8 @@ from services.research_agent import SanctionsResearchAgent
 from db_operations.db import get_directors, get_shareholders, get_transactions
 from config import settings
 
+import os
+
 logger = logging.getLogger(__name__)
 
 

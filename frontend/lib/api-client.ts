@@ -40,12 +40,17 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
+    // Silently pass through cancellations (AbortController.abort()) — these are intentional
+    if (error.code === 'ERR_CANCELED') {
+      return Promise.reject({ code: 'ERR_CANCELED', message: 'Request cancelled' });
+    }
+
     // Handle different error types
     let errorMessage = 'An unexpected error occurred';
 
-    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
       errorMessage = 'Request timed out. The search is taking longer than expected. Please try again.';
-    } else if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+    } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
       errorMessage = 'Cannot connect to backend. Please ensure the backend is running on http://localhost:8000';
     } else if (error.response) {
       // Backend returned an error response
@@ -54,8 +59,10 @@ apiClient.interceptors.response.use(
                      error.message;
     }
 
-    // Log errors
-    console.error('[API Error]', {
+    // Use console.warn for network/connection errors (no response) to avoid the
+    // Next.js dev overlay — these are expected when the backend is starting up.
+    const logFn = error.response ? console.error : console.warn;
+    logFn('[API Error]', {
       message: errorMessage,
       originalError: error.message,
       status: error.response?.status,
