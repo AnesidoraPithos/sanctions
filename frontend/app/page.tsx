@@ -119,7 +119,7 @@ export default function Home() {
           {/* Wordmark */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div style={{ flexShrink: 0 }}>
-              <Image src="/bear-logo.png" alt="BEAR²" width={44} height={44} style={{ display: 'block', opacity: 0.9 }} />
+              <Image src="/bear-logo.png" alt="BEAR²" width={2816} height={1536} priority style={{ display: 'block', opacity: 0.9, height: '64px', width: 'auto' }} />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
@@ -127,18 +127,12 @@ export default function Home() {
                   className="font-display animate-fadeInUp"
                   style={{ fontSize: '2.2rem', lineHeight: 1, color: 'var(--amber-light)', letterSpacing: '0.08em' }}
                 >
-                  BEAR
-                </span>
-                <span
-                  className="font-display animate-fadeInUp delay-50"
-                  style={{ fontSize: '1.2rem', lineHeight: 1, color: 'var(--amber-primary)', verticalAlign: 'super' }}
-                >
-                  2
+                  BEAR<sup className="font-display animate-fadeInUp delay-50" style={{ fontSize: '0.55em', color: 'var(--amber-primary)' }}>2</sup>
                 </span>
               </div>
               <div
                 className="label-stamp animate-fadeInUp delay-100"
-                style={{ fontSize: '0.55rem', marginTop: '0.15rem', color: 'var(--text-muted)' }}
+                style={{ fontSize: '0.75rem', marginTop: '0.15rem', color: 'var(--text-muted)' }}
               >
                 Background Entity Assessment &amp; Risk Research
               </div>
@@ -151,7 +145,7 @@ export default function Home() {
               href="/saved"
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '0.7rem',
+                fontSize: '0.75rem',
                 letterSpacing: '0.12em',
                 textTransform: 'uppercase',
                 color: 'var(--text-muted)',
@@ -166,9 +160,9 @@ export default function Home() {
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '0.65rem',
+                fontSize: '0.75rem',
                 letterSpacing: '0.12em',
-                color: 'var(--text-faint)',
+                color: 'var(--text-muted)',
                 border: '1px solid var(--border-dim)',
                 padding: '0.2rem 0.5rem',
               }}
@@ -254,7 +248,7 @@ export default function Home() {
               />
               <span
                 className="label-stamp-bright"
-                style={{ fontSize: '0.65rem' }}
+                style={{ fontSize: '0.75rem' }}
               >
                 Intelligence Query Initiation
               </span>
@@ -279,10 +273,10 @@ export default function Home() {
                   onClick={handleCancel}
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: '0.6rem',
+                    fontSize: '0.75rem',
                     letterSpacing: '0.1em',
                     textTransform: 'uppercase',
-                    padding: '0.2rem 0.5rem',
+                    padding: '0.25rem 0.5rem',
                     background: 'transparent',
                     border: '1px solid var(--risk-high)',
                     color: 'var(--risk-high-bright)',
@@ -355,7 +349,7 @@ export default function Home() {
                 background: 'var(--bg-panel)',
               }}
             >
-              <span className="label-stamp-bright" style={{ fontSize: '0.6rem' }}>
+              <span className="label-stamp-bright" style={{ fontSize: '0.75rem' }}>
                 Recent Intelligence Briefs
               </span>
               {savedCount > 0 && (
@@ -363,7 +357,7 @@ export default function Home() {
                   href="/saved"
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: '0.65rem',
+                    fontSize: '0.75rem',
                     letterSpacing: '0.1em',
                     color: 'var(--amber-primary)',
                     textDecoration: 'none',
@@ -398,7 +392,7 @@ export default function Home() {
                   {/* Risk indicator */}
                   <div
                     className={`risk-badge risk-badge-${entry.risk_level as RiskLevel}`}
-                    style={{ flexShrink: 0, fontSize: '0.65rem' }}
+                    style={{ flexShrink: 0, fontSize: '0.75rem' }}
                   >
                     {entry.risk_level}
                   </div>
@@ -423,7 +417,7 @@ export default function Home() {
                   <span
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '0.65rem',
+                      fontSize: '0.75rem',
                       letterSpacing: '0.12em',
                       textTransform: 'uppercase',
                       color: 'var(--text-muted)',
@@ -437,8 +431,8 @@ export default function Home() {
                   <span
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '0.65rem',
-                      color: 'var(--text-faint)',
+                      fontSize: '0.75rem',
+                      color: 'var(--text-muted)',
                       flexShrink: 0,
                       minWidth: '52px',
                       textAlign: 'right',
@@ -454,7 +448,7 @@ export default function Home() {
                   <span
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '0.65rem',
+                      fontSize: '0.75rem',
                       color: 'var(--amber-primary)',
                       flexShrink: 0,
                     }}
@@ -526,7 +520,7 @@ export default function Home() {
                   </span>
                   <span
                     className="font-data"
-                    style={{ fontSize: '0.65rem', color: 'var(--amber-deep)', letterSpacing: '0.1em' }}
+                    style={{ fontSize: '0.75rem', color: 'var(--amber-deep)', letterSpacing: '0.1em' }}
                   >
                     [{cap.code}]
                   </span>

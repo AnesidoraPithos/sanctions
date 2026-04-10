@@ -77,7 +77,7 @@ function ConfigSection({ title, children }: { title: string; children: React.Rea
         gap: '1.25rem',
       }}
     >
-      <div className="label-stamp-bright" style={{ fontSize: '0.6rem' }}>
+      <div className="label-stamp-bright" style={{ fontSize: '0.75rem' }}>
         {title}
       </div>
       {children}
@@ -146,8 +146,8 @@ function SliderField({
           display: 'flex',
           justifyContent: 'space-between',
           fontFamily: 'var(--font-mono)',
-          fontSize: '0.6rem',
-          color: 'var(--text-faint)',
+          fontSize: '0.75rem',
+          color: 'var(--text-muted)',
           marginTop: '0.25rem',
           letterSpacing: '0.05em',
         }}
@@ -159,7 +159,7 @@ function SliderField({
         <p
           style={{
             marginTop: '0.375rem',
-            fontSize: '0.7rem',
+            fontSize: '0.75rem',
             color: 'var(--text-muted)',
             fontFamily: 'var(--font-mono)',
             lineHeight: 1.5,
@@ -213,7 +213,7 @@ function ToggleField({
         <p
           style={{
             margin: '0.2rem 0 0',
-            fontSize: '0.7rem',
+            fontSize: '0.75rem',
             color: 'var(--text-muted)',
             fontFamily: 'var(--font-mono)',
             lineHeight: 1.5,
@@ -280,8 +280,8 @@ export default function TierSelector({
               <div
                 className="font-data"
                 style={{
-                  fontSize: '0.6rem',
-                  color: isActive ? 'var(--amber-primary)' : 'var(--text-faint)',
+                  fontSize: '0.75rem',
+                  color: isActive ? 'var(--amber-primary)' : 'var(--text-muted)',
                   letterSpacing: '0.12em',
                   marginBottom: '0.4rem',
                 }}
@@ -313,7 +313,7 @@ export default function TierSelector({
                 <span
                   className="font-data"
                   style={{
-                    fontSize: '0.62rem',
+                    fontSize: '0.75rem',
                     color: isActive ? 'var(--amber-primary)' : 'var(--text-muted)',
                   }}
                 >
@@ -330,13 +330,13 @@ export default function TierSelector({
                       display: 'flex',
                       alignItems: 'flex-start',
                       gap: '0.4rem',
-                      fontSize: '0.72rem',
+                      fontSize: '0.75rem',
                       color: isActive ? 'var(--text-main)' : 'var(--text-muted)',
                       fontFamily: 'var(--font-mono)',
                       lineHeight: 1.4,
                     }}
                   >
-                    <span style={{ color: isActive ? 'var(--amber-primary)' : 'var(--text-faint)', flexShrink: 0 }}>
+                    <span style={{ color: isActive ? 'var(--amber-primary)' : 'var(--text-muted)', flexShrink: 0 }}>
                       {isActive ? '▸' : '·'}
                     </span>
                     {feature}
@@ -451,7 +451,7 @@ export default function TierSelector({
             description="USAspending.gov federal procurement records and related-party transactions"
           />
           <div>
-            <div className="label-stamp-bright" style={{ fontSize: '0.58rem', marginBottom: '0.75rem', paddingTop: '0.25rem' }}>
+            <div className="label-stamp-bright" style={{ fontSize: '0.75rem', marginBottom: '0.75rem', paddingTop: '0.25rem' }}>
               Phase 4 — Advanced Intelligence Modules
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
@@ -484,7 +484,7 @@ export default function TierSelector({
               background: 'var(--risk-mid-bg)',
               border: '1px solid var(--risk-mid)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.7rem',
+              fontSize: '0.75rem',
               color: 'var(--risk-mid-bright)',
               lineHeight: 1.5,
             }}

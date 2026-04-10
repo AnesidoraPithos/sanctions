@@ -127,8 +127,8 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
         />
         <div
           style={{
-            fontSize: '0.7rem',
-            color: 'var(--text-faint)',
+            fontSize: '0.75rem',
+            color: 'var(--text-muted)',
             fontFamily: 'var(--font-mono)',
             marginTop: '0.375rem',
             letterSpacing: '0.03em',
@@ -146,7 +146,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
           style={{ display: 'block', marginBottom: '0.5rem' }}
         >
           Country Filter{' '}
-          <span style={{ color: 'var(--text-faint)' }}>(optional)</span>
+          <span style={{ color: 'var(--text-muted)' }}>(optional)</span>
         </label>
         <select
           id="country"
@@ -191,7 +191,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
             }}
           >
             {fuzzyThreshold}
-            <span style={{ fontSize: '0.65rem', color: 'var(--amber-primary)', marginLeft: '1px' }}>%</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--amber-primary)', marginLeft: '1px' }}>%</span>
           </span>
         </div>
         <input
@@ -210,8 +210,8 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
             display: 'flex',
             justifyContent: 'space-between',
             fontFamily: 'var(--font-mono)',
-            fontSize: '0.62rem',
-            color: 'var(--text-faint)',
+            fontSize: '0.75rem',
+            color: 'var(--text-muted)',
             letterSpacing: '0.08em',
             marginTop: '0.25rem',
           }}
@@ -224,7 +224,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
           style={{
             marginTop: '0.375rem',
             fontFamily: 'var(--font-mono)',
-            fontSize: '0.68rem',
+            fontSize: '0.75rem',
             color: 'var(--text-muted)',
             lineHeight: 1.55,
           }}
@@ -285,7 +285,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                 style={{
                   marginLeft: 'auto',
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '0.62rem',
+                  fontSize: '0.75rem',
                   opacity: 0.7,
                   letterSpacing: '0.1em',
                 }}

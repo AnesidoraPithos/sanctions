@@ -109,7 +109,7 @@ function ScoreBar({ score }: { score: number }) {
       >
         <span
           className="label-stamp"
-          style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}
+          style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}
         >
           Intelligence Score
         </span>
@@ -118,7 +118,7 @@ function ScoreBar({ score }: { score: number }) {
           style={{ fontSize: '0.8rem', color: 'var(--amber-light)' }}
         >
           {score}
-          <span style={{ fontSize: '0.6rem', color: 'var(--amber-primary)' }}>/100</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--amber-primary)' }}>/100</span>
         </span>
       </div>
       <div
@@ -144,8 +144,8 @@ function ScoreBar({ score }: { score: number }) {
           display: 'flex',
           justifyContent: 'space-between',
           fontFamily: 'var(--font-mono)',
-          fontSize: '0.58rem',
-          color: 'var(--text-faint)',
+          fontSize: '0.75rem',
+          color: 'var(--text-muted)',
           marginTop: '0.25rem',
           letterSpacing: '0.06em',
         }}
@@ -173,8 +173,8 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
   );
 
   const badgeSize = {
-    sm: { fontSize: '0.58rem', padding: '0.18rem 0.5rem' },
-    md: { fontSize: '0.65rem', padding: '0.22rem 0.65rem' },
+    sm: { fontSize: '0.75rem', padding: '0.22rem 0.6rem' },
+    md: { fontSize: '0.75rem', padding: '0.25rem 0.7rem' },
     lg: { fontSize: '0.75rem', padding: '0.3rem 0.85rem' },
   }[size];
 
@@ -195,13 +195,13 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
         <button
           onClick={() => setShowExplanation(true)}
           style={{
-            width: '18px',
-            height: '18px',
+            width: '20px',
+            height: '20px',
             background: 'var(--bg-panel)',
             border: '1px solid var(--border-main)',
             color: 'var(--text-muted)',
             fontFamily: 'var(--font-mono)',
-            fontSize: '0.6rem',
+            fontSize: '0.75rem',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -272,7 +272,7 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span className={`risk-badge risk-badge-${level}`} style={{ fontSize: '0.65rem' }}>
+                <span className={`risk-badge risk-badge-${level}`} style={{ fontSize: '0.75rem' }}>
                   {config.clearance}
                 </span>
                 <span
@@ -388,7 +388,7 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                         >
                           <span
                             className="label-stamp"
-                            style={{ fontSize: '0.58rem', color: 'var(--text-muted)' }}
+                            style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}
                           >
                             {row.category}
                           </span>
@@ -423,7 +423,7 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                             style={{ fontSize: '0.875rem', color: 'var(--amber-light)', fontWeight: 600 }}
                           >
                             {parsedBreakdown.cappedTotal}
-                            <span style={{ fontSize: '0.6rem', color: 'var(--amber-primary)' }}>/100</span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--amber-primary)' }}>/100</span>
                           </span>
                         </div>
                       )}
@@ -475,14 +475,14 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                 >
                   <span
                     className="label-stamp-bright"
-                    style={{ fontSize: '0.62rem' }}
+                    style={{ fontSize: '0.75rem' }}
                   >
                     Scoring Methodology
                   </span>
                   <span
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '0.65rem',
+                      fontSize: '0.75rem',
                       color: 'var(--amber-primary)',
                       transition: 'transform 0.2s',
                       display: 'inline-block',
@@ -527,19 +527,19 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                         >
                           <span
                             className="label-stamp"
-                            style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}
+                            style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}
                           >
                             {category.title}
                           </span>
                           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexShrink: 0 }}>
-                            <span className="font-data" style={{ fontSize: '0.65rem', color: 'var(--amber-primary)' }}>
+                            <span className="font-data" style={{ fontSize: '0.75rem', color: 'var(--amber-primary)' }}>
                               {category.range}
                             </span>
                             <span
                               style={{
                                 fontFamily: 'var(--font-mono)',
-                                fontSize: '0.6rem',
-                                color: 'var(--text-faint)',
+                                fontSize: '0.75rem',
+                                color: 'var(--text-secondary)',
                                 fontStyle: 'italic',
                               }}
                             >
@@ -616,13 +616,13 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                           />
                           <span
                             className="font-data"
-                            style={{ fontSize: '0.68rem', color: 'var(--text-main)', letterSpacing: '0.1em' }}
+                            style={{ fontSize: '0.75rem', color: 'var(--text-main)', letterSpacing: '0.1em' }}
                           >
                             {tier.label}
                           </span>
                           <span
                             className="font-data"
-                            style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: 'auto' }}
+                            style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 'auto' }}
                           >
                             {tier.range}
                           </span>
@@ -637,8 +637,8 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
               <p
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '0.68rem',
-                  color: 'var(--text-faint)',
+                  fontSize: '0.75rem',
+                  color: 'var(--text-muted)',
                   margin: 0,
                   lineHeight: 1.6,
                   borderTop: '1px solid var(--border-void)',
