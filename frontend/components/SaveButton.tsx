@@ -15,14 +15,29 @@ export default function SaveButton({ searchId, initialSaved, initialLabel, onSav
   const [label, setLabel] = useState(initialLabel ?? '');
   const [isLoading, setIsLoading] = useState(false);
   const [showLabelInput, setShowLabelInput] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (showLabelInput && inputRef.current) {
       inputRef.current.focus();
     }
   }, [showLabelInput]);
+
+  // Close popup and cancel remove-confirm on outside click
+  useEffect(() => {
+    if (!showLabelInput && !confirmingRemove) return;
+    const handler = (e: MouseEvent) => {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        setShowLabelInput(false);
+        setConfirmingRemove(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showLabelInput, confirmingRemove]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -31,7 +46,11 @@ export default function SaveButton({ searchId, initialSaved, initialLabel, onSav
 
   const handleClick = () => {
     if (isSaved) {
-      handleUnsave();
+      if (confirmingRemove) {
+        handleUnsave();
+      } else {
+        setConfirmingRemove(true);
+      }
     } else {
       setShowLabelInput(true);
     }
@@ -53,7 +72,7 @@ export default function SaveButton({ searchId, initialSaved, initialLabel, onSav
   };
 
   const handleUnsave = async () => {
-    if (!confirm('Remove bookmark from this result?')) return;
+    setConfirmingRemove(false);
     setIsLoading(true);
     try {
       await api.unsaveResult(searchId);
@@ -69,11 +88,34 @@ export default function SaveButton({ searchId, initialSaved, initialLabel, onSav
   };
 
   return (
-    <div className="relative flex items-center gap-2">
+    <div ref={popupRef} className="relative flex items-center gap-2">
       {/* Label input popup */}
       {showLabelInput && (
-        <div className="absolute right-0 top-full mt-2 z-50 bg-[#0d1425] border border-gray-700 rounded-lg shadow-xl p-3 w-64">
-          <p className="text-sm text-gray-400 mb-2">Add a label (optional)</p>
+        <div
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 'calc(100% + 6px)',
+            zIndex: 50,
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-main)',
+            padding: '0.875rem',
+            width: '240px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+          }}
+        >
+          <p
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.65rem',
+              letterSpacing: '0.08em',
+              color: 'var(--text-muted)',
+              marginBottom: '0.5rem',
+              textTransform: 'uppercase',
+            }}
+          >
+            Add label (optional)
+          </p>
           <input
             ref={inputRef}
             type="text"
@@ -84,18 +126,21 @@ export default function SaveButton({ searchId, initialSaved, initialLabel, onSav
               if (e.key === 'Escape') setShowLabelInput(false);
             }}
             placeholder="e.g. Review next week"
-            className="w-full bg-[#1a2035] border border-gray-600 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 mb-2"
+            className="intel-input"
+            style={{ marginBottom: '0.625rem', fontSize: '0.75rem' }}
           />
-          <div className="flex gap-2">
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
               onClick={handleSave}
-              className="flex-1 bg-green-600 hover:bg-green-500 text-white text-sm font-medium py-1.5 rounded transition-colors"
+              className="btn-primary"
+              style={{ flex: 1, fontSize: '0.65rem', padding: '0.375rem' }}
             >
               Save
             </button>
             <button
               onClick={() => setShowLabelInput(false)}
-              className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium py-1.5 rounded transition-colors"
+              className="btn-secondary"
+              style={{ flex: 1, fontSize: '0.65rem', padding: '0.375rem' }}
             >
               Cancel
             </button>
@@ -107,30 +152,68 @@ export default function SaveButton({ searchId, initialSaved, initialLabel, onSav
       <button
         onClick={handleClick}
         disabled={isLoading}
-        title={isSaved ? 'Remove bookmark' : 'Bookmark this result'}
-        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all
-          ${isSaved
-            ? 'bg-green-900/40 border border-green-600 text-green-400 hover:bg-red-900/30 hover:border-red-600 hover:text-red-400'
-            : 'bg-gray-800 border border-gray-600 text-gray-300 hover:border-green-500 hover:text-green-400'
-          }
-          ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}
-        `}
+        title={confirmingRemove ? 'Click again to confirm removal' : isSaved ? 'Remove bookmark' : 'Bookmark this result'}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.375rem',
+          padding: '0.375rem 0.75rem',
+          fontSize: '0.65rem',
+          fontFamily: 'var(--font-mono)',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          border: confirmingRemove
+            ? '1px solid var(--risk-high)'
+            : isSaved
+              ? '1px solid var(--risk-safe)'
+              : '1px solid var(--border-main)',
+          background: confirmingRemove
+            ? 'var(--risk-high-bg)'
+            : isSaved
+              ? 'var(--risk-safe-bg)'
+              : 'var(--bg-panel)',
+          color: confirmingRemove
+            ? 'var(--risk-high-bright)'
+            : isSaved
+              ? 'var(--risk-safe-bright)'
+              : 'var(--text-secondary)',
+          cursor: isLoading ? 'not-allowed' : 'pointer',
+          opacity: isLoading ? 0.5 : 1,
+          transition: 'all 0.15s',
+          whiteSpace: 'nowrap',
+        }}
       >
         {isSaved ? (
-          <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
             <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
           </svg>
         ) : (
-          <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
           </svg>
         )}
-        <span>{isSaved ? 'Saved' : 'Save'}</span>
+        <span>{confirmingRemove ? 'Confirm Remove?' : isSaved ? 'Saved' : 'Save'}</span>
       </button>
 
       {/* Toast */}
       {toast && (
-        <div className="absolute right-0 top-full mt-2 z-50 bg-gray-800 border border-gray-600 text-white text-sm px-3 py-1.5 rounded-lg shadow-lg whitespace-nowrap">
+        <div
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 'calc(100% + 6px)',
+            zIndex: 50,
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-main)',
+            color: 'var(--text-main)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.7rem',
+            letterSpacing: '0.06em',
+            padding: '0.375rem 0.75rem',
+            whiteSpace: 'nowrap',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+          }}
+        >
           {toast}
         </div>
       )}

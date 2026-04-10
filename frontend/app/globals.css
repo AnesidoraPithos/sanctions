@@ -7,62 +7,62 @@
 
 :root {
   /* ── Depth Layers ─────────────────────────────────────────── */
-  --bg-void:    #04080F;
-  --bg-deep:    #070C19;
-  --bg-surface: #0C1526;
-  --bg-panel:   #101D32;
-  --bg-raised:  #14243D;
-  --bg-hover:   #182B47;
+  --bg-void:    #F2F5FA;
+  --bg-deep:    #FFFFFF;
+  --bg-surface: #F7F9FB;
+  --bg-panel:   #ECF0F7;
+  --bg-raised:  #E3E9F3;
+  --bg-hover:   #D8E1EE;
 
   /* ── Structural Borders ───────────────────────────────────── */
-  --border-void:   #0F1D30;
-  --border-dim:    #182840;
-  --border-main:   #1F3354;
-  --border-bright: #2A4470;
+  --border-void:   #DDE4ED;
+  --border-dim:    #C8D2E0;
+  --border-main:   #9BAABF;
+  --border-bright: #6880A0;
 
   /* ── Text Hierarchy ───────────────────────────────────────── */
-  --text-bright:    #EEF3FF;
-  --text-main:      #B8CCDF;
-  --text-secondary: #7A96B0;
-  --text-muted:     #4A6478;
-  --text-faint:     #2E4258;
+  --text-bright:    #0A1628;
+  --text-main:      #1A2C48;
+  --text-secondary: #324B6A;
+  --text-muted:     #516A85;
+  --text-faint:     #7890A8;
 
   /* ── Amber / Gold — Classification Accent ─────────────────── */
-  --amber-deep:    #7A5200;
-  --amber-primary: #A87008;
-  --amber-main:    #C48C0C;
-  --amber-light:   #E0A818;
-  --amber-glow:    #F0C030;
-  --amber-pale:    #FAEAAA;
+  --amber-deep:    #4A2E00;
+  --amber-primary: #7A4E00;
+  --amber-main:    #9A6200;
+  --amber-light:   #B47800;
+  --amber-glow:    #CE8C00;
+  --amber-pale:    #FFF4CC;
 
   /* ── Cyan — Data / Intelligence ───────────────────────────── */
-  --cyan-deep:   #003A50;
-  --cyan-dim:    #005A70;
-  --cyan-main:   #009AB8;
-  --cyan-bright: #00BEDD;
-  --cyan-glow:   #30D0EE;
+  --cyan-deep:   #002030;
+  --cyan-dim:    #003A50;
+  --cyan-main:   #006882;
+  --cyan-bright: #00829E;
+  --cyan-glow:   #009AB8;
 
   /* ── Risk Classification ──────────────────────────────────── */
-  --risk-safe-bg:      #051510;
-  --risk-safe:         #0CAA68;
-  --risk-safe-bright:  #10D880;
+  --risk-safe-bg:      #EAFFF5;
+  --risk-safe:         #1A9050;
+  --risk-safe-bright:  #0D6038;
 
-  --risk-low-bg:       #050E1A;
-  --risk-low:          #2878D8;
-  --risk-low-bright:   #40A0F8;
+  --risk-low-bg:       #EAF2FF;
+  --risk-low:          #1A50B0;
+  --risk-low-bright:   #103890;
 
-  --risk-mid-bg:       #160E00;
-  --risk-mid:          #C08000;
-  --risk-mid-bright:   #E89800;
+  --risk-mid-bg:       #FFF8E6;
+  --risk-mid:          #8C5800;
+  --risk-mid-bright:   #6A4000;
 
-  --risk-high-bg:      #160600;
-  --risk-high:         #C84010;
-  --risk-high-bright:  #EC6030;
+  --risk-high-bg:      #FFF2EC;
+  --risk-high:         #A82800;
+  --risk-high-bright:  #801800;
 
-  --risk-critical-bg:  #160202;
-  --risk-critical:     #C41818;
-  --risk-critical-bright: #E83030;
-  --risk-critical-glow: rgba(196, 24, 24, 0.35);
+  --risk-critical-bg:  #FFF0F0;
+  --risk-critical:     #900000;
+  --risk-critical-bright: #700000;
+  --risk-critical-glow: rgba(144, 0, 0, 0.20);
 }
 
 /* ── Tailwind v4 Theme Extension ──────────────────────────────────────────── */
@@ -97,21 +97,6 @@ body {
   min-height: 100vh;
 }
 
-/* Very subtle scanline texture */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 3px,
-    rgba(0, 0, 0, 0.03) 3px,
-    rgba(0, 0, 0, 0.03) 4px
-  );
-  pointer-events: none;
-  z-index: 9999;
-}
 
 code, pre, .font-mono {
   font-family: var(--font-mono), 'Courier New', monospace;
@@ -148,8 +133,8 @@ code, pre, .font-mono {
 
 .label-stamp {
   font-family: var(--font-mono), monospace;
-  font-size: 0.6rem;
-  letter-spacing: 0.2em;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--amber-primary);
   opacity: 0.8;
@@ -157,8 +142,8 @@ code, pre, .font-mono {
 
 .label-stamp-bright {
   font-family: var(--font-mono), monospace;
-  font-size: 0.65rem;
-  letter-spacing: 0.18em;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--amber-light);
 }
@@ -304,7 +289,7 @@ code, pre, .font-mono {
   cursor: pointer;
   outline: none;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23A87008' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237A4E00' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 1rem center;
   padding-right: 2.5rem;
@@ -476,9 +461,9 @@ input[type='checkbox'].amber-check:focus {
 
 .risk-badge {
   font-family: var(--font-mono), monospace;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   padding: 0.2rem 0.6rem;
   display: inline-flex;
@@ -545,7 +530,7 @@ input[type='checkbox'].amber-check:focus {
 
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: none; }
 }
 
 @keyframes fadeIn {
@@ -555,7 +540,7 @@ input[type='checkbox'].amber-check:focus {
 
 @keyframes slideInRight {
   from { opacity: 0; transform: translateX(16px); }
-  to   { opacity: 1; transform: translateX(0); }
+  to   { opacity: 1; transform: none; }
 }
 
 @keyframes amber-blink {

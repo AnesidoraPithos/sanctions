@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -16,6 +16,7 @@ export default function Home() {
   const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
   const [recentSearches, setRecentSearches] = useState<HistoryEntry[]>([]);
   const [savedCount, setSavedCount] = useState(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     api.getHistory(5).then((data) => setRecentSearches(data.entries)).catch(() => {});
@@ -23,6 +24,11 @@ export default function Home() {
   }, []);
 
   const handleSearch = async (request: SearchRequest) => {
+    // Abort any in-flight search
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsLoading(true);
     setError(null);
 
@@ -37,26 +43,38 @@ export default function Home() {
       let response;
       switch (enrichedRequest.tier) {
         case 'network':
-          response = await api.searchNetwork(enrichedRequest);
+          response = await api.searchNetwork(enrichedRequest, controller.signal);
           break;
         case 'deep':
-          response = await api.searchDeep(enrichedRequest);
+          response = await api.searchDeep(enrichedRequest, controller.signal);
           break;
         case 'base':
         default:
-          response = await api.searchBase(enrichedRequest);
+          response = await api.searchBase(enrichedRequest, controller.signal);
           break;
       }
       setActiveSearchId(null);
       router.push(`/results/${response.search_id}`);
     } catch (err: unknown) {
+      // Ignore cancellation — user deliberately cancelled
+      const errObj = err as { code?: string; message?: string; data?: { message?: string } };
+      if (errObj?.code === 'ERR_CANCELED' || controller.signal.aborted) {
+        setActiveSearchId(null);
+        setIsLoading(false);
+        return;
+      }
       console.error('Search error:', err);
       setActiveSearchId(null);
-      const errorObj = err as { message?: string; data?: { message?: string }; code?: string };
-      const errorMessage = errorObj.message || 'Failed to perform search. Please try again.';
+      const errorMessage = errObj.message || 'Failed to perform search. Please try again.';
       setError(errorMessage);
       setIsLoading(false);
     }
+  };
+
+  const handleCancel = () => {
+    abortControllerRef.current?.abort();
+    setIsLoading(false);
+    setActiveSearchId(null);
   };
 
   return (
@@ -132,24 +150,22 @@ export default function Home() {
 
           {/* Nav */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-            {savedCount > 0 && (
-              <Link
-                href="/saved"
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.7rem',
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                  color: 'var(--text-muted)',
-                  textDecoration: 'none',
-                  transition: 'color 0.2s',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.color = 'var(--amber-light)')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
-              >
-                Saved ({savedCount})
-              </Link>
-            )}
+            <Link
+              href="/saved"
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.7rem',
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                color: 'var(--text-muted)',
+                textDecoration: 'none',
+                transition: 'color 0.2s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--amber-light)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+            >
+              Saved{savedCount > 0 && ` (${savedCount})`}
+            </Link>
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
@@ -247,22 +263,40 @@ export default function Home() {
               </span>
             </div>
             {isLoading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      background: 'var(--cyan-bright)',
+                      animation: 'data-pulse 1s ease-in-out infinite',
+                      boxShadow: '0 0 6px var(--cyan-main)',
+                    }}
+                  />
+                  <span className="label-stamp" style={{ color: 'var(--cyan-main)' }}>
+                    Query Active
+                  </span>
+                </div>
+                <button
+                  onClick={handleCancel}
                   style={{
-                    width: '6px',
-                    height: '6px',
-                    background: 'var(--cyan-bright)',
-                    animation: 'data-pulse 1s ease-in-out infinite',
-                    boxShadow: '0 0 6px var(--cyan-main)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.6rem',
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    padding: '0.2rem 0.5rem',
+                    background: 'transparent',
+                    border: '1px solid var(--risk-high)',
+                    color: 'var(--risk-high-bright)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
                   }}
-                />
-                <span
-                  className="label-stamp"
-                  style={{ color: 'var(--cyan-main)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--risk-high-bg)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                 >
-                  Query Active
-                </span>
+                  Cancel
+                </button>
               </div>
             )}
           </div>
@@ -349,8 +383,9 @@ export default function Home() {
 
             <div>
               {recentSearches.map((entry, i) => (
-                <div
+                <Link
                   key={entry.search_id}
+                  href={`/results/${entry.search_id}`}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -358,6 +393,7 @@ export default function Home() {
                     padding: '0.625rem 1.25rem',
                     borderBottom: i < recentSearches.length - 1 ? '1px solid var(--border-void)' : 'none',
                     transition: 'background 0.15s',
+                    textDecoration: 'none',
                   }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-panel)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
@@ -365,7 +401,7 @@ export default function Home() {
                   {/* Risk indicator */}
                   <div
                     className={`risk-badge risk-badge-${entry.risk_level as RiskLevel}`}
-                    style={{ flexShrink: 0, fontSize: '0.58rem' }}
+                    style={{ flexShrink: 0, fontSize: '0.65rem' }}
                   >
                     {entry.risk_level}
                   </div>
@@ -390,7 +426,7 @@ export default function Home() {
                   <span
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '0.62rem',
+                      fontSize: '0.65rem',
                       letterSpacing: '0.12em',
                       textTransform: 'uppercase',
                       color: 'var(--text-muted)',
@@ -404,7 +440,7 @@ export default function Home() {
                   <span
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '0.62rem',
+                      fontSize: '0.65rem',
                       color: 'var(--text-faint)',
                       flexShrink: 0,
                       minWidth: '52px',
@@ -417,25 +453,18 @@ export default function Home() {
                     })}
                   </span>
 
-                  {/* Link */}
-                  <Link
-                    href={`/results/${entry.search_id}`}
+                  {/* Arrow */}
+                  <span
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '0.62rem',
-                      letterSpacing: '0.1em',
+                      fontSize: '0.65rem',
                       color: 'var(--amber-primary)',
-                      textDecoration: 'none',
-                      textTransform: 'uppercase',
                       flexShrink: 0,
-                      transition: 'color 0.2s',
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--amber-light)')}
-                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--amber-primary)')}
                   >
-                    Open →
-                  </Link>
-                </div>
+                    →
+                  </span>
+                </Link>
               ))}
             </div>
           </div>

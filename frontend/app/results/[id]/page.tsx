@@ -6,7 +6,7 @@
 
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import React, { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ResultsResponse, SanctionsHit, MediaHit, NetworkData, FinancialIntelligence, FinancialFlow, DirectorPivot, InfrastructureHit, BeneficialOwner } from '@/lib/types';
@@ -75,11 +75,11 @@ function renderMarkdown(text: string): string {
       const parts = line.split('|');
       const riskHeader = parts[0].trim();
       const scoreComponents = parts.slice(1);
-      html += `<div style="background:#1a1f2e;border-left:4px solid #f59e0b;padding:12px 16px;margin:12px 0;border-radius:4px">`;
-      html += `<div style="color:#f59e0b;font-weight:bold;margin-bottom:8px">${processInline(riskHeader)}</div>`;
+      html += `<div style="background:var(--bg-raised);border-left:3px solid var(--amber-primary);padding:12px 16px;margin:12px 0">`;
+      html += `<div style="color:var(--amber-light);font-weight:bold;margin-bottom:8px;font-family:var(--font-mono);font-size:0.78rem;letter-spacing:0.06em">${processInline(riskHeader)}</div>`;
       for (const comp of scoreComponents) {
         if (comp.trim()) {
-          html += `<div style="color:#d1d5db;margin:2px 0">&bull; ${processInline(comp.trim())}</div>`;
+          html += `<div style="color:var(--text-secondary);margin:2px 0;font-family:var(--font-mono);font-size:0.75rem">&bull; ${processInline(comp.trim())}</div>`;
         }
       }
       html += `</div>\n`;
@@ -101,13 +101,29 @@ export default function ResultsPage({ params }: PageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   type TabType = 'sanctions' | 'media' | 'report' | 'financial' | 'network-relations' | 'financial-flows' | 'management-network' | 'infrastructure' | 'beneficial-ownership';
-  const [activeTab, setActiveTab] = useState<TabType>('sanctions');
+  const [activeTab, setActiveTab] = useState<TabType | null>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const [tabsCanScrollRight, setTabsCanScrollRight] = useState(false);
+
+  useEffect(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    const check = () => setTabsCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    check();
+    el.addEventListener('scroll', check);
+    window.addEventListener('resize', check);
+    return () => {
+      el.removeEventListener('scroll', check);
+      window.removeEventListener('resize', check);
+    };
+  }, [results]);
 
   useEffect(() => {
     const fetchResults = async () => {
       try {
         const data = await api.getResults(searchId);
         setResults(data);
+        setActiveTab(data.tier === 'network' || data.tier === 'deep' ? 'network-relations' : 'sanctions');
         setIsLoading(false);
       } catch (err: unknown) {
         console.error('Error fetching results:', err);
@@ -121,13 +137,6 @@ export default function ResultsPage({ params }: PageProps) {
 
     fetchResults();
   }, [searchId]);
-
-  // Set default active tab based on tier
-  useEffect(() => {
-    if (results && (results.tier === 'network' || results.tier === 'deep')) {
-      setActiveTab('network-relations');
-    }
-  }, [results]);
 
   if (isLoading) {
     return (
@@ -298,13 +307,13 @@ export default function ResultsPage({ params }: PageProps) {
         {/* Network / Deep Tier Confirmation Banner */}
         {(results.tier === 'network' || results.tier === 'deep') && (
           <div style={{ marginBottom: '1.25rem', background: 'var(--bg-panel)', border: '1px solid var(--border-main)', borderLeft: '2px solid var(--cyan-main)', padding: '1rem 1.25rem' }}>
-            <div className="flex items-start gap-3">
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
               <span style={{ color: 'var(--cyan-bright)', flexShrink: 0 }}>◈</span>
-              <div className="flex-1">
+              <div style={{ flex: 1 }}>
                 <div className="label-stamp-bright" style={{ marginBottom: '0.375rem' }}>
                   {results.tier === 'deep' ? 'Deep Tier Research Completed' : 'Network Tier Research Completed'}
                 </div>
-                <p className="text-sm text-blue-300">
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--cyan-bright)', margin: 0, lineHeight: 1.6 }}>
                   {results.metadata?.network_depth && (results.metadata.network_depth as number) > 1
                     ? `Multi-level corporate structure analysis performed (${results.metadata.network_depth} levels deep).`
                     : 'Corporate structure analysis performed.'
@@ -392,7 +401,11 @@ export default function ResultsPage({ params }: PageProps) {
         )}
 
         {/* Tabs */}
-        <div style={{ borderBottom: '1px solid var(--border-dim)', marginBottom: '1.5rem', overflowX: 'auto' }}>
+        <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+          <div
+            ref={tabsRef}
+            style={{ borderBottom: '1px solid var(--border-dim)', overflowX: 'auto', scrollbarWidth: 'none' }}
+          >
           <nav style={{ display: 'flex', gap: 0, minWidth: 'max-content' }}>
             {([
               { key: 'sanctions', label: `Sanctions (${results.sanctions_hits})`, always: true },
@@ -437,6 +450,21 @@ export default function ResultsPage({ params }: PageProps) {
               );
             })}
           </nav>
+          </div>
+          {/* Right-fade scroll indicator */}
+          {tabsCanScrollRight && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                bottom: '1px',
+                width: '48px',
+                background: 'linear-gradient(to right, transparent, var(--bg-void))',
+                pointerEvents: 'none',
+              }}
+            />
+          )}
         </div>
 
         {/* Tab Content */}
@@ -543,45 +571,61 @@ export default function ResultsPage({ params }: PageProps) {
           {/* Financial Intelligence Tab */}
           {activeTab === 'financial' && results.financial_intelligence && (() => {
             const financialIntel = results.financial_intelligence as FinancialIntelligence;
+            const tableHeadStyle: React.CSSProperties = {
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.62rem',
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase' as const,
+              color: 'var(--text-muted)',
+              padding: '0.625rem 1rem',
+              textAlign: 'left' as const,
+              background: 'var(--bg-panel)',
+              borderBottom: '1px solid var(--border-dim)',
+              whiteSpace: 'nowrap' as const,
+            };
+            const tableCellStyle: React.CSSProperties = {
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.75rem',
+              color: 'var(--text-main)',
+              padding: '0.625rem 1rem',
+              borderBottom: '1px solid var(--border-void)',
+            };
             return (
-              <div className="space-y-6">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 {/* Directors & Officers */}
                 {financialIntel.directors && financialIntel.directors.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-4">
-                      Directors & Officers ({financialIntel.directors.length})
-                    </h3>
-                    <div className="bg-[#0d1425] border border-gray-800 rounded-lg overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-900/50">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Name</th>
-                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Title</th>
-                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Nationality</th>
-                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Sanctions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-800">
-                            {financialIntel.directors.map((director, idx) => (
-                              <tr key={idx} className="hover:bg-gray-900/30">
-                                <td className="px-4 py-3 text-white">{director.name}</td>
-                                <td className="px-4 py-3 text-gray-300">{director.title || '-'}</td>
-                                <td className="px-4 py-3 text-gray-300">{director.nationality || '-'}</td>
-                                <td className="px-4 py-3">
-                                  {director.sanctions_hits && director.sanctions_hits > 0 ? (
-                                    <span className="text-sm px-2 py-1 bg-red-900/30 text-red-400 rounded">
-                                      {director.sanctions_hits} hit(s)
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-500 text-sm">None</span>
-                                  )}
-                                </td>
-                              </tr>
+                    <div className="label-stamp-bright" style={{ marginBottom: '0.75rem' }}>
+                      Directors &amp; Officers ({financialIntel.directors.length})
+                    </div>
+                    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-dim)', overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr>
+                            {['Name', 'Title', 'Nationality', 'Sanctions'].map(h => (
+                              <th key={h} style={tableHeadStyle}>{h}</th>
                             ))}
-                          </tbody>
-                        </table>
-                      </div>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {financialIntel.directors.map((director, idx) => (
+                            <tr key={idx} style={{ background: idx % 2 === 1 ? 'var(--bg-panel)' : 'transparent' }}>
+                              <td style={{ ...tableCellStyle, color: 'var(--text-bright)', fontWeight: 500 }}>{director.name}</td>
+                              <td style={tableCellStyle}>{director.title || '—'}</td>
+                              <td style={tableCellStyle}>{director.nationality || '—'}</td>
+                              <td style={tableCellStyle}>
+                                {director.sanctions_hits && director.sanctions_hits > 0 ? (
+                                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', padding: '0.15rem 0.5rem', background: 'var(--risk-critical-bg)', color: 'var(--risk-critical-bright)', border: '1px solid var(--risk-critical)' }}>
+                                    {director.sanctions_hits} hit(s)
+                                  </span>
+                                ) : (
+                                  <span style={{ color: 'var(--text-faint)', fontSize: '0.72rem' }}>None</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}
@@ -589,42 +633,38 @@ export default function ResultsPage({ params }: PageProps) {
                 {/* Shareholders */}
                 {financialIntel.shareholders && financialIntel.shareholders.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-4">
+                    <div className="label-stamp-bright" style={{ marginBottom: '0.75rem' }}>
                       Major Shareholders ({financialIntel.shareholders.length})
-                    </h3>
-                    <div className="bg-[#0d1425] border border-gray-800 rounded-lg overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-900/50">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Name</th>
-                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Type</th>
-                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Ownership %</th>
-                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Jurisdiction</th>
-                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Sanctions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-800">
-                            {financialIntel.shareholders.map((shareholder, idx) => (
-                              <tr key={idx} className="hover:bg-gray-900/30">
-                                <td className="px-4 py-3 text-white">{shareholder.name}</td>
-                                <td className="px-4 py-3 text-gray-300">{shareholder.type || '-'}</td>
-                                <td className="px-4 py-3 text-gray-300">{shareholder.ownership_percentage || 0}%</td>
-                                <td className="px-4 py-3 text-gray-300">{shareholder.jurisdiction || '-'}</td>
-                                <td className="px-4 py-3">
-                                  {shareholder.sanctions_hits && shareholder.sanctions_hits > 0 ? (
-                                    <span className="text-sm px-2 py-1 bg-red-900/30 text-red-400 rounded">
-                                      {shareholder.sanctions_hits} hit(s)
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-500 text-sm">None</span>
-                                  )}
-                                </td>
-                              </tr>
+                    </div>
+                    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-dim)', overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr>
+                            {['Name', 'Type', 'Ownership %', 'Jurisdiction', 'Sanctions'].map(h => (
+                              <th key={h} style={tableHeadStyle}>{h}</th>
                             ))}
-                          </tbody>
-                        </table>
-                      </div>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {financialIntel.shareholders.map((shareholder, idx) => (
+                            <tr key={idx} style={{ background: idx % 2 === 1 ? 'var(--bg-panel)' : 'transparent' }}>
+                              <td style={{ ...tableCellStyle, color: 'var(--text-bright)', fontWeight: 500 }}>{shareholder.name}</td>
+                              <td style={tableCellStyle}>{shareholder.type || '—'}</td>
+                              <td style={{ ...tableCellStyle, color: 'var(--amber-light)' }}>{shareholder.ownership_percentage || 0}%</td>
+                              <td style={tableCellStyle}>{shareholder.jurisdiction || '—'}</td>
+                              <td style={tableCellStyle}>
+                                {shareholder.sanctions_hits && shareholder.sanctions_hits > 0 ? (
+                                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', padding: '0.15rem 0.5rem', background: 'var(--risk-critical-bg)', color: 'var(--risk-critical-bright)', border: '1px solid var(--risk-critical)' }}>
+                                    {shareholder.sanctions_hits} hit(s)
+                                  </span>
+                                ) : (
+                                  <span style={{ color: 'var(--text-faint)', fontSize: '0.72rem' }}>None</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}
@@ -632,35 +672,28 @@ export default function ResultsPage({ params }: PageProps) {
                 {/* Transactions */}
                 {financialIntel.transactions && financialIntel.transactions.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-4">
+                    <div className="label-stamp-bright" style={{ marginBottom: '0.75rem' }}>
                       Related Party Transactions ({financialIntel.transactions.length})
-                    </h3>
-                    <div className="space-y-3">
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                       {financialIntel.transactions.map((transaction, idx) => (
-                        <div key={idx} className="bg-[#0d1425] border border-gray-800 rounded-lg p-4">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-400 text-sm">Type:</span>
-                              <p className="text-white">{transaction.transaction_type || '-'}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-400 text-sm">Counterparty:</span>
-                              <p className="text-white">{transaction.counterparty || '-'}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-400 text-sm">Amount:</span>
-                              <p className="text-white">
-                                {transaction.currency} {transaction.amount?.toLocaleString() || '-'}
-                              </p>
-                            </div>
-                            <div>
-                              <span className="text-gray-400 text-sm">Date:</span>
-                              <p className="text-white">{transaction.transaction_date || '-'}</p>
-                            </div>
+                        <div key={idx} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-dim)', padding: '1rem 1.25rem' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem' }}>
+                            {[
+                              { label: 'Type', value: transaction.transaction_type || '—' },
+                              { label: 'Counterparty', value: transaction.counterparty || '—' },
+                              { label: 'Amount', value: transaction.amount != null ? `${transaction.currency || ''} ${Number(transaction.amount).toLocaleString()}` : '—' },
+                              { label: 'Date', value: transaction.transaction_date || '—' },
+                            ].map(({ label, value }) => (
+                              <div key={label}>
+                                <div className="label-stamp" style={{ marginBottom: '0.2rem' }}>{label}</div>
+                                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-main)', margin: 0 }}>{value}</p>
+                              </div>
+                            ))}
                           </div>
                           {transaction.purpose && (
-                            <p className="text-sm text-gray-400 mt-3">
-                              <span className="font-medium">Purpose:</span> {transaction.purpose}
+                            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '0.75rem', marginBottom: 0, borderTop: '1px solid var(--border-void)', paddingTop: '0.625rem' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>Purpose: </span>{transaction.purpose}
                             </p>
                           )}
                         </div>
@@ -669,13 +702,13 @@ export default function ResultsPage({ params }: PageProps) {
                   </div>
                 )}
 
-                {/* No Financial Intelligence */}
+                {/* Empty */}
                 {(!financialIntel.directors || financialIntel.directors.length === 0) &&
                  (!financialIntel.shareholders || financialIntel.shareholders.length === 0) &&
                  (!financialIntel.transactions || financialIntel.transactions.length === 0) && (
-                  <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-8 text-center">
-                    <p className="text-gray-400">
-                      No financial intelligence data found. This is normal for private companies or non-US entities.
+                  <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-dim)', padding: '2.5rem', textAlign: 'center' }}>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>
+                      No financial intelligence data found. This is normal for private or non-US entities.
                     </p>
                   </div>
                 )}
@@ -685,59 +718,59 @@ export default function ResultsPage({ params }: PageProps) {
 
           {/* Financial Flows Tab (deep tier only) */}
           {activeTab === 'financial-flows' && (
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {results.financial_flows && results.financial_flows.length > 0 ? (
                 <>
-                  <p className="text-sm text-gray-400">
-                    {results.financial_flows.length} financial flow{results.financial_flows.length !== 1 ? 's' : ''} identified
-                    from federal procurement records and related-party transactions.
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', margin: 0 }}>
+                    {results.financial_flows.length} flow{results.financial_flows.length !== 1 ? 's' : ''} identified from federal procurement records and related-party transactions.
                   </p>
-                  <div className="bg-[#0d1425] border border-gray-800 rounded-lg overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-900/50">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Source</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Target</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Type</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium text-gray-400 uppercase">Amount</th>
-                            <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">Date</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-800">
-                          {(results.financial_flows as FinancialFlow[]).map((flow, idx) => (
-                            <tr key={idx} className="hover:bg-gray-900/30">
-                              <td className="px-4 py-3 text-white max-w-[200px] truncate" title={flow.source}>
-                                {flow.source}
-                              </td>
-                              <td className="px-4 py-3 text-gray-300 max-w-[200px] truncate" title={flow.target}>
-                                {flow.target}
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className="text-sm px-2 py-0.5 bg-purple-900/30 text-purple-300 rounded capitalize">
-                                  {flow.type.replace(/_/g, ' ')}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right text-gray-300 font-mono text-sm">
-                                {flow.amount != null
-                                  ? `${flow.currency || 'USD'} ${Number(flow.amount).toLocaleString()}`
-                                  : '—'}
-                              </td>
-                              <td className="px-4 py-3 text-gray-400 text-sm">{flow.date || '—'}</td>
-                            </tr>
+                  <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-dim)', overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          {['Source', 'Target', 'Type', 'Amount', 'Date'].map((h, i) => (
+                            <th key={h} style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '0.62rem',
+                              letterSpacing: '0.12em',
+                              textTransform: 'uppercase',
+                              color: 'var(--text-muted)',
+                              padding: '0.625rem 1rem',
+                              textAlign: i === 3 ? 'right' : 'left',
+                              background: 'var(--bg-panel)',
+                              borderBottom: '1px solid var(--border-dim)',
+                              whiteSpace: 'nowrap',
+                            }}>{h}</th>
                           ))}
-                        </tbody>
-                      </table>
-                    </div>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(results.financial_flows as FinancialFlow[]).map((flow, idx) => (
+                          <tr key={idx} style={{ background: idx % 2 === 1 ? 'var(--bg-panel)' : 'transparent' }}>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-bright)', padding: '0.625rem 1rem', borderBottom: '1px solid var(--border-void)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={flow.source}>{flow.source}</td>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)', padding: '0.625rem 1rem', borderBottom: '1px solid var(--border-void)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={flow.target}>{flow.target}</td>
+                            <td style={{ padding: '0.625rem 1rem', borderBottom: '1px solid var(--border-void)' }}>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.08em', padding: '0.15rem 0.5rem', background: 'var(--bg-raised)', color: 'var(--cyan-bright)', border: '1px solid var(--cyan-dim)', textTransform: 'capitalize' }}>
+                                {flow.type.replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--amber-light)', padding: '0.625rem 1rem', borderBottom: '1px solid var(--border-void)', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              {flow.amount != null ? `${flow.currency || 'USD'} ${Number(flow.amount).toLocaleString()}` : '—'}
+                            </td>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.625rem 1rem', borderBottom: '1px solid var(--border-void)', whiteSpace: 'nowrap' }}>{flow.date || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </>
               ) : (
-                <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-8 text-center">
-                  <p className="text-gray-400">
+                <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-dim)', padding: '2.5rem', textAlign: 'center' }}>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 0.375rem' }}>
                     No financial flows found. This may be normal for private or non-US entities.
                   </p>
-                  <p className="text-sm text-gray-500 mt-2">
-                    Sources checked: USAspending.gov (federal procurement) and SEC EDGAR related-party transactions.
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-faint)', margin: 0 }}>
+                    Sources: USAspending.gov and SEC EDGAR related-party transactions.
                   </p>
                 </div>
               )}
@@ -767,85 +800,70 @@ export default function ResultsPage({ params }: PageProps) {
 
           {/* Network Relations Tab (unified Network Graph + Subsidiaries) */}
           {activeTab === 'network-relations' && results.network_data && (() => {
+            const formatSourceName = (source: string) => {
+              switch (source) {
+                case 'sec_edgar': return 'SEC EDGAR';
+                case 'opencorporates_api': return 'OpenCorporates';
+                case 'wikipedia': return 'Wikipedia';
+                case 'duckduckgo': return 'DuckDuckGo';
+                case 'google': return 'Google';
+                default: return source || 'Unknown';
+              }
+            };
+
             // Entity Card Component (reusable for subsidiaries/sisters)
             const EntityCard = ({ entity, showOwnership = false }: { entity: any; showOwnership?: boolean }) => {
-              // Helper function to format source name
-              const formatSourceName = (source: string) => {
-                switch (source) {
-                  case 'sec_edgar': return 'SEC EDGAR';
-                  case 'opencorporates_api': return 'OpenCorporates';
-                  case 'wikipedia': return 'Wikipedia';
-                  case 'duckduckgo': return 'DuckDuckGo';
-                  case 'google': return 'Google';
-                  default: return source || 'Unknown';
-                }
-              };
 
               return (
-                <div className="bg-[#0d1425] border border-gray-800 rounded-lg p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-white">{entity.name}</h3>
-                        {entity.level && (
-                          <span className="text-sm px-2 py-1 bg-blue-900/30 text-blue-300 rounded">
-                            Level {entity.level}
-                          </span>
-                        )}
-                        {entity.relationship === 'sister' && (
-                          <span className="text-sm px-2 py-1 bg-purple-900/30 text-purple-300 rounded">
-                            Sister Company
-                          </span>
-                        )}
-                      </div>
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-dim)', padding: '1rem 1.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.625rem', flexWrap: 'wrap' }}>
+                    <span className="font-editorial" style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-bright)' }}>
+                      {entity.name}
+                    </span>
+                    {entity.level && (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.1em', padding: '0.15rem 0.5rem', background: 'var(--bg-raised)', color: 'var(--cyan-bright)', border: '1px solid var(--cyan-dim)' }}>
+                        Level {entity.level}
+                      </span>
+                    )}
+                    {entity.relationship === 'sister' && (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.1em', padding: '0.15rem 0.5rem', background: 'var(--bg-raised)', color: 'var(--amber-primary)', border: '1px solid var(--border-main)' }}>
+                        Sister
+                      </span>
+                    )}
+                  </div>
 
-                      {/* Data grid - removed ownership, added source */}
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm mb-3">
-                        <div>
-                          <span className="text-gray-400">Jurisdiction:</span>
-                          <span className="ml-2 text-white">{entity.jurisdiction || '-'}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Status:</span>
-                          <span className="ml-2 text-white">{entity.status || '-'}</span>
-                        </div>
-                        {/* Source with link */}
-                        <div>
-                          <span className="text-gray-400">Source:</span>
-                          {entity.reference_url ? (
-                            <a
-                              href={entity.reference_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="ml-2 text-blue-400 hover:underline text-sm"
-                            >
-                              {formatSourceName(entity.source)}
-                            </a>
-                          ) : (
-                            <span className="ml-2 text-white">
-                              {formatSourceName(entity.source)}
-                            </span>
-                          )}
-                        </div>
-                        {/* Optional: Only show ownership if explicitly requested and not null */}
-                        {showOwnership && entity.ownership_percentage !== undefined && entity.ownership_percentage > 0 && (
-                          <div>
-                            <span className="text-gray-400">Ownership:</span>
-                            <span className="ml-2 text-white">{entity.ownership_percentage}%</span>
-                          </div>
-                        )}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.625rem' }}>
+                    {[
+                      { label: 'Jurisdiction', value: entity.jurisdiction || '—' },
+                      { label: 'Status', value: entity.status || '—' },
+                      ...(showOwnership && entity.ownership_percentage > 0 ? [{ label: 'Ownership', value: `${entity.ownership_percentage}%` }] : []),
+                    ].map(({ label, value }) => (
+                      <div key={label}>
+                        <div className="label-stamp" style={{ marginBottom: '0.2rem' }}>{label}</div>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-main)' }}>{value}</span>
                       </div>
-
-                      {/* Sanctions warning */}
-                      {entity.sanctions_hits !== undefined && entity.sanctions_hits > 0 && (
-                        <div className="mt-3 p-2 bg-red-900/20 border border-red-700 rounded">
-                          <span className="text-red-400 font-semibold text-sm">
-                            ⚠️ {entity.sanctions_hits} sanctions hit(s)
-                          </span>
-                        </div>
+                    ))}
+                    <div>
+                      <div className="label-stamp" style={{ marginBottom: '0.2rem' }}>Source</div>
+                      {entity.reference_url ? (
+                        <a href={entity.reference_url} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--amber-primary)', textDecoration: 'none', letterSpacing: '0.04em' }}>
+                          {formatSourceName(entity.source)} →
+                        </a>
+                      ) : (
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-main)' }}>
+                          {formatSourceName(entity.source)}
+                        </span>
                       )}
                     </div>
                   </div>
+
+                  {entity.sanctions_hits !== undefined && entity.sanctions_hits > 0 && (
+                    <div style={{ marginTop: '0.625rem', padding: '0.375rem 0.75rem', background: 'var(--risk-critical-bg)', border: '1px solid var(--risk-critical)' }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--risk-critical-bright)', letterSpacing: '0.04em' }}>
+                        ⚠ {entity.sanctions_hits} sanctions hit(s)
+                      </span>
+                    </div>
+                  )}
                 </div>
               );
             };
@@ -856,174 +874,118 @@ export default function ResultsPage({ params }: PageProps) {
             const hasSisters = (results.network_data as any)?.sisters?.length > 0;
             const hasNetworkGraph = (results.network_data as NetworkData).nodes && (results.network_data as NetworkData).nodes.length > 0;
 
+            const sectionLabel = (text: string) => (
+              <div className="label-stamp-bright" style={{ marginBottom: '0.75rem' }}>{text}</div>
+            );
+            const sectionNote = (text: string) => (
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.75rem', marginTop: 0 }}>{text}</p>
+            );
+            const cardStack = (children: React.ReactNode) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>{children}</div>
+            );
+
             return (
-              <div className="space-y-6">
-                {/* Section 1: Network Graph (always at top if available) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {/* Network Graph */}
                 {hasNetworkGraph && (
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-4">
-                      Network Visualization
-                    </h3>
-                    <NetworkGraph
-                      networkData={results.network_data as NetworkData}
-                      height={600}
-                    />
+                    {sectionLabel('Network Visualization')}
+                    <NetworkGraph networkData={results.network_data as NetworkData} height={600} />
                   </div>
                 )}
 
-                {/* Section 2: Smart entity display based on type */}
                 {/* Case 1: Entity is a CHILD (has parent company) */}
                 {hasParent ? (
                   <>
-                    {/* Display parent company first */}
-                    <div className="bg-purple-900/20 border border-purple-700 rounded-lg p-5">
-                      <div className="flex items-start gap-3">
-                        <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-purple-400 mb-3">
-                            Parent Company Discovered
-                          </h3>
-                          <div className="bg-[#0d1425] border border-purple-800 rounded-lg p-4">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h4 className="text-xl font-semibold text-white">
-                                {(results.network_data.parent_info as any).name}
-                              </h4>
-                              <span className="text-sm px-2 py-1 bg-purple-900/30 text-purple-300 rounded">
-                                Parent
-                              </span>
+                    {/* Parent company */}
+                    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-main)', borderLeft: '2px solid var(--amber-primary)', padding: '1.25rem' }}>
+                      <div className="label-stamp-bright" style={{ marginBottom: '0.875rem', color: 'var(--amber-light)' }}>
+                        Parent Company Discovered
+                      </div>
+                      <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-dim)', padding: '1rem 1.25rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+                          <span className="font-editorial" style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-bright)' }}>
+                            {(results.network_data.parent_info as any).name}
+                          </span>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.1em', padding: '0.15rem 0.5rem', background: 'var(--amber-pale)', color: 'var(--amber-deep)', border: '1px solid var(--amber-primary)' }}>
+                            Parent
+                          </span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.625rem' }}>
+                          {[
+                            { label: 'Jurisdiction', value: (results.network_data.parent_info as any).jurisdiction || '—' },
+                            { label: 'Relationship', value: (results.network_data.parent_info as any).relationship || 'Parent' },
+                            ...(results.network_data.parent_info as any).confidence ? [{ label: 'Confidence', value: (results.network_data.parent_info as any).confidence }] : [],
+                          ].map(({ label, value }) => (
+                            <div key={label}>
+                              <div className="label-stamp" style={{ marginBottom: '0.2rem' }}>{label}</div>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-main)', textTransform: 'capitalize' }}>{value}</span>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                              <div>
-                                <span className="text-gray-400">Jurisdiction:</span>
-                                <span className="ml-2 text-white">
-                                  {(results.network_data.parent_info as any).jurisdiction || '-'}
+                          ))}
+                          {((results.network_data.parent_info as any).reference_url || (results.network_data.parent_info as any).source) && (
+                            <div>
+                              <div className="label-stamp" style={{ marginBottom: '0.2rem' }}>Source</div>
+                              {(results.network_data.parent_info as any).reference_url ? (
+                                <a href={(results.network_data.parent_info as any).reference_url} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--amber-primary)', textDecoration: 'none' }}>
+                                  {formatSourceName((results.network_data.parent_info as any).source)} →
+                                </a>
+                              ) : (
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-main)' }}>
+                                  {(results.network_data.parent_info as any).source === 'intelligence_report' ? 'Intelligence Report' : (results.network_data.parent_info as any).source}
                                 </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Relationship:</span>
-                                <span className="ml-2 text-white capitalize">
-                                  {(results.network_data.parent_info as any).relationship || 'Parent'}
-                                </span>
-                              </div>
-                              {(results.network_data.parent_info as any).confidence && (
-                                <div>
-                                  <span className="text-gray-400">Confidence:</span>
-                                  <span className="ml-2 text-white capitalize">
-                                    {(results.network_data.parent_info as any).confidence}
-                                  </span>
-                                </div>
-                              )}
-                              {((results.network_data.parent_info as any).reference_url ||
-                                (results.network_data.parent_info as any).source) && (
-                                <div className="col-span-2">
-                                  <span className="text-gray-400">Source:</span>
-                                  {(results.network_data.parent_info as any).reference_url ? (
-                                    <a
-                                      href={(results.network_data.parent_info as any).reference_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="ml-2 text-blue-400 hover:underline text-sm"
-                                    >
-                                      {(results.network_data.parent_info as any).source === 'sec_edgar' ? 'SEC EDGAR' :
-                                       (results.network_data.parent_info as any).source === 'opencorporates_api' ? 'OpenCorporates' :
-                                       (results.network_data.parent_info as any).source === 'wikipedia' ? 'Wikipedia' :
-                                       (results.network_data.parent_info as any).source === 'duckduckgo' ? 'DuckDuckGo' :
-                                       (results.network_data.parent_info as any).source || 'View Source'}
-                                    </a>
-                                  ) : (
-                                    <span className="ml-2 text-gray-300 text-sm capitalize">
-                                      {(results.network_data.parent_info as any).source === 'intelligence_report'
-                                        ? 'Intelligence Report (no direct URL available)'
-                                        : (results.network_data.parent_info as any).source}
-                                    </span>
-                                  )}
-                                </div>
                               )}
                             </div>
-                            <p className="text-sm text-gray-500 mt-3">
-                              This entity is owned by or is a subsidiary of the parent company shown above.
-                            </p>
-                          </div>
+                          )}
                         </div>
                       </div>
                     </div>
 
-                    {/* Display sister companies */}
+                    {/* Sister companies */}
                     {hasSisters ? (
                       <div>
-                        <h3 className="text-lg font-semibold text-white mb-4">
-                          Sister Companies ({(results.network_data as any).sisters.length})
-                        </h3>
-                        <p className="text-sm text-gray-400 mb-4">
-                          Companies owned by the same parent company ({(results.network_data.parent_info as any).name})
-                        </p>
-                        <div className="space-y-3">
-                          {(results.network_data as any).sisters.map((sister: any, idx: number) => (
-                            <EntityCard key={idx} entity={sister} showOwnership={false} />
-                          ))}
-                        </div>
+                        {sectionLabel(`Sister Companies (${(results.network_data as any).sisters.length})`)}
+                        {sectionNote(`Companies owned by the same parent (${(results.network_data.parent_info as any).name})`)}
+                        {cardStack((results.network_data as any).sisters.map((sister: any, idx: number) => (
+                          <EntityCard key={idx} entity={sister} showOwnership={false} />
+                        )))}
                       </div>
                     ) : (
-                      <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-6 text-center">
-                        <p className="text-gray-400">
-                          No sister companies discovered. This may be the only subsidiary of {(results.network_data.parent_info as any).name}.
+                      <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-dim)', padding: '1.5rem', textAlign: 'center' }}>
+                        <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                          No sister companies discovered — this may be the sole subsidiary of {(results.network_data.parent_info as any).name}.
                         </p>
                       </div>
                     )}
 
-                    {/* Display subsidiaries of this entity, if any */}
+                    {/* Subsidiaries of this entity */}
                     {hasSubsidiaries && (
                       <div>
-                        <h3 className="text-lg font-semibold text-white mb-4">
-                          Subsidiaries ({results.subsidiaries!.length})
-                        </h3>
-                        <p className="text-sm text-gray-400 mb-4">
-                          Companies owned or controlled by {results.entity_name}
-                        </p>
-                        <div className="space-y-3">
-                          {results.subsidiaries!.map((subsidiary: any, idx: number) => (
-                            <EntityCard key={idx} entity={subsidiary} showOwnership={false} />
-                          ))}
-                        </div>
+                        {sectionLabel(`Subsidiaries (${results.subsidiaries!.length})`)}
+                        {sectionNote(`Companies owned or controlled by ${results.entity_name}`)}
+                        {cardStack(results.subsidiaries!.map((subsidiary: any, idx: number) => (
+                          <EntityCard key={idx} entity={subsidiary} showOwnership={false} />
+                        )))}
                       </div>
                     )}
                   </>
                 ) : hasSubsidiaries ? (
-                  /* Case 2: Entity is a PARENT (has subsidiaries but no parent) */
+                  /* Case 2: Entity is a PARENT */
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-4">
-                      Subsidiaries ({results.subsidiaries!.length})
-                    </h3>
-                    <p className="text-sm text-gray-400 mb-4">
-                      Companies owned or controlled by {results.entity_name}
-                    </p>
-                    <div className="space-y-3">
-                      {results.subsidiaries!.map((subsidiary: any, idx: number) => (
-                        <EntityCard key={idx} entity={subsidiary} showOwnership={false} />
-                      ))}
-                    </div>
+                    {sectionLabel(`Subsidiaries (${results.subsidiaries!.length})`)}
+                    {sectionNote(`Companies owned or controlled by ${results.entity_name}`)}
+                    {cardStack(results.subsidiaries!.map((subsidiary: any, idx: number) => (
+                      <EntityCard key={idx} entity={subsidiary} showOwnership={false} />
+                    )))}
                   </div>
                 ) : (
-                  /* Case 3: STANDALONE entity (no parent, no subsidiaries) */
-                  <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-8">
-                    <div className="text-center">
-                      <h3 className="text-lg font-semibold text-white mb-2">
-                        Standalone Entity
-                      </h3>
-                      <p className="text-gray-400 mb-4">
-                        {results.entity_name} appears to be a standalone entity with no parent company or subsidiaries in public records.
-                      </p>
-                      <div className="text-sm text-gray-500 space-y-2">
-                        <p><strong>Data sources checked:</strong></p>
-                        <ul className="list-none text-left max-w-md mx-auto space-y-1">
-                          <li>• SEC EDGAR filings (Exhibit 21.1)</li>
-                          <li>• OpenCorporates database</li>
-                          <li>• Wikipedia corporate structure data</li>
-                          <li>• DuckDuckGo web search</li>
-                        </ul>
-                        <p className="mt-4 text-sm">
-                          This is normal for private companies, small businesses, or individuals.
-                        </p>
-                      </div>
+                  /* Case 3: Standalone entity */
+                  <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-dim)', padding: '2.5rem', textAlign: 'center' }}>
+                    <div className="label-stamp-bright" style={{ marginBottom: '0.75rem' }}>Standalone Entity</div>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem', lineHeight: 1.6 }}>
+                      {results.entity_name} appears to be a standalone entity with no parent company or subsidiaries in public records.
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-faint)', alignItems: 'center' }}>
+                      <span>Sources: SEC EDGAR · OpenCorporates · Wikipedia · DuckDuckGo</span>
                     </div>
                   </div>
                 )}

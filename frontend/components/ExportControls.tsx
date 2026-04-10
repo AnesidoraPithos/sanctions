@@ -61,28 +61,51 @@ export default function ExportControls({ searchId }: ExportControlsProps) {
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {buttons.map(({ format, label, icon }) => (
-        <button
-          key={format}
-          onClick={() => handleExport(format)}
-          disabled={loading !== null}
-          title={`Export as ${label}`}
-          className={`
-            flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-all
-            ${loading === format
-              ? "border-blue-600 bg-blue-950/40 text-blue-400 cursor-wait"
-              : "border-gray-700 bg-gray-900/50 text-gray-300 hover:border-blue-600 hover:text-blue-300"
-            }
-            disabled:opacity-60
-          `}
-        >
-          <span>{loading === format ? "⏳" : icon}</span>
-          <span>{loading === format ? "Exporting…" : label}</span>
-        </button>
-      ))}
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.375rem' }}>
+      {buttons.map(({ format, label }) => {
+        const isActive = loading === format;
+        return (
+          <button
+            key={format}
+            onClick={() => handleExport(format)}
+            disabled={loading !== null}
+            title={`Export as ${label}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.375rem',
+              padding: '0.375rem 0.625rem',
+              fontSize: '0.65rem',
+              fontFamily: 'var(--font-mono)',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              border: isActive ? '1px solid var(--amber-primary)' : '1px solid var(--border-main)',
+              background: isActive ? 'var(--amber-pale)' : 'var(--bg-panel)',
+              color: isActive ? 'var(--amber-deep)' : 'var(--text-secondary)',
+              cursor: loading !== null ? (isActive ? 'wait' : 'not-allowed') : 'pointer',
+              opacity: loading !== null && !isActive ? 0.5 : 1,
+              transition: 'all 0.15s',
+              whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={e => { if (!loading) { e.currentTarget.style.borderColor = 'var(--amber-primary)'; e.currentTarget.style.color = 'var(--amber-light)'; } }}
+            onMouseLeave={e => { if (!loading) { e.currentTarget.style.borderColor = 'var(--border-main)'; e.currentTarget.style.color = 'var(--text-secondary)'; } }}
+          >
+            <span>{isActive ? '…' : '↓'}</span>
+            <span>{isActive ? `${label}…` : label}</span>
+          </button>
+        );
+      })}
       {error && (
-        <span className="text-sm text-red-400 ml-2">{error}</span>
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.65rem',
+            color: 'var(--risk-critical-bright)',
+            marginLeft: '0.25rem',
+          }}
+        >
+          {error}
+        </span>
       )}
     </div>
   );

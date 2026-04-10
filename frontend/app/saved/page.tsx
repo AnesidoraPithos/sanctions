@@ -6,14 +6,6 @@ import Image from 'next/image';
 import { api } from '@/lib/api-client';
 import { HistoryEntry, RiskLevel, ResearchTier } from '@/lib/types';
 
-const RISK_COLORS: Record<RiskLevel, string> = {
-  SAFE: 'bg-green-900/40 text-green-400 border-green-700',
-  LOW: 'bg-blue-900/40 text-blue-400 border-blue-700',
-  MID: 'bg-yellow-900/40 text-yellow-400 border-yellow-700',
-  HIGH: 'bg-orange-900/40 text-orange-400 border-orange-700',
-  VERY_HIGH: 'bg-red-900/40 text-red-400 border-red-700',
-};
-
 const TIER_LABELS: Record<ResearchTier, string> = {
   base: 'Base',
   network: 'Network',
@@ -32,6 +24,7 @@ export default function SavedSearchesPage() {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   useEffect(() => {
     api.getSavedSearches()
@@ -40,105 +33,237 @@ export default function SavedSearchesPage() {
   }, []);
 
   const handleUnsave = async (searchId: string) => {
-    // Optimistic remove
+    setConfirmingId(null);
     setEntries((prev) => prev.filter((e) => e.search_id !== searchId));
     try {
       await api.unsaveResult(searchId);
     } catch {
-      // Re-fetch on failure
       api.getSavedSearches().then((data) => setEntries(data.entries)).catch(() => {});
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0b1121] text-white">
-      <header className="border-b border-gray-800 bg-[#0d1425]">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-4 lg:px-6 py-6">
-          <div className="flex flex-wrap items-center justify-between gap-y-3">
-            <div className="flex items-center gap-3">
-              <Image src="/bear-logo.png" alt="BEAR² Logo" width={144} height={144} className="rounded" />
-              <div>
-                <h1 className="text-2xl font-bold font-mono tracking-tight text-blue-400">
-                  BEAR<sup>2</sup>
-                </h1>
-                <p className="text-sm text-gray-400">Saved Searches</p>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-void)' }}>
+      {/* Header — matches main page exactly */}
+      <header style={{ borderBottom: '1px solid var(--border-dim)', background: 'var(--bg-deep)', position: 'relative', zIndex: 10 }}>
+        <div style={{ height: '2px', background: 'linear-gradient(90deg, transparent, var(--amber-primary), transparent)' }} />
+        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.25rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '1rem', textDecoration: 'none' }}>
+            <Image src="/bear-logo.png" alt="BEAR²" width={44} height={44} style={{ display: 'block', opacity: 0.9 }} />
+            <div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
+                <span className="font-display" style={{ fontSize: '2.2rem', lineHeight: 1, color: 'var(--amber-light)', letterSpacing: '0.08em' }}>BEAR</span>
+                <span className="font-display" style={{ fontSize: '1.2rem', lineHeight: 1, color: 'var(--amber-primary)', verticalAlign: 'super' }}>2</span>
+              </div>
+              <div className="label-stamp" style={{ fontSize: '0.55rem', marginTop: '0.15rem', color: 'var(--text-muted)' }}>
+                Background Entity Assessment &amp; Risk Research
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-4">
-              {entries.length > 0 && (
-                <span className="bg-blue-900/40 border border-blue-700 text-blue-400 text-sm px-3 py-1 rounded-full">
-                  {entries.length} saved
-                </span>
-              )}
-              <Link href="/" className="text-sm text-gray-400 hover:text-white transition-colors">
-                ← Back to Search
-              </Link>
-            </div>
+          </Link>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+            {entries.length > 0 && (
+              <span
+                className="font-data"
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.12em',
+                  color: 'var(--amber-primary)',
+                  border: '1px solid var(--border-dim)',
+                  padding: '0.2rem 0.5rem',
+                }}
+              >
+                {entries.length} saved
+              </span>
+            )}
+            <Link
+              href="/"
+              className="btn-secondary"
+              style={{ fontSize: '0.65rem', textDecoration: 'none' }}
+            >
+              ← New Search
+            </Link>
           </div>
         </div>
       </header>
 
-      <main className="max-w-screen-2xl mx-auto px-4 sm:px-4 lg:px-6 py-8">
+      <main style={{ maxWidth: '1400px', margin: '0 auto', padding: '2.5rem 1.5rem 4rem' }}>
+        {/* Page title */}
+        <div style={{ marginBottom: '2rem' }}>
+          <div className="label-stamp" style={{ marginBottom: '0.5rem' }}>// Saved Intelligence Briefs</div>
+          <h1
+            className="font-editorial"
+            style={{ fontSize: 'clamp(1.4rem, 3vw, 2rem)', fontWeight: 700, color: 'var(--text-bright)', lineHeight: 1.2, margin: 0 }}
+          >
+            Saved Searches
+          </h1>
+        </div>
+
+        {/* Loading */}
         {isLoading && (
-          <div className="text-center text-gray-400 py-16">Loading saved searches...</div>
+          <div
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-dim)',
+              padding: '3rem',
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                display: 'inline-block',
+                width: '8px',
+                height: '8px',
+                background: 'var(--amber-primary)',
+                animation: 'data-pulse 1s ease-in-out infinite',
+                boxShadow: '0 0 6px var(--amber-primary)',
+                marginBottom: '0.75rem',
+              }}
+            />
+            <p className="label-stamp" style={{ color: 'var(--text-muted)' }}>Loading saved searches…</p>
+          </div>
         )}
 
+        {/* Error */}
         {error && (
-          <div className="text-center text-red-400 py-16">{error}</div>
+          <div
+            style={{
+              background: 'var(--risk-critical-bg)',
+              border: '1px solid var(--risk-critical)',
+              padding: '1.5rem',
+              display: 'flex',
+              gap: '0.75rem',
+              alignItems: 'center',
+            }}
+          >
+            <span style={{ color: 'var(--risk-critical-bright)' }}>⚠</span>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--risk-critical-bright)', margin: 0 }}>{error}</p>
+          </div>
         )}
 
+        {/* Empty state */}
         {!isLoading && !error && entries.length === 0 && (
-          <div className="text-center py-20">
-            <svg className="w-12 h-12 text-gray-600 mx-auto mb-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1">
+          <div
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-dim)',
+              padding: '4rem 2rem',
+              textAlign: 'center',
+            }}
+          >
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1"
+              style={{ color: 'var(--border-main)', margin: '0 auto 1rem' }}
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
             </svg>
-            <p className="text-gray-400 text-lg">No saved searches yet.</p>
-            <p className="text-gray-500 text-sm mt-1">
-              Use the bookmark button on any results page to save important findings.
+            <p className="font-editorial" style={{ fontSize: '1rem', color: 'var(--text-bright)', marginBottom: '0.5rem' }}>
+              No saved searches
             </p>
-            <Link href="/" className="inline-block mt-6 px-5 py-2 bg-blue-700 hover:bg-blue-600 rounded-lg text-sm transition-colors">
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: 1.6 }}>
+              Use the Save button on any results page to bookmark important findings.
+            </p>
+            <Link href="/" className="btn-primary" style={{ textDecoration: 'none', display: 'inline-block', fontSize: '0.7rem' }}>
               Start a Search
             </Link>
           </div>
         )}
 
+        {/* Results grid */}
         {!isLoading && !error && entries.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+              gap: '1px',
+              background: 'var(--border-void)',
+              border: '1px solid var(--border-void)',
+            }}
+          >
             {entries.map((entry) => (
               <div
                 key={entry.search_id}
-                className="bg-[#0d1425] border border-gray-800 rounded-xl p-5 flex flex-col gap-3 hover:border-gray-600 transition-colors"
+                style={{
+                  background: 'var(--bg-surface)',
+                  padding: '1.25rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem',
+                }}
               >
-                {/* Entity name + badges */}
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold text-white text-sm leading-snug">{entry.entity_name}</h3>
-                  <button
-                    onClick={() => handleUnsave(entry.search_id)}
-                    title="Remove bookmark"
-                    className="text-gray-500 hover:text-red-400 transition-colors flex-shrink-0 mt-0.5"
+                {/* Entity name + remove */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem' }}>
+                  <h3
+                    className="font-editorial"
+                    style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-bright)', lineHeight: 1.3, margin: 0, flex: 1 }}
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
+                    {entry.entity_name}
+                  </h3>
+                  <button
+                    onClick={() =>
+                      confirmingId === entry.search_id
+                        ? handleUnsave(entry.search_id)
+                        : setConfirmingId(entry.search_id)
+                    }
+                    onBlur={() => setTimeout(() => setConfirmingId((id) => id === entry.search_id ? null : id), 150)}
+                    title={confirmingId === entry.search_id ? 'Click again to confirm removal' : 'Remove bookmark'}
+                    style={{
+                      flexShrink: 0,
+                      background: 'none',
+                      border: '1px solid',
+                      borderColor: confirmingId === entry.search_id ? 'var(--risk-high)' : 'transparent',
+                      color: confirmingId === entry.search_id ? 'var(--risk-high-bright)' : 'var(--text-faint)',
+                      cursor: 'pointer',
+                      padding: '0.2rem 0.4rem',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.62rem',
+                      letterSpacing: '0.06em',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {confirmingId === entry.search_id ? 'Remove?' : '×'}
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-sm px-2 py-0.5 rounded border font-medium ${RISK_COLORS[entry.risk_level as RiskLevel] ?? 'text-gray-400 border-gray-600'}`}>
+                {/* Risk + tier badges */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <div
+                    className={`risk-badge risk-badge-${entry.risk_level as RiskLevel}`}
+                    style={{ fontSize: '0.62rem' }}
+                  >
                     {entry.risk_level}
-                  </span>
-                  <span className="text-sm px-2 py-0.5 rounded border border-gray-600 text-gray-400">
+                  </div>
+                  <span
+                    className="label-stamp"
+                    style={{ fontSize: '0.62rem', color: 'var(--text-muted)', border: '1px solid var(--border-dim)', padding: '0.1rem 0.375rem' }}
+                  >
                     {TIER_LABELS[entry.tier as ResearchTier] ?? entry.tier}
                   </span>
                 </div>
 
                 {/* Label */}
                 {entry.save_label && (
-                  <p className="text-sm text-blue-300 italic">"{entry.save_label}"</p>
+                  <p
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.72rem',
+                      color: 'var(--amber-primary)',
+                      margin: 0,
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    &ldquo;{entry.save_label}&rdquo;
+                  </p>
                 )}
 
                 {/* Timestamps */}
-                <div className="text-sm text-gray-500 space-y-0.5">
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-faint)', lineHeight: 1.7 }}>
                   <div>Searched: {formatDate(entry.timestamp)}</div>
                   {entry.saved_at && <div>Saved: {formatDate(entry.saved_at)}</div>}
                 </div>
@@ -146,7 +271,23 @@ export default function SavedSearchesPage() {
                 {/* View link */}
                 <Link
                   href={`/results/${entry.search_id}`}
-                  className="mt-auto inline-block text-center w-full py-2 bg-blue-900/40 hover:bg-blue-800/60 border border-blue-700 text-blue-400 text-sm rounded-lg transition-colors"
+                  style={{
+                    marginTop: 'auto',
+                    display: 'block',
+                    textAlign: 'center',
+                    padding: '0.5rem',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.65rem',
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    color: 'var(--amber-primary)',
+                    textDecoration: 'none',
+                    border: '1px solid var(--border-main)',
+                    background: 'var(--bg-panel)',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--amber-primary)'; e.currentTarget.style.color = 'var(--amber-light)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-main)'; e.currentTarget.style.color = 'var(--amber-primary)'; }}
                 >
                   View Results →
                 </Link>

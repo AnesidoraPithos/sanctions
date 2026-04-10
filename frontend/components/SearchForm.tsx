@@ -39,10 +39,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!entityName.trim()) {
-      alert('Please enter an entity name');
-      return;
-    }
+    if (!entityName.trim()) return;
     const request: SearchRequest = {
       entity_name: entityName.trim(),
       country: country || undefined,
@@ -213,7 +210,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
             display: 'flex',
             justifyContent: 'space-between',
             fontFamily: 'var(--font-mono)',
-            fontSize: '0.6rem',
+            fontSize: '0.62rem',
             color: 'var(--text-faint)',
             letterSpacing: '0.08em',
             marginTop: '0.25rem',
@@ -223,6 +220,22 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
           <span>Recommended: 70–90%</span>
           <span>Exact (100%)</span>
         </div>
+        <p
+          style={{
+            marginTop: '0.375rem',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.68rem',
+            color: 'var(--text-muted)',
+            lineHeight: 1.55,
+          }}
+        >
+          {fuzzyThreshold < 60
+            ? <span style={{ color: 'var(--risk-mid-bright)' }}>⚠ Low threshold — expect many false positives from partial name matches.</span>
+            : fuzzyThreshold > 95
+            ? <span style={{ color: 'var(--risk-mid-bright)' }}>⚠ High threshold — may miss genuine hits with transliterated or abbreviated names.</span>
+            : <span>Matches names within {100 - fuzzyThreshold}% character variation. Handles common transliterations and abbreviations.</span>
+          }
+        </p>
       </div>
 
       {/* ── Submit ─────────────────────────────────────────── */}

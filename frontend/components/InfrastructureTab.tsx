@@ -11,8 +11,15 @@ export default function InfrastructureTab({
 }: InfrastructureTabProps) {
   if (!infrastructure || infrastructure.length === 0) {
     return (
-      <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-8 text-center">
-        <p className="text-gray-400">
+      <div
+        style={{
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border-dim)',
+          padding: '2rem',
+          textAlign: 'center',
+        }}
+      >
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', margin: 0 }}>
           No digital infrastructure data available. WHOIS correlation requires
           domains to be present in media intelligence results.
         </p>
@@ -25,16 +32,23 @@ export default function InfrastructureTab({
   ).length;
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Summary */}
-      <div className="bg-cyan-900/20 border border-cyan-700 rounded-lg p-4">
-        <p className="text-sm text-cyan-300">
-          <span className="font-semibold">{infrastructure.length}</span>{" "}
+      <div
+        style={{
+          background: 'rgba(0,188,188,0.06)',
+          border: '1px solid var(--cyan-dark)',
+          borderLeft: '3px solid var(--cyan-main)',
+          padding: '0.875rem 1rem',
+        }}
+      >
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', margin: 0, lineHeight: 1.5 }}>
+          <span style={{ color: 'var(--cyan-bright)', fontWeight: 600 }}>{infrastructure.length}</span>{" "}
           domain{infrastructure.length !== 1 ? "s" : ""} analysed via WHOIS
           {sharedCount > 0 && (
             <>
               {" "}—{" "}
-              <span className="font-semibold text-orange-300">
+              <span style={{ color: 'var(--amber-light)', fontWeight: 600 }}>
                 {sharedCount}
               </span>{" "}
               with shared registrant or nameserver infrastructure
@@ -44,27 +58,55 @@ export default function InfrastructureTab({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: '1rem',
+        }}
+      >
         {infrastructure.map((hit, idx) => {
           const hasRelated = (hit.related_entities?.length || 0) > 0;
 
           return (
             <div
               key={idx}
-              className={`bg-[#0d1425] rounded-lg p-5 border ${
-                hasRelated
-                  ? "border-orange-600/60"
-                  : "border-gray-800"
-              }`}
+              style={{
+                background: 'var(--bg-surface)',
+                border: `1px solid ${hasRelated ? 'var(--amber-primary)' : 'var(--border-dim)'}`,
+                padding: '1.25rem',
+                position: 'relative',
+              }}
             >
               {/* Domain header */}
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm px-2 py-1 bg-cyan-900/40 text-cyan-300 rounded font-mono">
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.875rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.75rem',
+                      letterSpacing: '0.04em',
+                      padding: '0.2rem 0.5rem',
+                      background: 'rgba(0,188,188,0.1)',
+                      border: '1px solid var(--cyan-dark)',
+                      color: 'var(--cyan-bright)',
+                    }}
+                  >
                     {hit.domain}
                   </span>
                   {hasRelated && (
-                    <span className="text-sm px-2 py-1 bg-orange-900/40 text-orange-300 rounded">
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.62rem',
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        padding: '0.2rem 0.5rem',
+                        background: 'rgba(168,112,8,0.12)',
+                        border: '1px solid var(--amber-deep)',
+                        color: 'var(--amber-light)',
+                      }}
+                    >
                       Shared infra
                     </span>
                   )}
@@ -72,42 +114,46 @@ export default function InfrastructureTab({
               </div>
 
               {/* WHOIS fields */}
-              <dl className="space-y-1 text-sm">
+              <dl style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
                 {hit.registrant_org && (
-                  <div className="flex gap-2">
-                    <dt className="text-gray-500 w-28 flex-shrink-0">
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <dt style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.08em', color: 'var(--text-muted)', width: '6rem', flexShrink: 0, paddingTop: '0.05rem' }}>
                       Registrant
                     </dt>
-                    <dd className="text-gray-200 break-all">
+                    <dd style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-primary)', wordBreak: 'break-all', margin: 0 }}>
                       {hit.registrant_org}
                     </dd>
                   </div>
                 )}
                 {hit.registrar && (
-                  <div className="flex gap-2">
-                    <dt className="text-gray-500 w-28 flex-shrink-0">
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <dt style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.08em', color: 'var(--text-muted)', width: '6rem', flexShrink: 0, paddingTop: '0.05rem' }}>
                       Registrar
                     </dt>
-                    <dd className="text-gray-300">{hit.registrar}</dd>
+                    <dd style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
+                      {hit.registrar}
+                    </dd>
                   </div>
                 )}
                 {hit.creation_date && (
-                  <div className="flex gap-2">
-                    <dt className="text-gray-500 w-28 flex-shrink-0">
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <dt style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.08em', color: 'var(--text-muted)', width: '6rem', flexShrink: 0, paddingTop: '0.05rem' }}>
                       Created
                     </dt>
-                    <dd className="text-gray-300">{hit.creation_date}</dd>
+                    <dd style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
+                      {hit.creation_date}
+                    </dd>
                   </div>
                 )}
                 {hit.nameservers && hit.nameservers.length > 0 && (
-                  <div className="flex gap-2">
-                    <dt className="text-gray-500 w-28 flex-shrink-0">
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <dt style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.08em', color: 'var(--text-muted)', width: '6rem', flexShrink: 0, paddingTop: '0.05rem' }}>
                       Nameservers
                     </dt>
-                    <dd className="text-gray-300 font-mono text-sm">
+                    <dd style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-primary)', margin: 0 }}>
                       {hit.nameservers.slice(0, 3).join(", ")}
                       {hit.nameservers.length > 3 && (
-                        <span className="text-gray-500">
+                        <span style={{ color: 'var(--text-faint)' }}>
                           {" "}+{hit.nameservers.length - 3} more
                         </span>
                       )}
@@ -118,15 +164,23 @@ export default function InfrastructureTab({
 
               {/* Related entity badges */}
               {hasRelated && (
-                <div className="mt-3 pt-3 border-t border-gray-800">
-                  <p className="text-sm text-gray-400 mb-2">
+                <div style={{ marginTop: '0.875rem', paddingTop: '0.875rem', borderTop: '1px solid var(--border-dim)' }}>
+                  <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.5rem', marginTop: 0 }}>
                     Shares infrastructure with:
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
                     {hit.related_entities.map((entity, eIdx) => (
                       <span
                         key={eIdx}
-                        className="text-sm px-2 py-1 bg-orange-900/30 text-orange-300 border border-orange-700/40 rounded font-mono"
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.65rem',
+                          letterSpacing: '0.04em',
+                          padding: '0.2rem 0.5rem',
+                          background: 'rgba(168,112,8,0.08)',
+                          border: '1px solid var(--amber-deep)',
+                          color: 'var(--amber-light)',
+                        }}
                       >
                         {entity}
                       </span>

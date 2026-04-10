@@ -99,10 +99,11 @@ export const api = {
   /**
    * Base tier search
    */
-  searchBase: async (request: SearchRequest): Promise<SearchResponse> => {
+  searchBase: async (request: SearchRequest, signal?: AbortSignal): Promise<SearchResponse> => {
     const response = await apiClient.post<SearchResponse>(
       '/api/search/base',
-      request
+      request,
+      { signal }
     );
     return response.data;
   },
@@ -111,12 +112,13 @@ export const api = {
    * Network tier search (Phase 2)
    * Note: Network tier can take 2-10 minutes depending on depth
    */
-  searchNetwork: async (request: SearchRequest): Promise<SearchResponse> => {
+  searchNetwork: async (request: SearchRequest, signal?: AbortSignal): Promise<SearchResponse> => {
     const response = await apiClient.post<SearchResponse>(
       '/api/search/network',
       request,
       {
         timeout: 600000, // 10 minutes timeout for network tier
+        signal,
       }
     );
     return response.data;
@@ -126,12 +128,13 @@ export const api = {
    * Deep tier search (Phase 3)
    * Note: Deep tier can take 5-15 minutes
    */
-  searchDeep: async (request: SearchRequest): Promise<SearchResponse> => {
+  searchDeep: async (request: SearchRequest, signal?: AbortSignal): Promise<SearchResponse> => {
     const response = await apiClient.post<SearchResponse>(
       '/api/search/deep',
       request,
       {
         timeout: 900000, // 15 minutes timeout for deep tier
+        signal,
       }
     );
     return response.data;

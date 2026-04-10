@@ -7,6 +7,19 @@ interface ManagementNetworkTabProps {
   directorPivots: DirectorPivot[];
 }
 
+const thStyle: React.CSSProperties = {
+  padding: '0.4rem 1rem',
+  textAlign: 'left',
+  fontFamily: 'var(--font-mono)',
+  fontSize: '0.65rem',
+  letterSpacing: '0.14em',
+  textTransform: 'uppercase',
+  color: 'var(--text-muted)',
+  background: 'var(--bg-panel)',
+  fontWeight: 500,
+  borderBottom: '1px solid var(--border-main)',
+};
+
 export default function ManagementNetworkTab({
   directorPivots,
 }: ManagementNetworkTabProps) {
@@ -14,8 +27,15 @@ export default function ManagementNetworkTab({
 
   if (!directorPivots || directorPivots.length === 0) {
     return (
-      <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-8 text-center">
-        <p className="text-gray-400">
+      <div
+        style={{
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border-dim)',
+          padding: '2rem',
+          textAlign: 'center',
+        }}
+      >
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', margin: 0 }}>
           No interlocking directorate data found. This may occur when SEC EDGAR
           has no filings linking directors to other companies.
         </p>
@@ -41,53 +61,101 @@ export default function ManagementNetworkTab({
   );
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Summary */}
-      <div className="bg-purple-900/20 border border-purple-700 rounded-lg p-4">
-        <p className="text-sm text-purple-300">
-          <span className="font-semibold">{directorPivots.length}</span>{" "}
+      <div
+        style={{
+          background: 'rgba(168,112,8,0.06)',
+          border: '1px solid var(--amber-deep)',
+          borderLeft: '3px solid var(--amber-primary)',
+          padding: '0.875rem 1rem',
+        }}
+      >
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', margin: 0, lineHeight: 1.5 }}>
+          <span style={{ color: 'var(--amber-light)', fontWeight: 600 }}>{directorPivots.length}</span>{" "}
           director{directorPivots.length !== 1 ? "s" : ""} analysed —{" "}
-          <span className="font-semibold">{totalCompanies}</span> interlocking
-          company link{totalCompanies !== 1 ? "s" : ""} found via SEC EDGAR
-          filings.
+          <span style={{ color: 'var(--amber-light)', fontWeight: 600 }}>{totalCompanies}</span>{" "}
+          interlocking company link{totalCompanies !== 1 ? "s" : ""} found via SEC EDGAR filings.
         </p>
       </div>
 
       {directorPivots.map((pivot, idx) => {
         const isOpen = expanded.has(idx);
         const companyCount = pivot.companies?.length || 0;
+        const initial = pivot.director_name?.charAt(0)?.toUpperCase() || "?";
 
         return (
           <div
             key={idx}
-            className="bg-[#0d1425] border border-gray-800 rounded-lg overflow-hidden"
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-dim)',
+              overflow: 'hidden',
+            }}
           >
             {/* Director card header */}
             <button
               type="button"
               onClick={() => toggle(idx)}
-              className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-900/40 transition-colors"
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.875rem 1.25rem',
+                textAlign: 'left',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-panel)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-full bg-purple-900/50 border border-purple-600 flex items-center justify-center flex-shrink-0">
-                  <span className="text-purple-400 text-sm font-bold">
-                    {pivot.director_name?.charAt(0)?.toUpperCase() || "?"}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+                {/* Avatar */}
+                <div
+                  style={{
+                    width: '2rem',
+                    height: '2rem',
+                    background: 'rgba(168,112,8,0.1)',
+                    border: '1px solid var(--amber-deep)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <span style={{ color: 'var(--amber-light)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', fontWeight: 700 }}>
+                    {initial}
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">
+                  <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-bright)', fontFamily: 'var(--font-mono)' }}>
                     {pivot.director_name || "Unknown"}
                   </p>
                   {pivot.title && (
-                    <p className="text-sm text-gray-400">{pivot.title}</p>
+                    <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
+                      {pivot.title}
+                    </p>
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm px-2 py-1 bg-purple-900/30 text-purple-300 rounded">
-                  {companyCount} company link{companyCount !== 1 ? "s" : ""}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.65rem',
+                    letterSpacing: '0.08em',
+                    padding: '0.2rem 0.5rem',
+                    background: 'rgba(168,112,8,0.1)',
+                    border: '1px solid var(--amber-deep)',
+                    color: 'var(--amber-light)',
+                  }}
+                >
+                  {companyCount} link{companyCount !== 1 ? "s" : ""}
                 </span>
-                <span className="text-gray-500 text-sm">
+                <span style={{ color: 'var(--text-faint)', fontSize: '0.65rem', fontFamily: 'var(--font-mono)' }}>
                   {isOpen ? "▲" : "▼"}
                 </span>
               </div>
@@ -95,54 +163,52 @@ export default function ManagementNetworkTab({
 
             {/* Expanded company table */}
             {isOpen && (
-              <div className="border-t border-gray-800">
+              <div style={{ borderTop: '1px solid var(--border-dim)' }}>
                 {companyCount === 0 ? (
-                  <p className="text-sm text-gray-500 px-5 py-4">
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', padding: '1rem 1.25rem', margin: 0 }}>
                     No related company filings found for this director.
                   </p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-900/50">
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                      <thead>
                         <tr>
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
-                            Company
-                          </th>
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
-                            Role
-                          </th>
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
-                            Filing Date
-                          </th>
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
-                            Source
-                          </th>
+                          <th style={thStyle}>Company</th>
+                          <th style={thStyle}>Role</th>
+                          <th style={thStyle}>Filing Date</th>
+                          <th style={thStyle}>Source</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-800">
+                      <tbody>
                         {pivot.companies.map((company, cIdx) => (
-                          <tr key={cIdx} className="hover:bg-gray-900/30">
-                            <td className="px-4 py-3 text-white font-medium">
+                          <tr
+                            key={cIdx}
+                            style={{
+                              background: cIdx % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-panel)',
+                              borderBottom: '1px solid var(--border-void)',
+                            }}
+                          >
+                            <td style={{ padding: '0.625rem 1rem', color: 'var(--text-bright)', fontWeight: 500, fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
                               {company.company_name}
                             </td>
-                            <td className="px-4 py-3 text-gray-300">
+                            <td style={{ padding: '0.625rem 1rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
                               {company.role || "—"}
                             </td>
-                            <td className="px-4 py-3 text-gray-300">
+                            <td style={{ padding: '0.625rem 1rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
                               {company.filing_date || "—"}
                             </td>
-                            <td className="px-4 py-3">
+                            <td style={{ padding: '0.625rem 1rem' }}>
                               {company.source_url ? (
                                 <a
                                   href={company.source_url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-blue-400 hover:text-blue-300 text-sm"
+                                  style={{ color: 'var(--amber-primary)', fontSize: '0.72rem', fontFamily: 'var(--font-mono)', textDecoration: 'none', letterSpacing: '0.04em' }}
                                 >
                                   SEC EDGAR →
                                 </a>
                               ) : (
-                                <span className="text-gray-500 text-sm">—</span>
+                                <span style={{ color: 'var(--text-faint)', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>—</span>
                               )}
                             </td>
                           </tr>

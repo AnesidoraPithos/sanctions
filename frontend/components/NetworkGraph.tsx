@@ -20,6 +20,22 @@ const LAYOUT_OPTIONS: { name: LayoutName; label: string }[] = [
   { name: "grid", label: "Grid" },
 ];
 
+// Dossier palette for graph nodes
+const NODE_COLORS = {
+  parent:      "#a87008",  // amber-primary
+  subsidiary:  "#00bcd4",  // cyan-main
+  sister:      "#d4a017",  // amber-light
+  director:    "#e89b0c",  // amber-main
+  shareholder: "#7a5800",  // amber-deep
+};
+
+const labelStyle: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)',
+  fontSize: '0.7rem',
+  letterSpacing: '0.08em',
+  color: 'var(--text-muted)',
+};
+
 export default function NetworkGraph({
   networkData,
   height = 600,
@@ -39,7 +55,6 @@ export default function NetworkGraph({
   useEffect(() => {
     if (!containerRef.current || !networkData) return;
 
-    // Create Cytoscape instance
     const cy = cytoscape({
       container: containerRef.current,
       elements: {
@@ -47,7 +62,6 @@ export default function NetworkGraph({
         edges: networkData.edges,
       },
       style: [
-        // Node styles
         {
           selector: "node",
           style: {
@@ -58,51 +72,45 @@ export default function NetworkGraph({
             "text-valign": "center",
             "text-halign": "center",
             "font-size": "10px",
-            color: "#ffffff",
-            "text-outline-color": "#0b1121",
+            color: "#e8d5a0",
+            "text-outline-color": "#050c17",
             "text-outline-width": 2,
           },
         },
-        // Parent company node
         {
           selector: "node[node_type = 'parent']",
           style: {
-            "background-color": "#3b82f6",
+            "background-color": NODE_COLORS.parent,
             "border-width": 3,
-            "border-color": "#60a5fa",
+            "border-color": "#d4a017",
           },
         },
-        // Subsidiary node
         {
           selector: "node[node_type = 'subsidiary']",
           style: {
-            "background-color": "#10b981",
+            "background-color": NODE_COLORS.subsidiary,
           },
         },
-        // Sister company node
         {
           selector: "node[node_type = 'sister']",
           style: {
-            "background-color": "#a855f7",
+            "background-color": NODE_COLORS.sister,
           },
         },
-        // Director node
         {
           selector: "node[node_type = 'director']",
           style: {
-            "background-color": "#f59e0b",
+            "background-color": NODE_COLORS.director,
             shape: "hexagon",
           },
         },
-        // Shareholder node
         {
           selector: "node[node_type = 'shareholder']",
           style: {
-            "background-color": "#eab308",
+            "background-color": NODE_COLORS.shareholder,
             shape: "diamond",
           },
         },
-        // Sanctions hit highlighting
         {
           selector: "node[sanctions_hit > 0]",
           style: {
@@ -111,16 +119,14 @@ export default function NetworkGraph({
             "border-style": "solid",
           },
         },
-        // Selected node
         {
           selector: "node:selected",
           style: {
             "border-width": 4,
-            "border-color": "#60a5fa",
-            "background-color": "#2563eb",
+            "border-color": "#f5c842",
+            "background-color": "#c8960a",
           },
         },
-        // Edge styles
         {
           selector: "edge",
           style: {
@@ -132,13 +138,12 @@ export default function NetworkGraph({
             opacity: 0.6,
           },
         },
-        // Selected edge
         {
           selector: "edge:selected",
           style: {
             width: 3,
-            "line-color": "#60a5fa",
-            "target-arrow-color": "#60a5fa",
+            "line-color": "#d4a017",
+            "target-arrow-color": "#d4a017",
             opacity: 1,
           },
         },
@@ -153,7 +158,6 @@ export default function NetworkGraph({
       wheelSensitivity: 0.2,
     });
 
-    // Handle node click
     cy.on("tap", "node", (evt) => {
       const node = evt.target;
       const nodeData = node.data();
@@ -163,7 +167,6 @@ export default function NetworkGraph({
       }
     });
 
-    // Handle background click (deselect)
     cy.on("tap", (evt) => {
       if (evt.target === cy) {
         setSelectedNode(null);
@@ -172,7 +175,6 @@ export default function NetworkGraph({
 
     cyRef.current = cy;
 
-    // Cleanup
     return () => {
       cy.destroy();
     };
@@ -181,45 +183,25 @@ export default function NetworkGraph({
   // Update layout when changed
   useEffect(() => {
     if (!cyRef.current) return;
-
     const layout = cyRef.current.layout({
       name: selectedLayout,
       animate: true,
       animationDuration: 500,
     } as LayoutOptions);
-
     layout.run();
   }, [selectedLayout]);
 
   // Apply filters
   useEffect(() => {
     if (!cyRef.current) return;
-
     const cy = cyRef.current;
-
-    // Show/hide director nodes
-    cy.nodes('[node_type = "director"]').style(
-      "display",
-      filters.showDirectors ? "element" : "none"
-    );
-
-    // Show/hide shareholder nodes
-    cy.nodes('[node_type = "shareholder"]').style(
-      "display",
-      filters.showShareholders ? "element" : "none"
-    );
-
-    // Show/hide transaction edges
-    cy.edges('[relationship = "transacted_with"]').style(
-      "display",
-      filters.showTransactions ? "element" : "none"
-    );
+    cy.nodes('[node_type = "director"]').style("display", filters.showDirectors ? "element" : "none");
+    cy.nodes('[node_type = "shareholder"]').style("display", filters.showShareholders ? "element" : "none");
+    cy.edges('[relationship = "transacted_with"]').style("display", filters.showTransactions ? "element" : "none");
   }, [filters]);
 
-  // Export graph as PNG
   const exportAsPNG = () => {
     if (!cyRef.current) return;
-
     const png = cyRef.current.png({ full: true, scale: 2 });
     const link = document.createElement("a");
     link.download = "network-graph.png";
@@ -227,23 +209,34 @@ export default function NetworkGraph({
     link.click();
   };
 
-  // Fit graph to viewport
   const fitGraph = () => {
     if (!cyRef.current) return;
     cyRef.current.fit(undefined, 50);
   };
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-900/50 border border-gray-700 rounded-lg">
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          padding: '0.875rem 1rem',
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border-dim)',
+        }}
+      >
         {/* Layout Selector */}
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-400">Layout:</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+          <label style={labelStyle}>Layout:</label>
           <select
             value={selectedLayout}
             onChange={(e) => setSelectedLayout(e.target.value as LayoutName)}
-            className="px-3 py-1.5 text-sm bg-gray-800 text-white border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="intel-select"
+            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', minWidth: '8rem' }}
           >
             {LAYOUT_OPTIONS.map((option) => (
               <option key={option.name} value={option.name}>
@@ -254,55 +247,65 @@ export default function NetworkGraph({
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={filters.showDirectors}
-              onChange={(e) =>
-                setFilters({ ...filters, showDirectors: e.target.checked })
-              }
-              className="rounded text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
-            />
-            <span>Directors</span>
-          </label>
-
-          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={filters.showShareholders}
-              onChange={(e) =>
-                setFilters({ ...filters, showShareholders: e.target.checked })
-              }
-              className="rounded text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
-            />
-            <span>Shareholders</span>
-          </label>
-
-          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={filters.showTransactions}
-              onChange={(e) =>
-                setFilters({ ...filters, showTransactions: e.target.checked })
-              }
-              className="rounded text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
-            />
-            <span>Transactions</span>
-          </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+          {[
+            { key: 'showDirectors', label: 'Directors' },
+            { key: 'showShareholders', label: 'Shareholders' },
+            { key: 'showTransactions', label: 'Transactions' },
+          ].map(({ key, label }) => (
+            <label
+              key={key}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', ...labelStyle }}
+            >
+              <input
+                type="checkbox"
+                checked={filters[key as keyof typeof filters]}
+                onChange={(e) => setFilters({ ...filters, [key]: e.target.checked })}
+                style={{ accentColor: 'var(--amber-primary)', width: '0.8rem', height: '0.8rem' }}
+              />
+              <span>{label}</span>
+            </label>
+          ))}
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <button
             onClick={fitGraph}
-            className="px-3 py-1.5 text-sm bg-gray-800 text-white border border-gray-600 rounded hover:bg-gray-700 transition"
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.65rem',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              padding: '0.3rem 0.75rem',
+              background: 'transparent',
+              border: '1px solid var(--border-main)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--amber-primary)'; e.currentTarget.style.color = 'var(--amber-light)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-main)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
           >
             Fit to View
           </button>
           <button
             onClick={exportAsPNG}
-            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.65rem',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              padding: '0.3rem 0.75rem',
+              background: 'var(--amber-primary)',
+              border: '1px solid var(--amber-primary)',
+              color: 'var(--bg-void)',
+              cursor: 'pointer',
+              fontWeight: 600,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--amber-light)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--amber-primary)'; }}
           >
             Export PNG
           </button>
@@ -310,67 +313,105 @@ export default function NetworkGraph({
       </div>
 
       {/* Graph Container */}
-      <div className="flex gap-4">
+      <div style={{ display: 'flex', gap: '1rem' }}>
         {/* Main Graph */}
         <div
           ref={containerRef}
-          style={{ height: `${height}px` }}
-          className="flex-1 bg-gray-950 border border-gray-700 rounded-lg"
+          style={{
+            height: `${height}px`,
+            flex: 1,
+            background: 'var(--bg-void)',
+            border: '1px solid var(--border-dim)',
+          }}
         />
 
         {/* Node Details Panel */}
         {selectedNode && (
-          <div className="w-80 p-4 bg-gray-900/50 border border-gray-700 rounded-lg space-y-3 overflow-y-auto"
-           style={{ maxHeight: `${height}px` }}>
+          <div
+            style={{
+              width: '18rem',
+              padding: '1rem',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-main)',
+              overflowY: 'auto',
+              maxHeight: `${height}px`,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+            }}
+          >
             <div>
-              <h3 className="text-lg font-semibold text-white mb-2">
+              <h3
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: 'var(--text-bright)',
+                  margin: '0 0 0.5rem 0',
+                  lineHeight: 1.4,
+                }}
+              >
                 {selectedNode.label}
               </h3>
-              <div className="inline-block px-2 py-1 text-sm rounded bg-blue-900/50 text-blue-300 mb-3">
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.62rem',
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  padding: '0.15rem 0.5rem',
+                  background: 'rgba(168,112,8,0.12)',
+                  border: '1px solid var(--amber-deep)',
+                  color: 'var(--amber-light)',
+                  display: 'inline-block',
+                }}
+              >
                 {selectedNode.node_type}
-              </div>
+              </span>
             </div>
 
-            <div className="space-y-2 text-sm">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
               {selectedNode.entity_type && (
-                <div>
-                  <span className="text-gray-400">Type:</span>{" "}
-                  <span className="text-white">{selectedNode.entity_type}</span>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>Type:</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{selectedNode.entity_type}</span>
                 </div>
               )}
-
               {selectedNode.jurisdiction && (
-                <div>
-                  <span className="text-gray-400">Jurisdiction:</span>{" "}
-                  <span className="text-white">{selectedNode.jurisdiction}</span>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>Jurisdiction:</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{selectedNode.jurisdiction}</span>
                 </div>
               )}
-
               {selectedNode.ownership_pct !== undefined && (
-                <div>
-                  <span className="text-gray-400">Ownership:</span>{" "}
-                  <span className="text-white">{selectedNode.ownership_pct}%</span>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>Ownership:</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{selectedNode.ownership_pct}%</span>
                 </div>
               )}
-
               {selectedNode.title && (
-                <div>
-                  <span className="text-gray-400">Title:</span>{" "}
-                  <span className="text-white">{selectedNode.title}</span>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>Title:</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{selectedNode.title}</span>
                 </div>
               )}
-
               {selectedNode.nationality && (
-                <div>
-                  <span className="text-gray-400">Nationality:</span>{" "}
-                  <span className="text-white">{selectedNode.nationality}</span>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>Nationality:</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{selectedNode.nationality}</span>
                 </div>
               )}
-
               {selectedNode.sanctions_hit > 0 && (
-                <div className="mt-3 p-2 bg-red-900/20 border border-red-700 rounded">
-                  <span className="text-red-400 font-semibold">
-                    ⚠️ {selectedNode.sanctions_hit} sanctions hit(s)
+                <div
+                  style={{
+                    marginTop: '0.5rem',
+                    padding: '0.5rem 0.75rem',
+                    background: 'var(--risk-critical-bg)',
+                    border: '1px solid var(--risk-critical)',
+                  }}
+                >
+                  <span style={{ color: 'var(--risk-critical-bright)', fontWeight: 600, fontSize: '0.72rem' }}>
+                    ⚠ {selectedNode.sanctions_hit} sanctions hit{selectedNode.sanctions_hit !== 1 ? 's' : ''}
                   </span>
                 </div>
               )}
@@ -380,59 +421,94 @@ export default function NetworkGraph({
       </div>
 
       {/* Legend */}
-      <div className="p-4 bg-gray-900/50 border border-gray-700 rounded-lg">
-        <div className="text-sm font-medium text-gray-300 mb-3">Legend</div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-blue-500"></div>
-            <span className="text-gray-400">Parent Company</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-green-500"></div>
-            <span className="text-gray-400">Subsidiary</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-purple-500"></div>
-            <span className="text-gray-400">Sister Company</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-orange-500" style={{ clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)" }}></div>
-            <span className="text-gray-400">Director</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-yellow-500" style={{ clipPath: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)" }}></div>
-            <span className="text-gray-400">Shareholder</span>
-          </div>
+      <div
+        style={{
+          padding: '0.875rem 1rem',
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border-dim)',
+        }}
+      >
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+          Legend
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+            gap: '0.625rem',
+          }}
+        >
+          {[
+            { color: NODE_COLORS.parent, label: 'Parent Company', shape: 'circle' },
+            { color: NODE_COLORS.subsidiary, label: 'Subsidiary', shape: 'circle' },
+            { color: NODE_COLORS.sister, label: 'Sister Company', shape: 'circle' },
+            { color: NODE_COLORS.director, label: 'Director', shape: 'hexagon' },
+            { color: NODE_COLORS.shareholder, label: 'Shareholder', shape: 'diamond' },
+          ].map(({ color, label, shape }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div
+                style={{
+                  width: '0.875rem',
+                  height: '0.875rem',
+                  background: color,
+                  flexShrink: 0,
+                  borderRadius: shape === 'circle' ? '50%' : undefined,
+                  clipPath: shape === 'hexagon'
+                    ? 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)'
+                    : shape === 'diamond'
+                    ? 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'
+                    : undefined,
+                }}
+              />
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                {label}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Statistics */}
       {networkData.statistics && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-3 bg-gray-900/50 border border-gray-700 rounded-lg">
-            <div className="text-2xl font-bold text-blue-400">
-              {networkData.statistics.total_nodes}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+            gap: '1px',
+            background: 'var(--border-void)',
+            border: '1px solid var(--border-void)',
+          }}
+        >
+          {[
+            { value: networkData.statistics.total_nodes, label: 'Total Nodes' },
+            { value: networkData.statistics.companies, label: 'Companies' },
+            { value: networkData.statistics.people, label: 'People' },
+            { value: networkData.statistics.num_countries || 0, label: 'Countries' },
+          ].map(({ value, label }) => (
+            <div
+              key={label}
+              style={{
+                background: 'var(--bg-surface)',
+                padding: '0.875rem 1rem',
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '1.5rem',
+                  fontWeight: 700,
+                  color: 'var(--amber-light)',
+                  lineHeight: 1,
+                  marginBottom: '0.25rem',
+                }}
+              >
+                {value}
+              </div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                {label}
+              </div>
             </div>
-            <div className="text-sm text-gray-400">Total Nodes</div>
-          </div>
-          <div className="p-3 bg-gray-900/50 border border-gray-700 rounded-lg">
-            <div className="text-2xl font-bold text-green-400">
-              {networkData.statistics.companies}
-            </div>
-            <div className="text-sm text-gray-400">Companies</div>
-          </div>
-          <div className="p-3 bg-gray-900/50 border border-gray-700 rounded-lg">
-            <div className="text-2xl font-bold text-orange-400">
-              {networkData.statistics.people}
-            </div>
-            <div className="text-sm text-gray-400">People</div>
-          </div>
-          <div className="p-3 bg-gray-900/50 border border-gray-700 rounded-lg">
-            <div className="text-2xl font-bold text-purple-400">
-              {networkData.statistics.num_countries || 0}
-            </div>
-            <div className="text-sm text-gray-400">Countries</div>
-          </div>
+          ))}
         </div>
       )}
     </div>

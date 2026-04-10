@@ -12,34 +12,64 @@ function SourceBadge({ source }: { source: string }) {
     source.toLowerCase().includes("openownership") ||
     source.toLowerCase().includes("open ownership");
 
+  const style: React.CSSProperties = {
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.65rem',
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase' as const,
+    padding: '0.2rem 0.5rem',
+    border: '1px solid',
+    display: 'inline-block',
+  };
+
   if (isOccrp) {
     return (
-      <span className="text-sm px-2 py-1 bg-orange-900/40 text-orange-300 border border-orange-700/40 rounded">
+      <span style={{ ...style, background: 'rgba(168,112,8,0.12)', borderColor: 'var(--amber-primary)', color: 'var(--amber-light)' }}>
         OCCRP
       </span>
     );
   }
   if (isOpenOwnership) {
     return (
-      <span className="text-sm px-2 py-1 bg-emerald-900/40 text-emerald-300 border border-emerald-700/40 rounded">
+      <span style={{ ...style, background: 'rgba(0,188,188,0.1)', borderColor: 'var(--cyan-main)', color: 'var(--cyan-bright)' }}>
         OpenOwnership
       </span>
     );
   }
   return (
-    <span className="text-sm px-2 py-1 bg-gray-700 text-gray-300 rounded">
+    <span style={{ ...style, background: 'var(--bg-panel)', borderColor: 'var(--border-main)', color: 'var(--text-muted)' }}>
       {source}
     </span>
   );
 }
+
+const thStyle: React.CSSProperties = {
+  padding: '0.5rem 1rem',
+  textAlign: 'left',
+  fontFamily: 'var(--font-mono)',
+  fontSize: '0.65rem',
+  letterSpacing: '0.14em',
+  textTransform: 'uppercase',
+  color: 'var(--text-muted)',
+  background: 'var(--bg-panel)',
+  fontWeight: 500,
+  borderBottom: '1px solid var(--border-main)',
+};
 
 export default function BeneficialOwnershipTab({
   beneficialOwners,
 }: BeneficialOwnershipTabProps) {
   if (!beneficialOwners || beneficialOwners.length === 0) {
     return (
-      <div className="bg-gray-800/20 border border-gray-700 rounded-lg p-8 text-center">
-        <p className="text-gray-400">
+      <div
+        style={{
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border-dim)',
+          padding: '2rem',
+          textAlign: 'center',
+        }}
+      >
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', margin: 0 }}>
           No beneficial ownership records found in OCCRP Aleph or the Open
           Ownership Register for this entity.
         </p>
@@ -48,71 +78,74 @@ export default function BeneficialOwnershipTab({
   }
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Summary */}
-      <div className="bg-emerald-900/20 border border-emerald-700 rounded-lg p-4">
-        <p className="text-sm text-emerald-300">
-          <span className="font-semibold">{beneficialOwners.length}</span>{" "}
+      <div
+        style={{
+          background: 'rgba(0,188,188,0.06)',
+          border: '1px solid var(--cyan-dark)',
+          borderLeft: '3px solid var(--cyan-main)',
+          padding: '0.875rem 1rem',
+        }}
+      >
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', margin: 0, lineHeight: 1.5 }}>
+          <span style={{ color: 'var(--cyan-bright)', fontWeight: 600 }}>{beneficialOwners.length}</span>{" "}
           beneficial owner record{beneficialOwners.length !== 1 ? "s" : ""}{" "}
           retrieved from OCCRP Aleph and the Open Ownership Register.
         </p>
       </div>
 
       {/* Table */}
-      <div className="bg-[#0d1425] border border-gray-800 rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-900/50">
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-dim)', overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+            <thead>
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">
-                  Name
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">
-                  Nationality
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">
-                  Ownership %
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">
-                  Source
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-400 uppercase">
-                  Verification Date
-                </th>
+                <th style={thStyle}>Name</th>
+                <th style={thStyle}>Nationality</th>
+                <th style={thStyle}>Ownership %</th>
+                <th style={thStyle}>Source</th>
+                <th style={thStyle}>Verification Date</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-800">
+            <tbody>
               {beneficialOwners.map((owner, idx) => (
-                <tr key={idx} className="hover:bg-gray-900/30">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-medium">
-                        {owner.name}
-                      </span>
-                    </div>
+                <tr
+                  key={idx}
+                  style={{
+                    background: idx % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-panel)',
+                    borderBottom: '1px solid var(--border-void)',
+                  }}
+                >
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <span style={{ color: 'var(--text-bright)', fontWeight: 500, fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                      {owner.name}
+                    </span>
                     {owner.source_url && (
-                      <a
-                        href={owner.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 text-sm"
-                      >
-                        View record →
-                      </a>
+                      <div>
+                        <a
+                          href={owner.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'var(--amber-primary)', fontSize: '0.72rem', fontFamily: 'var(--font-mono)', textDecoration: 'none', letterSpacing: '0.04em' }}
+                        >
+                          View record →
+                        </a>
+                      </div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-300">
+                  <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
                     {owner.nationality || "—"}
                   </td>
-                  <td className="px-4 py-3 text-gray-300">
+                  <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
                     {owner.ownership_pct != null
                       ? `${owner.ownership_pct.toFixed(1)}%`
                       : "—"}
                   </td>
-                  <td className="px-4 py-3">
+                  <td style={{ padding: '0.75rem 1rem' }}>
                     <SourceBadge source={owner.source} />
                   </td>
-                  <td className="px-4 py-3 text-gray-300 text-sm">
+                  <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
                     {owner.verification_date || "—"}
                   </td>
                 </tr>

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { RiskLevel, RiskExplanation } from '@/lib/types';
 
 const SCORING_METHODOLOGY = [
@@ -160,6 +161,8 @@ function ScoreBar({ score }: { score: number }) {
 export default function RiskBadge({ level, size = 'md', explanation }: RiskBadgeProps) {
   const [showExplanation, setShowExplanation] = useState(false);
   const [showMethodology, setShowMethodology] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   const config = riskConfig[level];
   const parsedBreakdown = useMemo(
     () =>
@@ -222,8 +225,8 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
         </button>
       )}
 
-      {/* ── Modal ──────────────────────────────────────────────── */}
-      {showExplanation && explanation && (
+      {/* ── Modal (portal → renders directly on <body>, outside all stacking contexts) ── */}
+      {showExplanation && explanation && mounted && createPortal(
         <>
           {/* Backdrop */}
           <div
@@ -231,7 +234,7 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
               position: 'fixed',
               inset: 0,
               background: 'rgba(4, 8, 15, 0.85)',
-              zIndex: 40,
+              zIndex: 9000,
               backdropFilter: 'blur(2px)',
             }}
             onClick={() => setShowExplanation(false)}
@@ -247,7 +250,7 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
               transform: 'translate(-50%, -50%)',
               background: 'var(--bg-surface)',
               border: '1px solid var(--border-main)',
-              zIndex: 50,
+              zIndex: 9001,
               width: 'min(680px, 95vw)',
               maxHeight: '85vh',
               overflowY: 'auto',
@@ -647,7 +650,8 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
               </p>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );
