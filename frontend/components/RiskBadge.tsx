@@ -242,7 +242,7 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
 
           {/* Panel */}
           <div
-            className="animate-fadeInUp"
+            className="animate-fadeIn"
             style={{
               position: 'fixed',
               top: '50%',

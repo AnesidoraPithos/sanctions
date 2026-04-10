@@ -105,6 +105,10 @@ class SanctionsResearchAgent:
                 # Extract reason after "||" if present
                 parts = content.split("||")
                 reason = parts[1].strip() if len(parts) > 1 else "Confirmed relevant by AI."
+                # Reject ambiguous YES where the reason admits the entity is not mentioned
+                irrelevant_phrases = ["not explicitly mention", "is not explicitly mentioned", "does not explicitly mention"]
+                if any(phrase in reason.lower() for phrase in irrelevant_phrases):
+                    return False, "AI deemed irrelevant."
                 return True, reason
             else:
                 return False, "AI deemed irrelevant."
@@ -411,9 +415,14 @@ REPORT REQUIREMENTS:
 
 5. **MANDATORY: References Section**
    - At the very END of the report, you MUST include a "## References" section
-   - List ALL unique source URLs cited in the report
-   - Format as a numbered list: "1. https://example.com"
-   - Include the full URL for each source
+   - List ALL unique source URLs cited in the report as a numbered APA-style list
+   - Use APA 7th edition web citation format for each entry:
+     * With known author: Author, A. A. (Year, Month Day). Title of article. *Website Name*. URL
+     * Without known author: Title of article. (Year, Month Day). *Website Name*. URL
+     * When date is unknown, use (n.d.) in place of the year
+     * Infer the website name from the domain (e.g. treasury.gov → U.S. Department of the Treasury)
+     * Use title-case for article titles
+   - Example: U.S. Department of Justice. (2024, March 15). *Entity X added to sanctions list*. justice.gov. https://www.justice.gov/...
    - This section is REQUIRED even if you have inline citations
 
 6. **Writing Quality**:

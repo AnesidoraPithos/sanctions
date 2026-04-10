@@ -177,7 +177,9 @@ export default function ResultsPage({ params }: PageProps) {
   const mediaData: MediaHit[] = results.research_data.media_data || [];
   const officialSources = results.research_data.media_intelligence?.official_sources || [];
   const generalMedia = results.research_data.media_intelligence?.general_media || [];
-  const allMedia = [...officialSources, ...generalMedia, ...mediaData];
+  const allMedia = [...officialSources, ...generalMedia, ...mediaData].filter(
+    (hit: MediaHit) => !hit.relevance || !/not explicitly mention/i.test(hit.relevance)
+  );
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-void)', color: 'var(--text-main)' }}>
@@ -978,12 +980,17 @@ export default function ResultsPage({ params }: PageProps) {
                     )))}
                   </div>
                 ) : (
-                  /* Case 3: Standalone entity */
+                  /* Case 3: No corporate structure found */
                   <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-dim)', padding: '2.5rem', textAlign: 'center' }}>
-                    <div className="label-stamp-bright" style={{ marginBottom: '0.75rem' }}>Standalone Entity</div>
-                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem', lineHeight: 1.6 }}>
-                      {results.entity_name} appears to be a standalone entity with no parent company or subsidiaries in public records.
+                    <div className="label-stamp-bright" style={{ marginBottom: '0.75rem' }}>No Corporate Structure Discovered</div>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: hasNetworkGraph ? '0.5rem' : '1rem', lineHeight: 1.6 }}>
+                      No parent companies or subsidiaries were found for {results.entity_name} in public records.
                     </p>
+                    {hasNetworkGraph && (
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-faint)', marginBottom: '1rem', lineHeight: 1.6 }}>
+                        Director and shareholder connections are shown in the network graph above.
+                      </p>
+                    )}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-faint)', alignItems: 'center' }}>
                       <span>Sources: SEC EDGAR · OpenCorporates · Wikipedia · DuckDuckGo</span>
                     </div>
