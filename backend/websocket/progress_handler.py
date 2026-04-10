@@ -125,6 +125,7 @@ async def websocket_progress(websocket: WebSocket, search_id: str):
         except Exception:
             pass
     finally:
+        clear_progress(search_id)
         try:
             await websocket.close()
         except Exception:

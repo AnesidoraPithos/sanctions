@@ -5,6 +5,7 @@ Endpoints for entity background searches (base/network/deep tiers).
 """
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
+from functools import partial
 from typing import Dict, Any
 import uuid
 from datetime import datetime
@@ -48,12 +49,9 @@ def search_base_tier(request: SearchRequest):
     Returns:
         SearchResponse with search_id, risk_level, hit counts, and intelligence report
     """
-    # Use client-supplied UUID if provided (enables WebSocket progress tracking before response)
-    search_id = request.client_search_id if request.client_search_id else str(uuid.uuid4())
+    search_id = request.client_search_id or str(uuid.uuid4())
     timestamp = datetime.utcnow()
-
-    def _progress(step: str, percent: int) -> None:
-        update_progress(search_id, step, percent)
+    _progress = partial(update_progress, search_id)
 
     logger.info(f"Starting base tier search: {search_id} for entity: {request.entity_name}")
 
@@ -211,13 +209,10 @@ def search_network_tier(request: SearchRequest):
     Returns:
         SearchResponse with network_data, financial_intelligence, subsidiaries
     """
-    # Use client-supplied UUID if provided (enables WebSocket progress tracking before response)
-    search_id = request.client_search_id if request.client_search_id else str(uuid.uuid4())
+    search_id = request.client_search_id or str(uuid.uuid4())
     timestamp = datetime.utcnow()
     search_start_time = time.time()
-
-    def _progress(step: str, percent: int) -> None:
-        update_progress(search_id, step, percent)
+    _progress = partial(update_progress, search_id)
 
     logger.info(
         f"Starting network tier search: {search_id} for entity: {request.entity_name} "
@@ -586,13 +581,10 @@ def search_deep_tier(request: SearchRequest):
     - Financial flow extraction from related-party transactions
     - Enhanced intelligence report
     """
-    # Use client-supplied UUID if provided (enables WebSocket progress tracking before response)
-    search_id = request.client_search_id if request.client_search_id else str(uuid.uuid4())
+    search_id = request.client_search_id or str(uuid.uuid4())
     timestamp = datetime.utcnow()
     search_start_time = time.time()
-
-    def _progress(step: str, percent: int) -> None:
-        update_progress(search_id, step, percent)
+    _progress = partial(update_progress, search_id)
 
     logger.info(f"Starting deep tier search: {search_id} for entity: {request.entity_name}")
 
