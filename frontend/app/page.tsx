@@ -32,12 +32,9 @@ export default function Home() {
     setIsLoading(true);
     setError(null);
 
-    let enrichedRequest = request;
-    if (request.tier === 'network' || request.tier === 'deep') {
-      const clientId = crypto.randomUUID();
-      enrichedRequest = { ...request, client_search_id: clientId };
-      setActiveSearchId(clientId);
-    }
+    const clientId = crypto.randomUUID();
+    const enrichedRequest = { ...request, client_search_id: clientId };
+    setActiveSearchId(clientId);
 
     try {
       let response;

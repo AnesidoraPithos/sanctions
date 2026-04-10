@@ -22,6 +22,7 @@ from services.conglomerate_service import get_conglomerate_service
 from services.network_service import get_network_service
 from services.risk_assessment_service import get_risk_assessment_service
 from db_operations.db import save_search_results
+from websocket.progress_handler import update_progress, complete_progress, fail_progress
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ router = APIRouter()
 
 
 @router.post("/base", response_model=SearchResponse)
-async def search_base_tier(request: SearchRequest):
+def search_base_tier(request: SearchRequest):
     """
     Perform base tier entity background search
 
@@ -47,14 +48,18 @@ async def search_base_tier(request: SearchRequest):
     Returns:
         SearchResponse with search_id, risk_level, hit counts, and intelligence report
     """
-    # Generate unique search ID
-    search_id = str(uuid.uuid4())
+    # Use client-supplied UUID if provided (enables WebSocket progress tracking before response)
+    search_id = request.client_search_id if request.client_search_id else str(uuid.uuid4())
     timestamp = datetime.utcnow()
+
+    def _progress(step: str, percent: int) -> None:
+        update_progress(search_id, step, percent)
 
     logger.info(f"Starting base tier search: {search_id} for entity: {request.entity_name}")
 
     try:
         # Step 1: Sanctions Screening
+        _progress("Sanctions screening", 5)
         logger.info(f"[{search_id}] Step 1: Sanctions screening...")
         sanctions_service = get_sanctions_service()
         sanctions_hits = sanctions_service.search_sanctions(
@@ -68,6 +73,7 @@ async def search_base_tier(request: SearchRequest):
         )
 
         # Step 2: Media Intelligence (OSINT)
+        _progress("OSINT media intelligence", 40)
         logger.info(f"[{search_id}] Step 2: OSINT media intelligence...")
         research_service = get_research_service()
         media_intelligence = research_service.get_media_intelligence(request.entity_name)
@@ -78,6 +84,7 @@ async def search_base_tier(request: SearchRequest):
         )
 
         # Step 3: Generate Intelligence Report
+        _progress("Generating intelligence report", 65)
         logger.info(f"[{search_id}] Step 3: Generating LLM intelligence report...")
         intelligence_report = research_service.generate_intelligence_report(
             request.entity_name
@@ -86,6 +93,7 @@ async def search_base_tier(request: SearchRequest):
         logger.info(f"[{search_id}] Intelligence report generated")
 
         # Step 4: Extract AI risk assessment and calculate combined risk
+        _progress("Calculating risk level", 80)
         logger.info(f"[{search_id}] Step 4: Calculating combined risk level...")
         risk_service = get_risk_assessment_service()
         ai_assessment = risk_service.extract_ai_risk_assessment(intelligence_report)
@@ -105,6 +113,7 @@ async def search_base_tier(request: SearchRequest):
         media_data = research_service.format_media_data(media_intelligence)
 
         # Step 6: Save to database
+        _progress("Saving results", 92)
         logger.info(f"[{search_id}] Saving results to database...")
         metadata = {
             "entity_name": request.entity_name,
@@ -132,6 +141,7 @@ async def search_base_tier(request: SearchRequest):
         if not save_success:
             logger.warning(f"[{search_id}] Failed to save to database, but continuing...")
 
+        complete_progress(search_id)
         logger.info(f"[{search_id}] Base tier search complete")
 
         # Return response
@@ -154,6 +164,7 @@ async def search_base_tier(request: SearchRequest):
 
     except Exception as e:
         logger.error(f"[{search_id}] Search failed: {str(e)}", exc_info=True)
+        fail_progress(search_id, str(e))
 
         # Save failed search to database
         try:
@@ -181,7 +192,7 @@ async def search_base_tier(request: SearchRequest):
 
 
 @router.post("/network", response_model=SearchResponse)
-async def search_network_tier(request: SearchRequest):
+def search_network_tier(request: SearchRequest):
     """
     Perform network tier entity background search (Phase 2)
 
@@ -200,10 +211,13 @@ async def search_network_tier(request: SearchRequest):
     Returns:
         SearchResponse with network_data, financial_intelligence, subsidiaries
     """
-    # Generate unique search ID
-    search_id = str(uuid.uuid4())
+    # Use client-supplied UUID if provided (enables WebSocket progress tracking before response)
+    search_id = request.client_search_id if request.client_search_id else str(uuid.uuid4())
     timestamp = datetime.utcnow()
     search_start_time = time.time()
+
+    def _progress(step: str, percent: int) -> None:
+        update_progress(search_id, step, percent)
 
     logger.info(
         f"Starting network tier search: {search_id} for entity: {request.entity_name} "
@@ -212,6 +226,7 @@ async def search_network_tier(request: SearchRequest):
 
     try:
         # STEP 1: Run base tier research (sanctions + media intelligence)
+        _progress("Sanctions screening", 5)
         logger.info(f"[{search_id}] Step 1: Base tier research...")
         sanctions_service = get_sanctions_service()
         research_service = get_research_service()
@@ -232,6 +247,7 @@ async def search_network_tier(request: SearchRequest):
         )
 
         # STEP 2: Conglomerate discovery
+        _progress("Conglomerate discovery", 20)
         logger.info(f"[{search_id}] Step 2: Conglomerate discovery...")
         conglomerate_service = get_conglomerate_service()
 
@@ -257,6 +273,7 @@ async def search_network_tier(request: SearchRequest):
         )
 
         # STEP 3: Extract financial intelligence
+        _progress("Extracting financial intelligence", 38)
         logger.info(f"[{search_id}] Step 3: Extracting financial intelligence...")
 
         # Try to get CIK for more accurate results
@@ -291,6 +308,7 @@ async def search_network_tier(request: SearchRequest):
         )
 
         # STEP 4: Cross-entity sanctions screening
+        _progress("Cross-entity sanctions screening", 55)
         logger.info(f"[{search_id}] Step 4: Cross-entity sanctions screening...")
 
         # Define wrapper functions for parallel screening
@@ -373,6 +391,7 @@ async def search_network_tier(request: SearchRequest):
         )
 
         # STEP 5: Build network graph
+        _progress("Building network graph", 72)
         logger.info(f"[{search_id}] Step 5: Building network graph...")
         network_service = get_network_service()
 
@@ -392,6 +411,7 @@ async def search_network_tier(request: SearchRequest):
         )
 
         # STEP 6: Generate intelligence report
+        _progress("Generating intelligence report", 82)
         logger.info(f"[{search_id}] Step 6: Generating intelligence report...")
         intelligence_report = research_service.generate_intelligence_report(
             request.entity_name
@@ -476,6 +496,7 @@ async def search_network_tier(request: SearchRequest):
         }
 
         # STEP 8: Save to database
+        _progress("Saving results", 93)
         logger.info(f"[{search_id}] Saving results to database...")
         save_success = save_search_results(
             search_id=search_id,
@@ -495,6 +516,7 @@ async def search_network_tier(request: SearchRequest):
         if not save_success:
             logger.warning(f"[{search_id}] Failed to save to database, but continuing...")
 
+        complete_progress(search_id)
         logger.info(f"[{search_id}] Network tier search complete")
 
         # Return response
@@ -526,6 +548,7 @@ async def search_network_tier(request: SearchRequest):
 
     except Exception as e:
         logger.error(f"[{search_id}] Network tier search failed: {str(e)}", exc_info=True)
+        fail_progress(search_id, str(e))
 
         # Save failed search to database
         try:
@@ -553,7 +576,7 @@ async def search_network_tier(request: SearchRequest):
 
 
 @router.post("/deep")
-async def search_deep_tier(request: SearchRequest):
+def search_deep_tier(request: SearchRequest):
     """
     Perform deep tier entity background search (Phase 3)
 
@@ -568,16 +591,8 @@ async def search_deep_tier(request: SearchRequest):
     timestamp = datetime.utcnow()
     search_start_time = time.time()
 
-    # Import progress helper (lazy to avoid circular imports)
-    try:
-        from websocket.progress_handler import update_progress, complete_progress, fail_progress
-        _has_progress = True
-    except ImportError:
-        _has_progress = False
-
     def _progress(step: str, percent: int) -> None:
-        if _has_progress:
-            update_progress(search_id, step, percent)
+        update_progress(search_id, step, percent)
 
     logger.info(f"Starting deep tier search: {search_id} for entity: {request.entity_name}")
 
@@ -926,9 +941,7 @@ async def search_deep_tier(request: SearchRequest):
             metadata=metadata,
         )
 
-        _progress("Complete", 100)
-        if _has_progress:
-            complete_progress(search_id)
+        complete_progress(search_id)
 
         logger.info(f"[{search_id}] Deep tier search complete")
 
@@ -966,8 +979,7 @@ async def search_deep_tier(request: SearchRequest):
     except Exception as e:
         logger.error(f"[{search_id}] Deep tier search failed: {str(e)}", exc_info=True)
 
-        if _has_progress:
-            fail_progress(search_id, str(e))
+        fail_progress(search_id, str(e))
 
         try:
             save_search_results(
