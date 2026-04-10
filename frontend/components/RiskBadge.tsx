@@ -1,55 +1,47 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { RiskLevel, RiskExplanation } from '@/lib/types';
 
-const SCORING_METHODOLOGY = [
+const RISK_CATEGORIES = [
   {
     title: 'Regulatory & Legal Indicators',
-    range: '0–50 pts',
-    note: 'Highest item only',
     items: [
-      { label: 'Active sanctions listings', pts: 50 },
-      { label: 'Criminal investigations / charges', pts: 40 },
-      { label: 'Civil enforcement actions', pts: 30 },
-      { label: 'Regulatory violations / fines', pts: 25 },
-      { label: 'Pending investigations', pts: 15 },
-      { label: 'Past resolved issues (>3 years)', pts: 5 },
+      'Active sanctions listings',
+      'Criminal investigations/charges',
+      'Civil enforcement actions',
+      'Regulatory violations/fines',
+      'Pending investigations',
+      'Past resolved issues (>3 years)',
     ],
   },
   {
     title: 'Media Signal Strength',
-    range: '0–20 pts',
-    note: 'Additive up to max',
     items: [
-      { label: 'Official gov sources (treasury.gov, justice.gov, state.gov)', pts: 10, suffix: 'each, max 20' },
-      { label: 'Major credible news (Reuters, Bloomberg, WSJ, AP)', pts: 3, suffix: 'each, max 15' },
-      { label: 'General media / blogs', pts: 1, suffix: 'each, max 5' },
+      'Official government sources (treasury.gov, justice.gov, state.gov)',
+      'Major credible news (Reuters, Bloomberg, WSJ, AP)',
+      'General media/blogs',
     ],
   },
   {
     title: 'Severity Factors',
-    range: '0–30 pts',
-    note: 'Highest item only',
     items: [
-      { label: 'National security concerns', pts: 30 },
-      { label: 'Financial crimes (money laundering, fraud)', pts: 15 },
-      { label: 'Export control violations', pts: 15 },
-      { label: 'Corruption / bribery', pts: 12 },
-      { label: 'Environmental / labor violations', pts: 8 },
-      { label: 'Civil disputes', pts: 5 },
+      'National security concerns',
+      'Financial crimes (money laundering, fraud)',
+      'Export control violations',
+      'Corruption/bribery',
+      'Environmental/labor violations',
+      'Civil disputes',
     ],
   },
   {
     title: 'Temporal Relevance',
-    range: '0–10 pts',
-    note: 'Highest item only',
     items: [
-      { label: 'Issues within last 6 months', pts: 10 },
-      { label: 'Issues within last 1 year', pts: 8 },
-      { label: 'Issues within last 3 years', pts: 5 },
-      { label: 'Older than 3 years', pts: 2 },
+      'Issues within last 6 months',
+      'Issues within last 1 year',
+      'Issues within last 3 years',
+      'Older than 3 years',
     ],
   },
 ];
@@ -58,6 +50,8 @@ interface RiskBadgeProps {
   level: RiskLevel;
   size?: 'sm' | 'md' | 'lg';
   explanation?: RiskExplanation;
+  /** When false, only the ? button is rendered (the badge is omitted — replaced by a dropdown in the parent). */
+  showBadge?: boolean;
 }
 
 const riskConfig: Record<RiskLevel, { label: string; clearance: string }> = {
@@ -68,109 +62,37 @@ const riskConfig: Record<RiskLevel, { label: string; clearance: string }> = {
   VERY_HIGH: { label: 'Very High Risk', clearance: 'CRITICAL' },
 };
 
-const RAW_SCORE_RE = /RAW:\s*(\d+)\s*→\s*SCORE:\s*(\d+)/;
-
-function parseBreakdown(breakdown: string) {
-  const rawScoreMatch = breakdown.match(RAW_SCORE_RE);
-  const rawTotal = rawScoreMatch ? rawScoreMatch[1] : null;
-  const cappedTotal = rawScoreMatch ? rawScoreMatch[2] : null;
-  const wasCapped = rawTotal && cappedTotal && rawTotal !== cappedTotal;
-  const segments = breakdown
-    .replace(/\s*\|\s*RAW:.*$/, '')
-    .split(' | ')
-    .filter(Boolean);
-  const rows = segments.map((seg) => {
-    const colonIdx = seg.indexOf(':');
-    if (colonIdx === -1) return { category: seg.trim(), detail: '' };
-    return {
-      category: seg.slice(0, colonIdx).trim(),
-      detail: seg.slice(colonIdx + 1).trim(),
-    };
-  });
-  return { rows, rawTotal, cappedTotal, wasCapped };
-}
-
-function ScoreBar({ score }: { score: number }) {
-  const color =
-    score >= 66
-      ? 'var(--risk-critical)'
-      : score >= 36
-      ? 'var(--risk-mid)'
-      : 'var(--risk-low)';
-
+function YesNoPill({ flagged }: { flagged: boolean }) {
   return (
-    <div>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: '0.375rem',
-        }}
-      >
-        <span
-          className="label-stamp"
-          style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}
-        >
-          Intelligence Score
-        </span>
-        <span
-          className="font-data"
-          style={{ fontSize: '0.8rem', color: 'var(--amber-light)' }}
-        >
-          {score}
-          <span style={{ fontSize: '0.75rem', color: 'var(--amber-primary)' }}>/100</span>
-        </span>
-      </div>
-      <div
-        style={{
-          height: '4px',
-          background: 'var(--bg-deep)',
-          border: '1px solid var(--border-dim)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            width: `${score}%`,
-            height: '100%',
-            background: color,
-            boxShadow: `0 0 8px ${color}`,
-            transition: 'width 0.8s cubic-bezier(0.4, 0, 0.2, 1)',
-          }}
-        />
-      </div>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontFamily: 'var(--font-mono)',
-          fontSize: '0.75rem',
-          color: 'var(--text-muted)',
-          marginTop: '0.25rem',
-          letterSpacing: '0.06em',
-        }}
-      >
-        <span>Low (0–35)</span>
-        <span>Medium (36–65)</span>
-        <span>High (66–100)</span>
-      </div>
-    </div>
+    <span
+      className="font-data"
+      style={{
+        fontSize: '0.7rem',
+        padding: '0.1rem 0.45rem',
+        background: flagged ? 'rgba(245, 180, 0, 0.12)' : 'rgba(255,255,255,0.04)',
+        border: `1px solid ${flagged ? 'var(--amber-primary)' : 'var(--border-dim)'}`,
+        color: flagged ? 'var(--amber-light)' : 'var(--text-muted)',
+        letterSpacing: '0.08em',
+        whiteSpace: 'nowrap' as const,
+        flexShrink: 0,
+      }}
+    >
+      {flagged ? 'YES' : 'NO'}
+    </span>
   );
 }
 
-export default function RiskBadge({ level, size = 'md', explanation }: RiskBadgeProps) {
+export default function RiskBadge({
+  level,
+  size = 'md',
+  explanation,
+  showBadge = true,
+}: RiskBadgeProps) {
   const [showExplanation, setShowExplanation] = useState(false);
-  const [showMethodology, setShowMethodology] = useState(false);
+  const [showResults, setShowResults] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const config = riskConfig[level];
-  const parsedBreakdown = useMemo(
-    () =>
-      explanation?.intelligence_breakdown
-        ? parseBreakdown(explanation.intelligence_breakdown)
-        : null,
-    [explanation?.intelligence_breakdown],
-  );
 
   const badgeSize = {
     sm: { fontSize: '0.75rem', padding: '0.22rem 0.6rem' },
@@ -178,17 +100,33 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
     lg: { fontSize: '0.75rem', padding: '0.3rem 0.85rem' },
   }[size];
 
+  const indicatorMap = useMemo(
+    () =>
+      new Map<string, boolean>(
+        (explanation?.indicator_results ?? []).map((r) => [
+          r.indicator.toLowerCase().trim(),
+          r.flagged,
+        ])
+      ),
+    [explanation?.indicator_results],
+  );
+
+  const yesCount = explanation?.yes_count ?? null;
+  const totalCount = explanation?.total_count ?? null;
+
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-      {/* Classification badge */}
-      <span
-        className={`risk-badge risk-badge-${level}`}
-        style={{ ...badgeSize, cursor: explanation ? 'pointer' : 'default' }}
-        onClick={explanation ? () => setShowExplanation(true) : undefined}
-        title={explanation ? 'Click to view risk assessment breakdown' : config.label}
-      >
-        {config.clearance}
-      </span>
+      {/* Classification badge — omitted when showBadge=false (parent renders a dropdown instead) */}
+      {showBadge && (
+        <span
+          className={`risk-badge risk-badge-${level}`}
+          style={{ ...badgeSize, cursor: explanation ? 'pointer' : 'default' }}
+          onClick={explanation ? () => setShowExplanation(true) : undefined}
+          title={explanation ? 'Click to view risk assessment details' : config.label}
+        >
+          {config.clearance}
+        </span>
+      )}
 
       {/* Info trigger */}
       {explanation && (
@@ -218,14 +156,14 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
             e.currentTarget.style.borderColor = 'var(--border-main)';
             e.currentTarget.style.color = 'var(--text-muted)';
           }}
-          title="View risk assessment breakdown"
-          aria-label="Show risk explanation"
+          title="View risk categories"
+          aria-label="Show risk categories"
         >
           ?
         </button>
       )}
 
-      {/* ── Modal (portal → renders directly on <body>, outside all stacking contexts) ── */}
+      {/* ── Modal ── */}
       {showExplanation && explanation && mounted && createPortal(
         <>
           {/* Backdrop */}
@@ -279,7 +217,7 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                   className="font-editorial"
                   style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-bright)' }}
                 >
-                  Risk Assessment Breakdown
+                  Risk Assessment Details
                 </span>
               </div>
               <button
@@ -314,6 +252,7 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
 
             {/* Modal body */}
             <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
               {/* Sanctions signal */}
               <div>
                 <div className="label-stamp" style={{ marginBottom: '0.4rem' }}>
@@ -335,109 +274,10 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
 
               <div style={{ borderTop: '1px solid var(--border-dim)' }} />
 
-              {/* Intelligence signal */}
+              {/* Intelligence signal + Risk Categories summary */}
               <div>
                 <div className="label-stamp" style={{ marginBottom: '0.4rem' }}>
                   Intelligence Analysis
-                </div>
-                <p
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '0.8rem',
-                    color: 'var(--text-main)',
-                    margin: '0 0 0.875rem',
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {explanation.intelligence_signal}
-                </p>
-                {explanation.intelligence_score !== null && (
-                  <ScoreBar score={explanation.intelligence_score} />
-                )}
-              </div>
-
-              {/* Scoring breakdown */}
-              {parsedBreakdown && parsedBreakdown.rows.length > 0 && (
-                <>
-                  <div style={{ borderTop: '1px solid var(--border-dim)' }} />
-                  <div>
-                    <div className="label-stamp" style={{ marginBottom: '0.625rem' }}>
-                      Score Breakdown
-                    </div>
-                    <div
-                      style={{
-                        border: '1px solid var(--border-dim)',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {parsedBreakdown.rows.map((row, i) => (
-                        <div
-                          key={i}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            justifyContent: 'space-between',
-                            gap: '1rem',
-                            padding: '0.5rem 0.875rem',
-                            borderBottom:
-                              i < parsedBreakdown.rows.length - 1
-                                ? '1px solid var(--border-void)'
-                                : 'none',
-                            background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
-                          }}
-                        >
-                          <span
-                            className="label-stamp"
-                            style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}
-                          >
-                            {row.category}
-                          </span>
-                          <span
-                            className="font-data"
-                            style={{ fontSize: '0.75rem', color: 'var(--text-main)', textAlign: 'right', whiteSpace: 'nowrap' }}
-                          >
-                            {row.detail}
-                          </span>
-                        </div>
-                      ))}
-                      {parsedBreakdown.rawTotal && (
-                        <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            padding: '0.5rem 0.875rem',
-                            background: 'var(--bg-panel)',
-                            borderTop: '1px solid var(--border-main)',
-                          }}
-                        >
-                          <span
-                            className="font-data"
-                            style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}
-                          >
-                            {parsedBreakdown.wasCapped
-                              ? `Raw: ${parsedBreakdown.rawTotal} → Capped`
-                              : 'Total Score'}
-                          </span>
-                          <span
-                            className="font-data"
-                            style={{ fontSize: '0.875rem', color: 'var(--amber-light)', fontWeight: 600 }}
-                          >
-                            {parsedBreakdown.cappedTotal}
-                            <span style={{ fontSize: '0.75rem', color: 'var(--amber-primary)' }}>/100</span>
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <div style={{ borderTop: '1px solid var(--border-dim)' }} />
-
-              {/* Final reasoning */}
-              <div>
-                <div className="label-stamp" style={{ marginBottom: '0.4rem' }}>
-                  Final Assessment
                 </div>
                 <p
                   style={{
@@ -448,11 +288,39 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                     lineHeight: 1.6,
                   }}
                 >
-                  {explanation.final_reasoning}
+                  {explanation.intelligence_signal}
                 </p>
+
+                {/* Risk Categories counter */}
+                {yesCount !== null && totalCount !== null && totalCount > 0 && (
+                  <div
+                    style={{
+                      marginTop: '0.75rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                    }}
+                  >
+                    <div className="label-stamp" style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                      Risk Categories
+                    </div>
+                    <span
+                      className="font-data"
+                      style={{
+                        fontSize: '0.85rem',
+                        color: yesCount > 0 ? 'var(--amber-light)' : 'var(--risk-safe-bright)',
+                      }}
+                    >
+                      {yesCount}
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        {' '}/ {totalCount} flagged
+                      </span>
+                    </span>
+                  </div>
+                )}
               </div>
 
-              {/* Methodology accordion */}
+              {/* Risk Results accordion */}
               <div
                 style={{
                   borderTop: '1px solid var(--border-dim)',
@@ -460,7 +328,7 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                 }}
               >
                 <button
-                  onClick={() => setShowMethodology(!showMethodology)}
+                  onClick={() => setShowResults(!showResults)}
                   style={{
                     background: 'transparent',
                     border: 'none',
@@ -473,11 +341,8 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                     transition: 'opacity 0.2s',
                   }}
                 >
-                  <span
-                    className="label-stamp-bright"
-                    style={{ fontSize: '0.75rem' }}
-                  >
-                    Scoring Methodology
+                  <span className="label-stamp-bright" style={{ fontSize: '0.75rem' }}>
+                    Risk Results
                   </span>
                   <span
                     style={{
@@ -486,149 +351,96 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                       color: 'var(--amber-primary)',
                       transition: 'transform 0.2s',
                       display: 'inline-block',
-                      transform: showMethodology ? 'rotate(180deg)' : 'none',
+                      transform: showResults ? 'rotate(180deg)' : 'none',
                     }}
                   >
                     ▾
                   </span>
                 </button>
 
-                {showMethodology && (
+                {showResults && (
                   <div
                     className="animate-fadeIn"
                     style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}
                   >
-                    <p
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.7rem',
-                        color: 'var(--text-muted)',
-                        margin: 0,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      Total score is capped at 100. Raw sums exceeding 100 are displayed as capped.
-                    </p>
-                    {SCORING_METHODOLOGY.map((category) => (
-                      <div
-                        key={category.title}
-                        style={{ border: '1px solid var(--border-dim)', overflow: 'hidden' }}
-                      >
+                    {explanation.indicator_results && explanation.indicator_results.length > 0 ? (
+                      RISK_CATEGORIES.map((category) => (
                         <div
-                          style={{
-                            background: 'var(--bg-panel)',
-                            borderBottom: '1px solid var(--border-dim)',
-                            padding: '0.5rem 0.875rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '0.5rem',
-                          }}
+                          key={category.title}
+                          style={{ border: '1px solid var(--border-dim)', overflow: 'hidden' }}
                         >
-                          <span
-                            className="label-stamp"
-                            style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}
-                          >
-                            {category.title}
-                          </span>
-                          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexShrink: 0 }}>
-                            <span className="font-data" style={{ fontSize: '0.75rem', color: 'var(--amber-primary)' }}>
-                              {category.range}
-                            </span>
-                            <span
-                              style={{
-                                fontFamily: 'var(--font-mono)',
-                                fontSize: '0.75rem',
-                                color: 'var(--text-secondary)',
-                                fontStyle: 'italic',
-                              }}
-                            >
-                              {category.note}
-                            </span>
-                          </div>
-                        </div>
-                        {category.items.map((item) => (
                           <div
-                            key={item.label}
                             style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: '1rem',
-                              padding: '0.375rem 0.875rem',
-                              borderBottom: '1px solid var(--border-void)',
+                              background: 'var(--bg-panel)',
+                              borderBottom: '1px solid var(--border-dim)',
+                              padding: '0.5rem 0.875rem',
                             }}
                           >
                             <span
-                              style={{
-                                fontFamily: 'var(--font-mono)',
-                                fontSize: '0.7rem',
-                                color: 'var(--text-secondary)',
-                              }}
+                              className="label-stamp"
+                              style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}
                             >
-                              {item.label}
+                              {category.title}
                             </span>
-                            <span
-                              className="font-data"
-                              style={{
-                                fontSize: '0.72rem',
-                                color: 'var(--text-main)',
-                                whiteSpace: 'nowrap',
-                                flexShrink: 0,
-                              }}
-                            >
-                              {item.pts} pts
-                              {'suffix' in item ? (
-                                <span style={{ color: 'var(--text-muted)', marginLeft: '0.25rem' }}>
-                                  ({item.suffix})
+                          </div>
+                          {category.items.map((itemLabel) => {
+                            const key = itemLabel.toLowerCase().trim();
+                            // fuzzy match: check if any indicator key contains our label or vice versa
+                            let flagged: boolean | undefined;
+                            for (const [k, v] of indicatorMap.entries()) {
+                              if (k.includes(key.slice(0, 20)) || key.includes(k.slice(0, 20))) {
+                                flagged = v;
+                                break;
+                              }
+                            }
+                            return (
+                              <div
+                                key={itemLabel}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: '1rem',
+                                  padding: '0.375rem 0.875rem',
+                                  borderBottom: '1px solid var(--border-void)',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontFamily: 'var(--font-mono)',
+                                    fontSize: '0.7rem',
+                                    color: 'var(--text-secondary)',
+                                  }}
+                                >
+                                  {itemLabel}
                                 </span>
-                              ) : null}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-
-                    {/* Scale reference */}
-                    <div style={{ border: '1px solid var(--border-dim)', overflow: 'hidden' }}>
-                      {[
-                        { label: 'LOW / SAFE',  range: '0–35',   color: 'var(--risk-low)' },
-                        { label: 'MEDIUM',       range: '36–65',  color: 'var(--risk-mid)' },
-                        { label: 'HIGH / CRITICAL', range: '66–100', color: 'var(--risk-critical)' },
-                      ].map((tier, i, arr) => (
-                        <div
-                          key={tier.label}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.75rem',
-                            padding: '0.375rem 0.875rem',
-                            borderBottom: i < arr.length - 1 ? '1px solid var(--border-void)' : 'none',
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: '8px',
-                              height: '8px',
-                              background: tier.color,
-                              flexShrink: 0,
-                            }}
-                          />
-                          <span
-                            className="font-data"
-                            style={{ fontSize: '0.75rem', color: 'var(--text-main)', letterSpacing: '0.1em' }}
-                          >
-                            {tier.label}
-                          </span>
-                          <span
-                            className="font-data"
-                            style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 'auto' }}
-                          >
-                            {tier.range}
-                          </span>
+                                {flagged !== undefined ? (
+                                  <YesNoPill flagged={flagged} />
+                                ) : (
+                                  <span
+                                    className="font-data"
+                                    style={{ fontSize: '0.7rem', color: 'var(--text-muted)', flexShrink: 0 }}
+                                  >
+                                    —
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                      ))}
-                    </div>
+                      ))
+                    ) : (
+                      <p
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.75rem',
+                          color: 'var(--text-muted)',
+                          margin: 0,
+                        }}
+                      >
+                        No indicator data available for this record.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -645,8 +457,7 @@ export default function RiskBadge({ level, size = 'md', explanation }: RiskBadge
                   paddingTop: '0.875rem',
                 }}
               >
-                Risk assessment combines sanctions screening with AI-powered intelligence analysis for a
-                comprehensive compliance evaluation.
+                Indicator results are factual extractions from open-source intelligence. Staff should review all available evidence before reaching a determination.
               </p>
             </div>
           </div>

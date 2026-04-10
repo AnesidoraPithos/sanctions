@@ -304,6 +304,7 @@ class ResultsResponse(BaseModel):
     # Bookmark fields
     is_saved: bool = Field(False, description="Whether this result has been bookmarked")
     save_label: Optional[str] = Field(None, description="User label for the bookmark")
+    manual_risk: Optional[str] = Field(None, description="Staff-assigned manual risk tier")
 
     class Config:
         json_schema_extra = {

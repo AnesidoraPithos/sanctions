@@ -9,7 +9,7 @@
 import React, { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ResultsResponse, SanctionsHit, MediaHit, NetworkData, FinancialIntelligence, FinancialFlow, DirectorPivot, InfrastructureHit, BeneficialOwner } from '@/lib/types';
+import { ResultsResponse, ManualRiskLevel, SanctionsHit, MediaHit, NetworkData, FinancialIntelligence, FinancialFlow, DirectorPivot, InfrastructureHit, BeneficialOwner } from '@/lib/types';
 import ManagementNetworkTab from '@/components/ManagementNetworkTab';
 import InfrastructureTab from '@/components/InfrastructureTab';
 import BeneficialOwnershipTab from '@/components/BeneficialOwnershipTab';
@@ -100,6 +100,7 @@ export default function ResultsPage({ params }: PageProps) {
   const [results, setResults] = useState<ResultsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [manualRisk, setManualRisk] = useState<ManualRiskLevel | ''>('');
   type TabType = 'sanctions' | 'media' | 'report' | 'financial' | 'network-relations' | 'financial-flows' | 'management-network' | 'infrastructure' | 'beneficial-ownership';
   const [activeTab, setActiveTab] = useState<TabType | null>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -123,6 +124,7 @@ export default function ResultsPage({ params }: PageProps) {
       try {
         const data = await api.getResults(searchId);
         setResults(data);
+        setManualRisk(data.manual_risk ?? '');
         setActiveTab(data.tier === 'network' || data.tier === 'deep' ? 'network-relations' : 'sanctions');
         setIsLoading(false);
       } catch (err: unknown) {
@@ -189,11 +191,10 @@ export default function ResultsPage({ params }: PageProps) {
         <div style={{ height: '2px', background: 'linear-gradient(90deg, transparent, var(--amber-primary), transparent)' }} />
         <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '1rem 1.5rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', textDecoration: 'none' }}>
-            <Image src="/bear-logo.png" alt="BEAR²" width={36} height={36} style={{ display: 'block', opacity: 0.9 }} />
+            <Image src="/bear-logo.png" alt="BEAR²" width={2816} height={1536} priority style={{ display: 'block', opacity: 0.9, height: '52px', width: 'auto' }} />
             <div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem' }}>
-                <span className="font-display" style={{ fontSize: '1.7rem', lineHeight: 1, color: 'var(--amber-light)', letterSpacing: '0.08em' }}>BEAR</span>
-                <span className="font-display" style={{ fontSize: '0.9rem', color: 'var(--amber-primary)', verticalAlign: 'super' }}>2</span>
+                <span className="font-display" style={{ fontSize: '1.7rem', lineHeight: 1, color: 'var(--amber-light)', letterSpacing: '0.08em' }}>BEAR<sup className="font-display" style={{ fontSize: '0.55em', color: 'var(--amber-primary)' }}>2</sup></span>
               </div>
               <div className="label-stamp" style={{ fontSize: '0.5rem', marginTop: '0.1rem', color: 'var(--text-faint)' }}>
                 Intelligence Dossier
@@ -245,7 +246,51 @@ export default function ResultsPage({ params }: PageProps) {
             </div>
             <div>
               <div className="label-stamp" style={{ marginBottom: '0.375rem' }}>Risk Classification</div>
-              <RiskBadge level={results.risk_level} size="lg" explanation={results.risk_explanation} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <select
+                  value={manualRisk}
+                  onChange={async (e) => {
+                    const val = e.target.value;
+                    if (val === manualRisk) return;
+                    const prev = manualRisk;
+                    setManualRisk(val);
+                    try {
+                      await api.setManualRisk(searchId, val || null);
+                    } catch {
+                      setManualRisk(prev);
+                    }
+                  }}
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.08em',
+                    padding: '0.28rem 0.6rem',
+                    background: 'var(--bg-panel)',
+                    border: `1px solid ${
+                      manualRisk === 'CRITICAL' ? 'var(--risk-critical)' :
+                      manualRisk === 'HIGH'     ? 'var(--risk-critical)' :
+                      manualRisk === 'MODERATE' ? 'var(--risk-mid)' :
+                      manualRisk === 'LOW'      ? 'var(--risk-low)' :
+                      'var(--border-main)'
+                    }`,
+                    color: manualRisk ? 'var(--text-bright)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    appearance: 'none' as const,
+                    WebkitAppearance: 'none' as const,
+                    paddingRight: '1.5rem',
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 0.5rem center',
+                  }}
+                >
+                  <option value="">PENDING REVIEW</option>
+                  <option value="LOW">LOW</option>
+                  <option value="MODERATE">MODERATE</option>
+                  <option value="HIGH">HIGH</option>
+                  <option value="CRITICAL">CRITICAL</option>
+                </select>
+                <RiskBadge level={results.risk_level} size="lg" explanation={results.risk_explanation} showBadge={false} />
+              </div>
             </div>
             <div>
               <div className="label-stamp" style={{ marginBottom: '0.375rem' }}>Research Tier</div>

@@ -44,6 +44,8 @@ def _ensure_columns_exist():
             cursor.execute("ALTER TABLE analysis_history ADD COLUMN save_label TEXT")
         if 'saved_at' not in columns:
             cursor.execute("ALTER TABLE analysis_history ADD COLUMN saved_at TEXT")
+        if 'manual_risk' not in columns:
+            cursor.execute("ALTER TABLE analysis_history ADD COLUMN manual_risk TEXT")
 
         conn.commit()
     except Exception as e:
@@ -210,7 +212,7 @@ def get_search_results(search_id: str) -> Optional[Dict[str, Any]]:
     try:
         cursor.execute("""
             SELECT analysis_id, timestamp, query_term, match_count, risk_level,
-                   results, intelligence_report, tier, is_saved, save_label
+                   results, intelligence_report, tier, is_saved, save_label, manual_risk
             FROM analysis_history
             WHERE analysis_id = ?
         """, (search_id,))
@@ -221,7 +223,7 @@ def get_search_results(search_id: str) -> Optional[Dict[str, Any]]:
             return None
 
         # Parse row
-        analysis_id, timestamp, query_term, match_count, risk_level, results_json, intelligence_report, tier, is_saved, save_label = row
+        analysis_id, timestamp, query_term, match_count, risk_level, results_json, intelligence_report, tier, is_saved, save_label, manual_risk = row
 
         # Parse JSON results
         results_data = json.loads(results_json) if results_json else {}
@@ -257,6 +259,7 @@ def get_search_results(search_id: str) -> Optional[Dict[str, Any]]:
             "metadata": results_data.get('metadata', {}),
             "is_saved": bool(is_saved),
             "save_label": save_label,
+            "manual_risk": manual_risk,
         }
 
     except Exception as e:
@@ -341,6 +344,34 @@ def toggle_save_result(search_id: str, is_saved: bool, label: Optional[str] = No
         return cursor.rowcount > 0
     except Exception as e:
         print(f"Error toggling save for {search_id}: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def set_manual_risk(search_id: str, manual_risk: Optional[str]) -> bool:
+    """
+    Store the staff's manual risk determination for a search result.
+
+    Args:
+        search_id: Unique identifier for the search
+        manual_risk: Staff-selected risk tier (LOW/MODERATE/HIGH/CRITICAL) or None to clear
+
+    Returns:
+        True if update successful, False otherwise
+    """
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            "UPDATE analysis_history SET manual_risk = ? WHERE analysis_id = ?",
+            (manual_risk or None, search_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"Error setting manual risk for {search_id}: {e}")
         return False
     finally:
         conn.close()

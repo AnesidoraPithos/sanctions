@@ -4,8 +4,11 @@
  * Shared types for API communication and component props.
  */
 
-// Risk levels
+// Risk levels (system-computed)
 export type RiskLevel = "SAFE" | "LOW" | "MID" | "HIGH" | "VERY_HIGH";
+
+// Staff-assigned manual risk tiers
+export type ManualRiskLevel = "LOW" | "MODERATE" | "HIGH" | "CRITICAL";
 
 // Research tiers
 export type ResearchTier = "base" | "network" | "deep";
@@ -47,9 +50,12 @@ export interface SearchRequest {
 export interface RiskExplanation {
   sanctions_signal: string;
   intelligence_signal: string;
-  intelligence_score: number | null;
-  intelligence_breakdown: string | null;
+  intelligence_score: number | null;       // deprecated, always null for new records
+  intelligence_breakdown: string | null;   // deprecated, always null for new records
   final_reasoning: string;
+  yes_count: number | null;
+  total_count: number | null;
+  indicator_results: Array<{ indicator: string; flagged: boolean }> | null;
 }
 
 export interface SanctionsHit {
@@ -342,6 +348,7 @@ export interface ResultsResponse {
   // Bookmark fields
   is_saved?: boolean;
   save_label?: string;
+  manual_risk?: ManualRiskLevel | null;
 }
 
 export interface HistoryEntry {

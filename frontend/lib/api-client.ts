@@ -11,6 +11,7 @@ import {
   ResultsResponse,
   HistoryResponse,
   HealthResponse,
+  ManualRiskLevel,
 } from './types';
 
 // Create axios instance with base configuration
@@ -180,6 +181,14 @@ export const api = {
    */
   unsaveResult: async (searchId: string): Promise<{ saved: boolean; search_id: string }> => {
     const response = await apiClient.delete(`/api/results/${searchId}/save`);
+    return response.data;
+  },
+
+  /**
+   * Set or clear a staff manual risk determination
+   */
+  setManualRisk: async (searchId: string, manualRisk: ManualRiskLevel | null): Promise<{ search_id: string; manual_risk: ManualRiskLevel | null }> => {
+    const response = await apiClient.patch(`/api/results/${searchId}/manual-risk`, { manual_risk: manualRisk });
     return response.data;
   },
 

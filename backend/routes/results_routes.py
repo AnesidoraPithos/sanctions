@@ -11,11 +11,17 @@ import logging
 
 # Import backend modules
 from models.responses import ResultsResponse, HistoryResponse, HistoryEntry, SaveResponse
-from db_operations.db import get_search_results, get_search_history, toggle_save_result, get_saved_searches
+from db_operations.db import get_search_results, get_search_history, toggle_save_result, get_saved_searches, set_manual_risk
+
+VALID_MANUAL_RISK = {"LOW", "MODERATE", "HIGH", "CRITICAL"}
 
 
 class SaveRequest(BaseModel):
     label: Optional[str] = None
+
+
+class ManualRiskRequest(BaseModel):
+    manual_risk: Optional[str] = None
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +100,7 @@ async def get_results(
             # Bookmark fields
             is_saved=results.get('is_saved', False),
             save_label=results.get('save_label'),
+            manual_risk=results.get('manual_risk'),
         )
 
     except HTTPException:
@@ -188,3 +195,23 @@ async def unsave_result(
 
     toggle_save_result(search_id, False)
     return SaveResponse(saved=False, search_id=search_id)
+
+
+@router.patch("/{search_id}/manual-risk")
+async def update_manual_risk(
+    search_id: str = Path(..., description="Search ID (UUID)"),
+    body: ManualRiskRequest = ManualRiskRequest(),
+):
+    """Set or clear the staff's manual risk determination for a search result."""
+    value = body.manual_risk.upper() if body.manual_risk else None
+    if value and value not in VALID_MANUAL_RISK:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "InvalidValue", "message": f"manual_risk must be one of {VALID_MANUAL_RISK} or null"}
+        )
+
+    found = set_manual_risk(search_id, value)
+    if not found:
+        raise HTTPException(status_code=404, detail={"error": "NotFound", "message": f"Search {search_id} not found"})
+
+    return {"search_id": search_id, "manual_risk": value}
