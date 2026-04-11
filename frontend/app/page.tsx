@@ -1,22 +1,27 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import SearchForm from '@/components/SearchForm';
 import ProgressTracker from '@/components/ProgressTracker';
-import { SearchRequest, HistoryEntry, RiskLevel } from '@/lib/types';
+import { SearchRequest, HistoryEntry, RiskLevel, ResearchTier } from '@/lib/types';
 import { api } from '@/lib/api-client';
 
 export default function Home() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
   const [recentSearches, setRecentSearches] = useState<HistoryEntry[]>([]);
   const [savedCount, setSavedCount] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Pre-fill from URL params (used by "Upgrade Tier" links on results page)
+  const upgradeEntity = searchParams.get('entity') ?? '';
+  const upgradeTier = (searchParams.get('tier') ?? '') as ResearchTier | '';
 
   useEffect(() => {
     api.getHistory(5).then((data) => setRecentSearches(data.entries)).catch(() => {});
@@ -69,6 +74,10 @@ export default function Home() {
   };
 
   const handleCancel = () => {
+    // Signal backend to stop at its next checkpoint (fire-and-forget)
+    if (activeSearchId) {
+      api.cancelSearch(activeSearchId).catch(() => {});
+    }
     abortControllerRef.current?.abort();
     setIsLoading(false);
     setActiveSearchId(null);
@@ -322,11 +331,16 @@ export default function Home() {
 
           {/* Form */}
           <div style={{ padding: '1.5rem' }}>
-            <SearchForm onSearch={handleSearch} isLoading={isLoading} />
+            <SearchForm
+              onSearch={handleSearch}
+              isLoading={isLoading}
+              initialEntity={upgradeEntity || undefined}
+              initialTier={upgradeTier || undefined}
+            />
           </div>
 
           {/* Progress tracker */}
-          <ProgressTracker searchId={activeSearchId} />
+          <ProgressTracker searchId={activeSearchId} onCancel={handleCancel} />
         </div>
 
         {/* ── Recent Briefs ────────────────────────────────────────── */}

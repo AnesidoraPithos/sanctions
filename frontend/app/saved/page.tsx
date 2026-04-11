@@ -49,11 +49,10 @@ export default function SavedSearchesPage() {
         <div style={{ height: '2px', background: 'linear-gradient(90deg, transparent, var(--amber-primary), transparent)' }} />
         <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.25rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '1rem', textDecoration: 'none' }}>
-            <Image src="/bear-logo.png" alt="BEAR²" width={44} height={44} style={{ display: 'block', opacity: 0.9 }} />
+            <Image src="/bear-logo.png" alt="BEAR²" width={2816} height={1536} priority style={{ display: 'block', opacity: 0.9, height: '64px', width: 'auto' }} />
             <div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
-                <span className="font-display" style={{ fontSize: '2.2rem', lineHeight: 1, color: 'var(--amber-light)', letterSpacing: '0.08em' }}>BEAR</span>
-                <span className="font-display" style={{ fontSize: '1.2rem', lineHeight: 1, color: 'var(--amber-primary)', verticalAlign: 'super' }}>2</span>
+                <span className="font-display" style={{ fontSize: '2.2rem', lineHeight: 1, color: 'var(--amber-light)', letterSpacing: '0.08em' }}>BEAR<sup className="font-display" style={{ fontSize: '0.55em', color: 'var(--amber-primary)' }}>2</sup></span>
               </div>
               <div className="label-stamp" style={{ fontSize: '0.55rem', marginTop: '0.15rem', color: 'var(--text-muted)' }}>
                 Background Entity Assessment &amp; Risk Research
@@ -259,6 +258,48 @@ export default function SavedSearchesPage() {
                     }}
                   >
                     &ldquo;{entry.save_label}&rdquo;
+                  </p>
+                )}
+
+                {/* Tags */}
+                {entry.save_tags && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                    {entry.save_tags.split(',').map((tag) => tag.trim()).filter(Boolean).map((tag) => (
+                      <span
+                        key={tag}
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.6rem',
+                          letterSpacing: '0.06em',
+                          padding: '0.1rem 0.35rem',
+                          border: '1px solid var(--border-main)',
+                          color: 'var(--text-secondary)',
+                          background: 'var(--bg-panel)',
+                        }}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Notes */}
+                {entry.save_notes && (
+                  <p
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.68rem',
+                      color: 'var(--text-muted)',
+                      margin: 0,
+                      fontStyle: 'italic',
+                      lineHeight: 1.5,
+                      overflow: 'hidden',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                    }}
+                  >
+                    {entry.save_notes}
                   </p>
                 )}
 

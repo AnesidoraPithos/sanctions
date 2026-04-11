@@ -4,6 +4,7 @@ import { useProgress } from '@/lib/websocket';
 
 interface ProgressTrackerProps {
   searchId: string | null | undefined;
+  onCancel?: () => void;
 }
 
 /**
@@ -11,7 +12,7 @@ interface ProgressTrackerProps {
  * Connects to the backend WebSocket and updates in real time.
  * Renders nothing once the search is done or if searchId is absent.
  */
-export default function ProgressTracker({ searchId }: ProgressTrackerProps) {
+export default function ProgressTracker({ searchId, onCancel }: ProgressTrackerProps) {
   const { step, percent, done, error } = useProgress(searchId);
 
   if (!searchId || done) return null;
@@ -59,17 +60,42 @@ export default function ProgressTracker({ searchId }: ProgressTrackerProps) {
             {step}
           </span>
         </div>
-        <span
-          className="font-data"
-          style={{
-            fontSize: '0.875rem',
-            color: 'var(--amber-light)',
-            flexShrink: 0,
-          }}
-        >
-          {percent}
-          <span style={{ fontSize: '0.6rem', color: 'var(--amber-primary)', marginLeft: '1px' }}>%</span>
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
+          <span
+            className="font-data"
+            style={{ fontSize: '0.875rem', color: 'var(--amber-light)' }}
+          >
+            {percent}
+            <span style={{ fontSize: '0.6rem', color: 'var(--amber-primary)', marginLeft: '1px' }}>%</span>
+          </span>
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.6rem',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                padding: '0.25rem 0.5rem',
+                border: '1px solid var(--border-main)',
+                background: 'transparent',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                transition: 'border-color 0.15s, color 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--risk-critical)';
+                (e.currentTarget as HTMLButtonElement).style.color = 'var(--risk-critical-bright)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-main)';
+                (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+              }}
+            >
+              × Cancel
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Progress bar */}

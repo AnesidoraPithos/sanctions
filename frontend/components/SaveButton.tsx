@@ -7,12 +7,16 @@ interface SaveButtonProps {
   searchId: string;
   initialSaved: boolean;
   initialLabel?: string;
+  initialNotes?: string;
+  initialTags?: string;
   onSaveChange?: (saved: boolean) => void;
 }
 
-export default function SaveButton({ searchId, initialSaved, initialLabel, onSaveChange }: SaveButtonProps) {
+export default function SaveButton({ searchId, initialSaved, initialLabel, initialNotes, initialTags, onSaveChange }: SaveButtonProps) {
   const [isSaved, setIsSaved] = useState(initialSaved);
   const [label, setLabel] = useState(initialLabel ?? '');
+  const [notes, setNotes] = useState(initialNotes ?? '');
+  const [tags, setTags] = useState(initialTags ?? '');
   const [isLoading, setIsLoading] = useState(false);
   const [showLabelInput, setShowLabelInput] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
@@ -60,7 +64,7 @@ export default function SaveButton({ searchId, initialSaved, initialLabel, onSav
     setIsLoading(true);
     setShowLabelInput(false);
     try {
-      await api.saveResult(searchId, label || undefined);
+      await api.saveResult(searchId, label || undefined, notes || undefined, tags || undefined);
       setIsSaved(true);
       onSaveChange?.(true);
       showToast('Saved');
@@ -78,6 +82,8 @@ export default function SaveButton({ searchId, initialSaved, initialLabel, onSav
       await api.unsaveResult(searchId);
       setIsSaved(false);
       setLabel('');
+      setNotes('');
+      setTags('');
       onSaveChange?.(false);
       showToast('Bookmark removed');
     } catch {
@@ -100,21 +106,12 @@ export default function SaveButton({ searchId, initialSaved, initialLabel, onSav
             background: 'var(--bg-surface)',
             border: '1px solid var(--border-main)',
             padding: '0.875rem',
-            width: '240px',
+            width: '280px',
             boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
           }}
         >
-          <p
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.65rem',
-              letterSpacing: '0.08em',
-              color: 'var(--text-muted)',
-              marginBottom: '0.5rem',
-              textTransform: 'uppercase',
-            }}
-          >
-            Add label (optional)
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '0.375rem', textTransform: 'uppercase' }}>
+            Label (optional)
           </p>
           <input
             ref={inputRef}
@@ -122,12 +119,33 @@ export default function SaveButton({ searchId, initialSaved, initialLabel, onSav
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSave();
               if (e.key === 'Escape') setShowLabelInput(false);
             }}
             placeholder="e.g. Review next week"
             className="intel-input"
             style={{ marginBottom: '0.625rem', fontSize: '0.75rem' }}
+          />
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '0.375rem', textTransform: 'uppercase' }}>
+            Tags (comma-separated)
+          </p>
+          <input
+            type="text"
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+            placeholder="sanctions, china, review"
+            className="intel-input"
+            style={{ marginBottom: '0.625rem', fontSize: '0.75rem' }}
+          />
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '0.375rem', textTransform: 'uppercase' }}>
+            Notes
+          </p>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Free-form notes about this entity..."
+            className="intel-input"
+            rows={3}
+            style={{ marginBottom: '0.625rem', fontSize: '0.75rem', resize: 'vertical', width: '100%', boxSizing: 'border-box' }}
           />
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button

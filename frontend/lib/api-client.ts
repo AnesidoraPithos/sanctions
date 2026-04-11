@@ -171,9 +171,16 @@ export const api = {
   /**
    * Bookmark a search result
    */
-  saveResult: async (searchId: string, label?: string): Promise<{ saved: boolean; search_id: string }> => {
-    const response = await apiClient.post(`/api/results/${searchId}/save`, { label });
+  saveResult: async (searchId: string, label?: string, notes?: string, tags?: string): Promise<{ saved: boolean; search_id: string }> => {
+    const response = await apiClient.post(`/api/results/${searchId}/save`, { label, notes, tags });
     return response.data;
+  },
+
+  /**
+   * Signal the backend to cancel an in-progress search
+   */
+  cancelSearch: async (searchId: string): Promise<void> => {
+    await apiClient.post(`/api/search/${searchId}/cancel`);
   },
 
   /**

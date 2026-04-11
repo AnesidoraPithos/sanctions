@@ -46,6 +46,10 @@ def _ensure_columns_exist():
             cursor.execute("ALTER TABLE analysis_history ADD COLUMN saved_at TEXT")
         if 'manual_risk' not in columns:
             cursor.execute("ALTER TABLE analysis_history ADD COLUMN manual_risk TEXT")
+        if 'save_notes' not in columns:
+            cursor.execute("ALTER TABLE analysis_history ADD COLUMN save_notes TEXT")
+        if 'save_tags' not in columns:
+            cursor.execute("ALTER TABLE analysis_history ADD COLUMN save_tags TEXT")
 
         conn.commit()
     except Exception as e:
@@ -212,7 +216,8 @@ def get_search_results(search_id: str) -> Optional[Dict[str, Any]]:
     try:
         cursor.execute("""
             SELECT analysis_id, timestamp, query_term, match_count, risk_level,
-                   results, intelligence_report, tier, is_saved, save_label, manual_risk
+                   results, intelligence_report, tier, is_saved, save_label, manual_risk,
+                   save_notes, save_tags
             FROM analysis_history
             WHERE analysis_id = ?
         """, (search_id,))
@@ -223,7 +228,7 @@ def get_search_results(search_id: str) -> Optional[Dict[str, Any]]:
             return None
 
         # Parse row
-        analysis_id, timestamp, query_term, match_count, risk_level, results_json, intelligence_report, tier, is_saved, save_label, manual_risk = row
+        analysis_id, timestamp, query_term, match_count, risk_level, results_json, intelligence_report, tier, is_saved, save_label, manual_risk, save_notes, save_tags = row
 
         # Parse JSON results
         results_data = json.loads(results_json) if results_json else {}
@@ -260,6 +265,8 @@ def get_search_results(search_id: str) -> Optional[Dict[str, Any]]:
             "is_saved": bool(is_saved),
             "save_label": save_label,
             "manual_risk": manual_risk,
+            "save_notes": save_notes,
+            "save_tags": save_tags,
         }
 
     except Exception as e:
@@ -318,14 +325,22 @@ def get_search_history(limit: int = 50) -> List[Dict[str, Any]]:
         conn.close()
 
 
-def toggle_save_result(search_id: str, is_saved: bool, label: Optional[str] = None) -> bool:
+def toggle_save_result(
+    search_id: str,
+    is_saved: bool,
+    label: Optional[str] = None,
+    notes: Optional[str] = None,
+    tags: Optional[str] = None,
+) -> bool:
     """
     Bookmark or un-bookmark a search result.
 
     Args:
         search_id: Unique identifier for the search
         is_saved: True to save, False to unsave
-        label: Optional label/note for the bookmark
+        label: Optional short label for the bookmark
+        notes: Optional free-form notes
+        tags: Optional comma-separated tags
 
     Returns:
         True if update successful, False otherwise
@@ -337,9 +352,16 @@ def toggle_save_result(search_id: str, is_saved: bool, label: Optional[str] = No
         saved_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if is_saved else None
         cursor.execute("""
             UPDATE analysis_history
-            SET is_saved = ?, save_label = ?, saved_at = ?
+            SET is_saved = ?, save_label = ?, saved_at = ?, save_notes = ?, save_tags = ?
             WHERE analysis_id = ?
-        """, (1 if is_saved else 0, label if is_saved else None, saved_at, search_id))
+        """, (
+            1 if is_saved else 0,
+            label if is_saved else None,
+            saved_at,
+            notes if is_saved else None,
+            tags if is_saved else None,
+            search_id,
+        ))
         conn.commit()
         return cursor.rowcount > 0
     except Exception as e:
@@ -393,7 +415,7 @@ def get_saved_searches(limit: int = 100) -> List[Dict[str, Any]]:
     try:
         cursor.execute("""
             SELECT analysis_id, timestamp, query_term, match_count, risk_level, tier,
-                   is_saved, save_label, saved_at
+                   is_saved, save_label, saved_at, save_notes, save_tags
             FROM analysis_history
             WHERE is_saved = 1
             ORDER BY saved_at DESC
@@ -413,6 +435,8 @@ def get_saved_searches(limit: int = 100) -> List[Dict[str, Any]]:
                 "is_saved": True,
                 "save_label": row[7],
                 "saved_at": row[8],
+                "save_notes": row[9],
+                "save_tags": row[10],
             }
             for row in rows
         ]

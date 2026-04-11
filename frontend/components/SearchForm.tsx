@@ -7,6 +7,8 @@ import TierSelector from './TierSelector';
 interface SearchFormProps {
   onSearch: (request: SearchRequest) => void;
   isLoading: boolean;
+  initialEntity?: string;
+  initialTier?: ResearchTier;
 }
 
 const COUNTRIES = [
@@ -22,11 +24,12 @@ const COUNTRIES = [
   'Other',
 ];
 
-export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
-  const [entityName, setEntityName] = useState('');
+export default function SearchForm({ onSearch, isLoading, initialEntity, initialTier }: SearchFormProps) {
+  const [entityName, setEntityName] = useState(initialEntity ?? '');
   const [country, setCountry] = useState('');
   const [fuzzyThreshold, setFuzzyThreshold] = useState(80);
-  const [tier, setTier] = useState<ResearchTier>('base');
+  const [tier, setTier] = useState<ResearchTier>(initialTier ?? 'base');
+  const [pendingRequest, setPendingRequest] = useState<SearchRequest | null>(null);
   const [networkDepth, setNetworkDepth] = useState(1);
   const [ownershipThreshold, setOwnershipThreshold] = useState(0);
   const [includeSisters, setIncludeSisters] = useState(true);
@@ -58,7 +61,11 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
         include_beneficial_ownership: includeBeneficialOwnership,
       }),
     };
-    onSearch(request);
+    if (tier === 'network' || tier === 'deep') {
+      setPendingRequest(request);
+    } else {
+      onSearch(request);
+    }
   };
 
   const getEstimatedDuration = () => {
@@ -242,7 +249,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
       <div>
         <button
           type="submit"
-          disabled={isLoading || !entityName.trim()}
+          disabled={isLoading || !entityName.trim() || !!pendingRequest}
           className="btn-primary"
           style={{ fontSize: '0.75rem' }}
         >
@@ -295,6 +302,63 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
             </>
           )}
         </button>
+
+        {/* Confirmation panel for slow tiers */}
+        {pendingRequest && !isLoading && (
+          <div
+            style={{
+              marginTop: '1rem',
+              padding: '1rem 1.125rem',
+              background: 'var(--bg-panel)',
+              border: '1px solid var(--border-main)',
+              borderLeft: '2px solid var(--amber-primary)',
+            }}
+          >
+            <p
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.72rem',
+                letterSpacing: '0.06em',
+                color: 'var(--amber-light)',
+                marginBottom: '0.375rem',
+                textTransform: 'uppercase',
+              }}
+            >
+              {pendingRequest.tier.toUpperCase()} TIER — Est. {getEstimatedDuration()}
+            </p>
+            <p
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.72rem',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.55,
+                marginBottom: '0.875rem',
+              }}
+            >
+              {pendingRequest.tier === 'network'
+                ? 'This search will map the full corporate network and may take several minutes to complete.'
+                : 'This search runs all intelligence modules including financial flows and beneficial ownership. Expect 5–15 minutes for large entities.'}
+            </p>
+            <div style={{ display: 'flex', gap: '0.625rem' }}>
+              <button
+                type="button"
+                onClick={() => { onSearch(pendingRequest); setPendingRequest(null); }}
+                className="btn-primary"
+                style={{ fontSize: '0.65rem', padding: '0.4rem 1rem' }}
+              >
+                Confirm
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingRequest(null)}
+                className="btn-secondary"
+                style={{ fontSize: '0.65rem', padding: '0.4rem 1rem' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Active query notice */}
         {isLoading && (

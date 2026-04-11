@@ -304,6 +304,8 @@ class ResultsResponse(BaseModel):
     # Bookmark fields
     is_saved: bool = Field(False, description="Whether this result has been bookmarked")
     save_label: Optional[str] = Field(None, description="User label for the bookmark")
+    save_notes: Optional[str] = Field(None, description="Free-form notes for the bookmark")
+    save_tags: Optional[str] = Field(None, description="Comma-separated tags for the bookmark")
     manual_risk: Optional[str] = Field(None, description="Staff-assigned manual risk tier")
 
     class Config:
@@ -335,6 +337,8 @@ class HistoryEntry(BaseModel):
     is_saved: bool = False
     save_label: Optional[str] = None
     saved_at: Optional[str] = None
+    save_notes: Optional[str] = None
+    save_tags: Optional[str] = None
 
 
 class SaveResponse(BaseModel):
@@ -343,6 +347,8 @@ class SaveResponse(BaseModel):
     saved: bool
     search_id: str
     label: Optional[str] = None
+    notes: Optional[str] = None
+    tags: Optional[str] = None
 
 
 class HistoryResponse(BaseModel):

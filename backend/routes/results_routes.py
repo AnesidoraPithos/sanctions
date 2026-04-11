@@ -18,6 +18,8 @@ VALID_MANUAL_RISK = {"LOW", "MODERATE", "HIGH", "CRITICAL"}
 
 class SaveRequest(BaseModel):
     label: Optional[str] = None
+    notes: Optional[str] = None
+    tags: Optional[str] = None
 
 
 class ManualRiskRequest(BaseModel):
@@ -100,6 +102,8 @@ async def get_results(
             # Bookmark fields
             is_saved=results.get('is_saved', False),
             save_label=results.get('save_label'),
+            save_notes=results.get('save_notes'),
+            save_tags=results.get('save_tags'),
             manual_risk=results.get('manual_risk'),
         )
 
@@ -151,6 +155,8 @@ async def get_history(
                 is_saved=entry.get('is_saved', False),
                 save_label=entry.get('save_label'),
                 saved_at=entry.get('saved_at'),
+                save_notes=entry.get('save_notes'),
+                save_tags=entry.get('save_tags'),
             )
             for entry in history
         ]
@@ -177,11 +183,11 @@ async def save_result(
     if not result:
         raise HTTPException(status_code=404, detail={"error": "NotFound", "message": f"Search {search_id} not found"})
 
-    success = toggle_save_result(search_id, True, body.label)
+    success = toggle_save_result(search_id, True, body.label, body.notes, body.tags)
     if not success:
         raise HTTPException(status_code=500, detail={"error": "DatabaseError", "message": "Failed to save result"})
 
-    return SaveResponse(saved=True, search_id=search_id, label=body.label)
+    return SaveResponse(saved=True, search_id=search_id, label=body.label, notes=body.notes, tags=body.tags)
 
 
 @router.delete("/{search_id}/save", response_model=SaveResponse)

@@ -348,6 +348,8 @@ export interface ResultsResponse {
   // Bookmark fields
   is_saved?: boolean;
   save_label?: string;
+  save_notes?: string;
+  save_tags?: string;
   manual_risk?: ManualRiskLevel | null;
 }
 
@@ -361,6 +363,8 @@ export interface HistoryEntry {
   is_saved?: boolean;
   save_label?: string;
   saved_at?: string;
+  save_notes?: string;
+  save_tags?: string;
 }
 
 export interface SaveRequest {
@@ -386,6 +390,8 @@ export interface HealthResponse {
 export interface SearchFormProps {
   onSearch: (request: SearchRequest) => void;
   isLoading: boolean;
+  initialEntity?: string;
+  initialTier?: ResearchTier;
 }
 
 export interface RiskBadgeProps {

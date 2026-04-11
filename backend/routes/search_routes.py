@@ -4,7 +4,7 @@ Search Routes
 Endpoints for entity background searches (base/network/deep tiers).
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Path
 from functools import partial
 from typing import Dict, Any
 import uuid
@@ -24,10 +24,29 @@ from services.network_service import get_network_service
 from services.risk_assessment_service import get_risk_assessment_service
 from db_operations.db import save_search_results
 from websocket.progress_handler import update_progress, complete_progress, fail_progress
+from core.cancel_store import mark_cancelled, is_cancelled, clear_cancelled
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _check_cancel(search_id: str) -> None:
+    """Raise HTTPException(499) if the search has been cancelled by the user."""
+    if is_cancelled(search_id):
+        clear_cancelled(search_id)
+        fail_progress(search_id, "Search cancelled by user")
+        raise HTTPException(
+            status_code=499,
+            detail={"error": "Cancelled", "message": "Search was cancelled by the user"},
+        )
+
+
+@router.post("/{search_id}/cancel")
+def cancel_search(search_id: str = Path(..., description="Search ID to cancel")):
+    """Signal a running search to stop at its next checkpoint."""
+    mark_cancelled(search_id)
+    return {"cancelled": True, "search_id": search_id}
 
 
 @router.post("/base", response_model=SearchResponse)
@@ -71,6 +90,7 @@ def search_base_tier(request: SearchRequest):
         )
 
         # Step 2: Media Intelligence (OSINT)
+        _check_cancel(search_id)
         _progress("OSINT media intelligence", 40)
         logger.info(f"[{search_id}] Step 2: OSINT media intelligence...")
         research_service = get_research_service()
@@ -82,15 +102,18 @@ def search_base_tier(request: SearchRequest):
         )
 
         # Step 3: Generate Intelligence Report
+        _check_cancel(search_id)
         _progress("Generating intelligence report", 65)
         logger.info(f"[{search_id}] Step 3: Generating LLM intelligence report...")
         intelligence_report = research_service.generate_intelligence_report(
-            request.entity_name
+            request.entity_name,
+            sanctions_hits=sanctions_hits
         )
 
         logger.info(f"[{search_id}] Intelligence report generated")
 
         # Step 4: Extract AI risk assessment and calculate combined risk
+        _check_cancel(search_id)
         _progress("Calculating risk level", 80)
         logger.info(f"[{search_id}] Step 4: Calculating combined risk level...")
         risk_service = get_risk_assessment_service()
@@ -242,6 +265,7 @@ def search_network_tier(request: SearchRequest):
         )
 
         # STEP 2: Conglomerate discovery
+        _check_cancel(search_id)
         _progress("Conglomerate discovery", 20)
         logger.info(f"[{search_id}] Step 2: Conglomerate discovery...")
         conglomerate_service = get_conglomerate_service()
@@ -268,6 +292,7 @@ def search_network_tier(request: SearchRequest):
         )
 
         # STEP 3: Extract financial intelligence
+        _check_cancel(search_id)
         _progress("Extracting financial intelligence", 38)
         logger.info(f"[{search_id}] Step 3: Extracting financial intelligence...")
 
@@ -303,6 +328,7 @@ def search_network_tier(request: SearchRequest):
         )
 
         # STEP 4: Cross-entity sanctions screening
+        _check_cancel(search_id)
         _progress("Cross-entity sanctions screening", 55)
         logger.info(f"[{search_id}] Step 4: Cross-entity sanctions screening...")
 
@@ -386,6 +412,7 @@ def search_network_tier(request: SearchRequest):
         )
 
         # STEP 5: Build network graph
+        _check_cancel(search_id)
         _progress("Building network graph", 72)
         logger.info(f"[{search_id}] Step 5: Building network graph...")
         network_service = get_network_service()
@@ -406,10 +433,12 @@ def search_network_tier(request: SearchRequest):
         )
 
         # STEP 6: Generate intelligence report
+        _check_cancel(search_id)
         _progress("Generating intelligence report", 82)
         logger.info(f"[{search_id}] Step 6: Generating intelligence report...")
         intelligence_report = research_service.generate_intelligence_report(
-            request.entity_name
+            request.entity_name,
+            sanctions_hits=sanctions_hits
         )
 
         logger.info(f"[{search_id}] Intelligence report generated")
@@ -608,6 +637,7 @@ def search_deep_tier(request: SearchRequest):
         )
 
         # --- STEP 2: Conglomerate discovery ---
+        _check_cancel(search_id)
         _progress("Conglomerate discovery", 20)
         logger.info(f"[{search_id}] Step 2: Conglomerate discovery...")
         conglomerate_service = get_conglomerate_service()
@@ -633,6 +663,7 @@ def search_deep_tier(request: SearchRequest):
         )
 
         # --- STEP 3: Financial intelligence ---
+        _check_cancel(search_id)
         _progress("Extracting financial intelligence", 40)
         logger.info(f"[{search_id}] Step 3: Extracting financial intelligence...")
         cik = conglomerate_service.search_sec_edgar_for_cik(request.entity_name)
@@ -647,6 +678,7 @@ def search_deep_tier(request: SearchRequest):
         warnings.extend(financial_intelligence.get("warnings", []))
 
         # --- STEP 4: Cross-entity sanctions screening ---
+        _check_cancel(search_id)
         _progress("Cross-entity sanctions screening", 55)
         logger.info(f"[{search_id}] Step 4: Cross-entity sanctions screening...")
 
@@ -687,6 +719,7 @@ def search_deep_tier(request: SearchRequest):
                         person_sanctions_count += hits
 
         # --- STEP 5: Build network graph ---
+        _check_cancel(search_id)
         _progress("Building network graph", 65)
         logger.info(f"[{search_id}] Step 5: Building network graph...")
         network_service = get_network_service()
@@ -701,6 +734,7 @@ def search_deep_tier(request: SearchRequest):
         )
 
         # --- STEP 6: USAspending.gov procurement records (graceful skip) ---
+        _check_cancel(search_id)
         _progress("Querying federal procurement records", 72)
         logger.info(f"[{search_id}] Step 6: Federal procurement data (USAspending)...")
         usaspending_flows: list = []
@@ -757,9 +791,13 @@ def search_deep_tier(request: SearchRequest):
                 })
 
         # --- STEP 8: Generate intelligence report ---
+        _check_cancel(search_id)
         _progress("Generating intelligence report", 85)
         logger.info(f"[{search_id}] Step 8: Generating intelligence report...")
-        intelligence_report = research_service.generate_intelligence_report(request.entity_name)
+        intelligence_report = research_service.generate_intelligence_report(
+            request.entity_name,
+            sanctions_hits=sanctions_hits
+        )
 
         # Fallback parent extraction
         if not parent_info and intelligence_report:

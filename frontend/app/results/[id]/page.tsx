@@ -8,6 +8,7 @@
 
 import React, { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { ResultsResponse, ManualRiskLevel, SanctionsHit, MediaHit, NetworkData, FinancialIntelligence, FinancialFlow, DirectorPivot, InfrastructureHit, BeneficialOwner } from '@/lib/types';
 import ManagementNetworkTab from '@/components/ManagementNetworkTab';
@@ -96,6 +97,7 @@ function renderMarkdown(text: string): string {
 export default function ResultsPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const searchId = resolvedParams.id;
+  const router = useRouter();
 
   const [results, setResults] = useState<ResultsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -206,6 +208,8 @@ export default function ResultsPage({ params }: PageProps) {
               searchId={searchId}
               initialSaved={results.is_saved ?? false}
               initialLabel={results.save_label}
+              initialNotes={results.save_notes}
+              initialTags={results.save_tags}
             />
             <ExportControls searchId={searchId} />
             <Link
@@ -300,6 +304,63 @@ export default function ResultsPage({ params }: PageProps) {
                   <span className="font-data" style={{ fontSize: '0.72rem', color: 'var(--cyan-main)' }}>
                     depth-{String(results.metadata.network_depth)}
                   </span>
+                )}
+                {results.tier === 'base' && (
+                  <>
+                    <button
+                      onClick={() => router.push(`/?entity=${encodeURIComponent(results.entity_name)}&tier=network`)}
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.6rem',
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                        padding: '0.2rem 0.5rem',
+                        border: '1px solid var(--cyan-main)',
+                        background: 'transparent',
+                        color: 'var(--cyan-main)',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      ↑ Network
+                    </button>
+                    <button
+                      onClick={() => router.push(`/?entity=${encodeURIComponent(results.entity_name)}&tier=deep`)}
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.6rem',
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                        padding: '0.2rem 0.5rem',
+                        border: '1px solid var(--amber-primary)',
+                        background: 'transparent',
+                        color: 'var(--amber-light)',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      ↑ Deep
+                    </button>
+                  </>
+                )}
+                {results.tier === 'network' && (
+                  <button
+                    onClick={() => router.push(`/?entity=${encodeURIComponent(results.entity_name)}&tier=deep`)}
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.6rem',
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      padding: '0.2rem 0.5rem',
+                      border: '1px solid var(--amber-primary)',
+                      background: 'transparent',
+                      color: 'var(--amber-light)',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    ↑ Upgrade to Deep
+                  </button>
                 )}
               </div>
             </div>
