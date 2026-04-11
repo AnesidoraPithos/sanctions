@@ -10,6 +10,7 @@ from .research_service import ResearchService, get_research_service
 from .conglomerate_service import ConglomerateService, get_conglomerate_service
 from .network_service import NetworkService, get_network_service
 from .risk_assessment_service import RiskAssessmentService, get_risk_assessment_service
+from .companies_house_service import CompaniesHouseService, get_companies_house_service
 
 __all__ = [
     'SanctionsService',
@@ -21,5 +22,7 @@ __all__ = [
     'NetworkService',
     'get_network_service',
     'RiskAssessmentService',
-    'get_risk_assessment_service'
+    'get_risk_assessment_service',
+    'CompaniesHouseService',
+    'get_companies_house_service',
 ]

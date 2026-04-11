@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     USA_TRADE_GOV_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     OPENCORPORATES_API_KEY: str = ""  # Optional - Phase 2 (network tier)
+    COMPANIES_HOUSE_API_KEY: str = ""  # Optional - UK corporate data via Companies House
 
     # Database
     DATABASE_PATH: str = "../sanctions.db"  # Relative to backend/
