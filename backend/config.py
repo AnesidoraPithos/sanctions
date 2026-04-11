@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENCORPORATES_API_KEY: str = ""  # Optional - Phase 2 (network tier)
     COMPANIES_HOUSE_API_KEY: str = ""  # Optional - UK corporate data via Companies House
+    ALEPH_API_KEY: str = ""  # Optional - OCCRP Aleph for leak database / PEP screening
 
     # Database
     DATABASE_PATH: str = "../sanctions.db"  # Relative to backend/

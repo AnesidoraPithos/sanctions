@@ -253,6 +253,10 @@ class SearchResponse(BaseModel):
         None,
         description="Advanced OSINT reconnaissance data (deep tier only)"
     )
+    aleph_hits: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="OCCRP Aleph offshore leak database and PEP hits (deep tier only)"
+    )
 
     class Config:
         json_schema_extra = {
@@ -300,6 +304,7 @@ class ResultsResponse(BaseModel):
     infrastructure: Optional[List[Dict[str, Any]]] = Field(None, description="Infrastructure correlation (deep tier)")
     beneficial_owners: Optional[List[Dict[str, Any]]] = Field(None, description="Beneficial owners (deep tier)")
     advanced_osint: Optional[Dict[str, Any]] = Field(None, description="Advanced OSINT data (deep tier)")
+    aleph_hits: Optional[List[Dict[str, Any]]] = Field(None, description="OCCRP Aleph leak/PEP hits (deep tier)")
 
     # Bookmark fields
     is_saved: bool = Field(False, description="Whether this result has been bookmarked")

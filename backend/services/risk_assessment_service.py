@@ -123,7 +123,8 @@ class RiskAssessmentService:
         self,
         sanctions_hits: List[Dict],
         ai_assessment: Dict,
-        media_intelligence: Optional[Dict] = None
+        media_intelligence: Optional[Dict] = None,
+        aleph_hits: Optional[List[Dict]] = None,   # OCCRP Aleph leak/PEP hits
     ) -> Tuple[str, Dict[str, Any]]:
         """
         Calculate final risk level combining all signals.
@@ -199,6 +200,60 @@ class RiskAssessmentService:
             if ai_level:
                 reasoning_parts.append(f"Intelligence indicators provide additional context")
 
+        # --- Aleph signal (offshore leaks + PEP) ---
+        # Runs as a post-processing elevation step so it never lowers an
+        # existing HIGH/VERY_HIGH determined by sanctions or AI indicators.
+        aleph_hits = aleph_hits or []
+        aleph_leak_hits = [h for h in aleph_hits if h.get("is_leak_db_hit")]
+        aleph_pep_hits  = [h for h in aleph_hits if h.get("is_pep")]
+
+        aleph_signal_parts: List[str] = []
+
+        if aleph_leak_hits and aleph_pep_hits:
+            # Rule A: PEP AND leak database hit — most serious combination
+            if final_risk in ("SAFE", "LOW"):
+                final_risk = "HIGH"
+                reasoning_parts.append(
+                    f"Elevated to HIGH: entity appears in {len(aleph_leak_hits)} "
+                    f"offshore leak dataset(s) AND is flagged as a PEP in OCCRP Aleph"
+                )
+            elif final_risk == "MID":
+                final_risk = "HIGH"
+                reasoning_parts.append(
+                    f"Elevated to HIGH from MID: PEP status + "
+                    f"{len(aleph_leak_hits)} leak dataset hit(s) in OCCRP Aleph"
+                )
+            # HIGH or VERY_HIGH already — no downgrade; just log
+            aleph_signal_parts.append(
+                f"PEP+leak: {len(aleph_pep_hits)} PEP flag(s), "
+                f"{len(aleph_leak_hits)} leak DB hit(s)"
+            )
+
+        elif aleph_pep_hits:
+            # Rule B: PEP only — elevate SAFE/LOW to MID; leave MID+ alone
+            if final_risk in ("SAFE", "LOW"):
+                final_risk = "MID"
+                reasoning_parts.append(
+                    f"Elevated to MID: entity is flagged as a PEP "
+                    f"in OCCRP Aleph ({len(aleph_pep_hits)} result(s))"
+                )
+            aleph_signal_parts.append(f"PEP flag(s): {len(aleph_pep_hits)}")
+
+        elif aleph_leak_hits:
+            # Rule C: Leak DB only — elevate SAFE/LOW to MID; leave MID+ alone
+            if final_risk in ("SAFE", "LOW"):
+                final_risk = "MID"
+                reasoning_parts.append(
+                    f"Elevated to MID: entity found in "
+                    f"{len(aleph_leak_hits)} offshore leak dataset(s) via OCCRP Aleph"
+                )
+            aleph_signal_parts.append(
+                f"Leak DB hit(s): {len(aleph_leak_hits)} "
+                f"({', '.join(set(h.get('dataset_label') or h.get('dataset_id', '?') for h in aleph_leak_hits))})"
+            )
+
+        aleph_signal = "; ".join(aleph_signal_parts) if aleph_signal_parts else "No Aleph hits"
+
         # Build full explanation
         explanation = {
             'sanctions_signal': sanctions_signal,
@@ -209,11 +264,13 @@ class RiskAssessmentService:
             'yes_count': yes_count,
             'total_count': total_count,
             'indicator_results': ai_assessment.get('indicators', []),
+            'aleph_signal': aleph_signal,     # OCCRP Aleph leak/PEP summary
         }
 
         logger.info(
             f"Combined risk calculation: "
-            f"Sanctions={sanctions_risk}, Indicators={yes_count}/{total_count}, Final={final_risk}"
+            f"Sanctions={sanctions_risk}, Indicators={yes_count}/{total_count}, "
+            f"Aleph={aleph_signal}, Final={final_risk}"
         )
 
         return final_risk, explanation

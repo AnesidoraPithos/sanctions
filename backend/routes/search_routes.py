@@ -824,6 +824,22 @@ def search_deep_tier(request: SearchRequest):
                 request.entity_name, intelligence_report
             )
 
+        # --- STEP 15: OCCRP Aleph leak databases & PEP check ---
+        # Must run before STEP 9 so aleph_hits feed the single risk call.
+        aleph_hits: list = []
+        _progress("Checking OCCRP Aleph leak databases...", 91)
+        try:
+            from services.aleph_service import get_aleph_service
+            aleph_hits = get_aleph_service().search_leaks_and_peps(request.entity_name)
+            logger.info(f"[{search_id}] Aleph: {len(aleph_hits)} hits")
+        except Exception as _exc:
+            logger.warning(f"[{search_id}] Aleph search failed: {_exc}")
+            warnings.append({
+                "source": "aleph",
+                "message": f"OCCRP Aleph unavailable: {_exc}",
+                "severity": "info",
+            })
+
         # --- STEP 9: Risk assessment ---
         _progress("Calculating risk level", 92)
         risk_service = get_risk_assessment_service()
@@ -832,6 +848,7 @@ def search_deep_tier(request: SearchRequest):
             sanctions_hits=sanctions_hits,
             ai_assessment=ai_assessment,
             media_intelligence=media_intelligence,
+            aleph_hits=aleph_hits,
         )
 
         # --- STEP 11: Director pivot (Phase 4) ---
@@ -944,6 +961,7 @@ def search_deep_tier(request: SearchRequest):
             "director_pivots_count": len(director_pivots),
             "infrastructure_domains_count": len(infrastructure),
             "beneficial_owners_count": len(beneficial_owners),
+            "aleph_hits_count": len(aleph_hits),
         }
 
         network_data_db = {
@@ -976,6 +994,7 @@ def search_deep_tier(request: SearchRequest):
             "infrastructure": infrastructure,
             "beneficial_owners": beneficial_owners,
             "advanced_osint": advanced_osint_data,
+            "aleph_hits": aleph_hits,
         }
 
         save_search_results(
@@ -1020,6 +1039,7 @@ def search_deep_tier(request: SearchRequest):
             infrastructure=infrastructure,
             beneficial_owners=beneficial_owners,
             advanced_osint=advanced_osint_data,
+            aleph_hits=aleph_hits,
             warnings=warnings,
             data_sources_used=data_sources_used,
             metadata=metadata,
