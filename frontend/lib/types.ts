@@ -264,6 +264,10 @@ export interface BeneficialOwner {
   source: string;
   source_url?: string;
   verification_date?: string;
+  /** "person" = ultimate beneficial owner (individual), "entity" = intermediary company */
+  entity_type?: "person" | "entity";
+  /** Intermediary entity names between the target company and this owner */
+  via?: string[];
 }
 
 export interface AdvancedOsintData {

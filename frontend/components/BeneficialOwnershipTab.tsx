@@ -118,11 +118,23 @@ export default function BeneficialOwnershipTab({
                   }}
                 >
                   <td style={{ padding: '0.75rem 1rem' }}>
-                    <span style={{ color: 'var(--text-bright)', fontWeight: 500, fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
-                      {owner.name}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      <span style={{ color: 'var(--text-bright)', fontWeight: 500, fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                        {owner.name}
+                      </span>
+                      {owner.entity_type === "entity" && (
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', letterSpacing: '0.08em', color: 'var(--text-muted)', border: '1px solid var(--border-dim)', padding: '0.1rem 0.3rem' }}>
+                          ENTITY
+                        </span>
+                      )}
+                    </div>
+                    {owner.via && owner.via.length > 0 && (
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', fontFamily: 'var(--font-mono)', marginTop: '0.2rem', lineHeight: 1.4 }}>
+                        via {owner.via.join(" \u2192 ")}
+                      </div>
+                    )}
                     {owner.source_url && (
-                      <div>
+                      <div style={{ marginTop: '0.15rem' }}>
                         <a
                           href={owner.source_url}
                           target="_blank"
