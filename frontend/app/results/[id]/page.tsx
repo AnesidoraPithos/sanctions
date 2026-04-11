@@ -19,7 +19,10 @@ import RiskBadge from '@/components/RiskBadge';
 import TierBadge from '@/components/TierBadge';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import NetworkGraph from '@/components/NetworkGraph';
+import dynamic from 'next/dynamic';
 import ExportControls from '@/components/ExportControls';
+
+const GeographicMap = dynamic(() => import('@/components/GeographicMap'), { ssr: false });
 import SaveButton from '@/components/SaveButton';
 import { format } from 'date-fns';
 
@@ -103,7 +106,7 @@ export default function ResultsPage({ params }: PageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [manualRisk, setManualRisk] = useState<ManualRiskLevel | ''>('');
-  type TabType = 'sanctions' | 'media' | 'report' | 'financial' | 'network-relations' | 'financial-flows' | 'management-network' | 'infrastructure' | 'beneficial-ownership';
+  type TabType = 'sanctions' | 'media' | 'report' | 'financial' | 'network-relations' | 'map' | 'financial-flows' | 'management-network' | 'infrastructure' | 'beneficial-ownership';
   const [activeTab, setActiveTab] = useState<TabType | null>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
   const [tabsCanScrollRight, setTabsCanScrollRight] = useState(false);
@@ -523,6 +526,7 @@ export default function ResultsPage({ params }: PageProps) {
               ...(results.tier === 'network' || results.tier === 'deep') && results.network_data ? [
                 { key: 'network-relations', label: `Network (${(results.network_data?.parent_info ? 1 : 0) + (results.subsidiaries?.length || 0) + ((results.network_data as any)?.sisters?.length || 0)})`, always: false },
                 { key: 'financial', label: 'Financial Intel', always: false },
+                { key: 'map', label: 'Map', always: false },
                 ...(results.tier === 'deep' ? [
                   { key: 'financial-flows', label: `Flows (${results.financial_flows?.length || 0})`, always: false },
                   ...(results.director_pivots ? [{ key: 'management-network', label: `Directors (${results.director_pivots.length})`, always: false }] : []),
@@ -905,6 +909,11 @@ export default function ResultsPage({ params }: PageProps) {
             <BeneficialOwnershipTab
               beneficialOwners={(results.beneficial_owners || []) as BeneficialOwner[]}
             />
+          )}
+
+          {/* Geographic Map Tab */}
+          {activeTab === 'map' && (
+            <GeographicMap results={results} />
           )}
 
           {/* Network Relations Tab (unified Network Graph + Subsidiaries) */}
