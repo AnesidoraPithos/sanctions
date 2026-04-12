@@ -12,6 +12,7 @@ from .network_service import NetworkService, get_network_service
 from .risk_assessment_service import RiskAssessmentService, get_risk_assessment_service
 from .companies_house_service import CompaniesHouseService, get_companies_house_service
 from .aleph_service import AlephService, get_aleph_service
+from .whalewisdom_service import WhaleWisdomService, get_whalewisdom_service
 
 __all__ = [
     'SanctionsService',
@@ -28,4 +29,6 @@ __all__ = [
     'get_companies_house_service',
     'AlephService',
     'get_aleph_service',
+    'WhaleWisdomService',
+    'get_whalewisdom_service',
 ]

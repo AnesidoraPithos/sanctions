@@ -23,6 +23,7 @@ from services.conglomerate_service import get_conglomerate_service
 from services.network_service import get_network_service
 from services.risk_assessment_service import get_risk_assessment_service
 from services.companies_house_service import get_companies_house_service
+from services.whalewisdom_service import get_whalewisdom_service
 from db_operations.db import save_search_results
 from websocket.progress_handler import update_progress, complete_progress, fail_progress
 from core.cancel_store import mark_cancelled, is_cancelled, clear_cancelled
@@ -318,6 +319,14 @@ def search_network_tier(request: SearchRequest):
         warnings.extend(ch_intelligence.get('warnings', []))
         if ch_intelligence.get('company_info'):
             data_sources_used.append('companies_house')
+
+        # Augment with WhaleWisdom institutional investor data (13F filings)
+        ww_service = get_whalewisdom_service()
+        ww_data = ww_service.get_institutional_shareholders(request.entity_name)
+        shareholders.extend(ww_data.get('shareholders', []))
+        warnings.extend(ww_data.get('warnings', []))
+        if ww_data.get('company_info'):
+            data_sources_used.append('whalewisdom')
 
         logger.info(
             f"[{search_id}] Financial intelligence extracted: "
