@@ -249,6 +249,10 @@ class SearchResponse(BaseModel):
         None,
         description="Beneficial ownership records (deep tier only)"
     )
+    bods_data: Optional[Dict[str, Any]] = Field(
+        None,
+        description="BODS-structured ownership data (deep tier only)"
+    )
     advanced_osint: Optional[AdvancedOsintData] = Field(
         None,
         description="Advanced OSINT reconnaissance data (deep tier only)"
@@ -303,6 +307,7 @@ class ResultsResponse(BaseModel):
     director_pivots: Optional[List[Dict[str, Any]]] = Field(None, description="Director pivot results (deep tier)")
     infrastructure: Optional[List[Dict[str, Any]]] = Field(None, description="Infrastructure correlation (deep tier)")
     beneficial_owners: Optional[List[Dict[str, Any]]] = Field(None, description="Beneficial owners (deep tier)")
+    bods_data: Optional[Dict[str, Any]] = Field(None, description="BODS-structured ownership data (deep tier only)")
     advanced_osint: Optional[Dict[str, Any]] = Field(None, description="Advanced OSINT data (deep tier)")
     aleph_hits: Optional[List[Dict[str, Any]]] = Field(None, description="OCCRP Aleph leak/PEP hits (deep tier)")
 

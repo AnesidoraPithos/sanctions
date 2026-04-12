@@ -258,6 +258,7 @@ def get_search_results(search_id: str) -> Optional[Dict[str, Any]]:
             "director_pivots": network_data.get('director_pivots', []) if network_data else [],
             "infrastructure": network_data.get('infrastructure', []) if network_data else [],
             "beneficial_owners": network_data.get('beneficial_owners', []) if network_data else [],
+            "bods_data": network_data.get('bods_data', {}) if network_data else {},
             "advanced_osint": network_data.get('advanced_osint', {}) if network_data else {},
             "intelligence_report": intelligence_report,
             "timestamp": timestamp,

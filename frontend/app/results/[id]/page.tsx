@@ -908,6 +908,7 @@ export default function ResultsPage({ params }: PageProps) {
           {activeTab === 'beneficial-ownership' && (
             <BeneficialOwnershipTab
               beneficialOwners={(results.beneficial_owners || []) as BeneficialOwner[]}
+              bodsData={results.bods_data}
             />
           )}
 

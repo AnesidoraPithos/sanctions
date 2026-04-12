@@ -1,16 +1,19 @@
 """
 Beneficial Ownership Service — Phase 4
 
-Queries OCCRP Aleph and Open Ownership Register to trace UBOs.
-The Open Ownership integration uses the BODS (Beneficial Ownership Data
-Standard) format: a two-step flow (company search → network statements)
-followed by recursive chain traversal to find the ultimate beneficial owners
-and any intermediary shell companies between them and the target entity.
+Builds a BODS (Beneficial Ownership Data Standard) formatting engine that
+transforms ownership data already collected by Companies House, SEC EDGAR,
+and OpenCorporates into a strict BODS-compliant JSON structure with three
+core arrays: entities, persons, and ownershipOrControlStatements.
+
+The Open Ownership Register was retired in late 2024; no external OO API
+calls are made. OCCRP Aleph search is retained as a supplementary source.
 """
 
 from __future__ import annotations
 
 import logging
+import uuid as _uuid_mod
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -18,15 +21,22 @@ import requests
 logger = logging.getLogger(__name__)
 
 ALEPH_SEARCH_URL = "https://aleph.occrp.org/api/2/search"
-OPEN_OWNERSHIP_SEARCH_URL = "https://register.openownership.org/api/companies/search"
-OPEN_OWNERSHIP_NETWORK_URL = "https://register.openownership.org/api/companies/{company_id}/network"
 
 _MAX_CHAIN_DEPTH = 5
 
+# Namespace for deterministic UUID5 generation
+_BODS_NS = _uuid_mod.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")  # DNS namespace
+
 
 # ---------------------------------------------------------------------------
-# BODS helper functions
+# BODS helper functions (used for traversing synthetic BODS statements)
 # ---------------------------------------------------------------------------
+
+def _make_id(prefix: str, name: str) -> str:
+    """Generate a deterministic BODS statementID from a prefix and name."""
+    slug = f"{prefix}:{name.lower().strip()}"
+    return str(_uuid_mod.uuid5(_BODS_NS, slug))
+
 
 def _extract_pct(interests: List[Dict[str, Any]]) -> Optional[float]:
     """Return the first numeric ownership percentage found in a BODS interests list."""
@@ -67,6 +77,8 @@ def _trace_ubo(
     ownership_list: List[Dict],
     path: List[str],
     seen: set,
+    source_map: Dict[str, str],
+    source_url_map: Dict[str, Optional[str]],
     max_depth: int = _MAX_CHAIN_DEPTH,
 ) -> List[Dict[str, Any]]:
     """Recursively trace Ultimate Beneficial Owners from a BODS statement set.
@@ -78,6 +90,8 @@ def _trace_ubo(
         ownership_list: All ownershipOrControlStatement dicts.
         path: Intermediary entity names accumulated so far (empty at root call).
         seen: Set of already-visited statement IDs (prevents cycles).
+        source_map: Map of statementID → source name string.
+        source_url_map: Map of statementID → source URL string or None.
         max_depth: Maximum intermediary depth before stopping recursion.
 
     Returns:
@@ -91,7 +105,10 @@ def _trace_ubo(
             continue
 
         party = stmt.get("interestedParty") or {}
-        pct = _extract_pct(stmt.get("interests") or [])
+        interests = stmt.get("interests") or []
+        pct = _extract_pct(interests)
+        stmt_date = stmt.get("statementDate")
+        interest_type = interests[0].get("type") if interests else "shareholding"
 
         # Case A: owner is a person → UBO found
         person_id = party.get("describedByPersonStatement")
@@ -108,9 +125,10 @@ def _trace_ubo(
                     "ownership_pct": pct,
                     "entity_type": "person",
                     "via": list(path),
-                    "source": "OpenOwnership",
-                    "source_url": f"https://register.openownership.org/entities/{person_id}",
-                    "verification_date": stmt.get("statementDate"),
+                    "source": source_map.get(person_id, "unknown"),
+                    "source_url": source_url_map.get(person_id),
+                    "verification_date": stmt_date,
+                    "interest_type": interest_type,
                 }
             )
             continue
@@ -128,6 +146,8 @@ def _trace_ubo(
                     ownership_list,
                     path + [inter_name],
                     seen,
+                    source_map,
+                    source_url_map,
                     max_depth,
                 )
             )
@@ -136,10 +156,16 @@ def _trace_ubo(
 
 
 class BeneficialOwnershipService:
-    """Trace beneficial ownership from public registries."""
+    """
+    BODS formatting engine for beneficial ownership tracing.
+
+    Takes ownership data already collected by Companies House (PSC),
+    SEC EDGAR, and OpenCorporates and transforms it into BODS-compliant JSON.
+    OCCRP Aleph is queried as a supplementary enrichment source.
+    """
 
     # ------------------------------------------------------------------
-    # OCCRP Aleph
+    # OCCRP Aleph (supplementary enrichment, API still active)
     # ------------------------------------------------------------------
 
     def search_occrp_aleph(self, entity_name: str) -> List[Dict[str, Any]]:
@@ -176,9 +202,12 @@ class BeneficialOwnershipService:
                         "name": name,
                         "nationality": nationality,
                         "ownership_pct": None,
+                        "entity_type": "person",
+                        "via": [],
                         "source": "OCCRP Aleph",
                         "source_url": f"https://aleph.occrp.org/entities/{hit.get('id', '')}",
                         "verification_date": None,
+                        "interest_type": "shareholding",
                     }
                 )
             return results
@@ -188,153 +217,284 @@ class BeneficialOwnershipService:
             return []
 
     # ------------------------------------------------------------------
-    # Open Ownership Register — BODS
+    # BODS formatting engine
     # ------------------------------------------------------------------
 
-    def search_open_ownership(self, entity_name: str) -> List[Dict[str, Any]]:
-        """Query the Open Ownership Register using BODS to trace UBOs.
+    def build_bods_from_collected_data(
+        self,
+        entity_name: str,
+        shareholders: List[Dict[str, Any]],
+        directors: List[Dict[str, Any]],
+        subsidiaries: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Build a BODS-compliant JSON structure from already-collected data.
 
-        Two-step process:
-        1. Search for the company by name to get its internal ID.
-        2. Fetch the BODS network statements for that company and recursively
-           trace the ownership chain to find Ultimate Beneficial Owners and
-           any intermediary entities in the chain.
+        Maps data from Companies House PSC, SEC EDGAR shareholders/directors,
+        and OpenCorporates subsidiaries into the three core BODS arrays.
 
         Args:
-            entity_name: Company name to search.
+            entity_name: The root entity being researched.
+            shareholders: List of shareholder dicts (from Companies House / SEC EDGAR).
+            directors: List of director dicts (from Companies House / SEC EDGAR).
+            subsidiaries: List of subsidiary dicts (from OpenCorporates / SEC EDGAR).
 
         Returns:
-            List of owner dicts with ``entity_type`` and ``via`` chain fields.
+            Dict with keys ``entities``, ``persons``, ``ownershipOrControlStatements``.
         """
-        try:
-            # Step 1 — find company ID
-            search_resp = requests.get(
-                OPEN_OWNERSHIP_SEARCH_URL,
-                params={"q": entity_name},
-                timeout=15,
+        entities: List[Dict[str, Any]] = []
+        persons: List[Dict[str, Any]] = []
+        ownership_stmts: List[Dict[str, Any]] = []
+
+        seen_entity_ids: set = set()
+        seen_person_ids: set = set()
+
+        # Root entity (the searched company)
+        root_id = _make_id("entity", entity_name)
+        entities.append(
+            {
+                "statementID": root_id,
+                "statementType": "entityStatement",
+                "name": entity_name,
+                "entityType": "registeredEntity",
+                "identifiers": [],
+            }
+        )
+        seen_entity_ids.add(root_id)
+
+        # --- Shareholders ---
+        for sh in (shareholders or []):
+            name = (sh.get("name") or "").strip()
+            if not name:
+                continue
+            sh_type = (sh.get("shareholder_type") or "").lower()
+            source = sh.get("source", "unknown")
+            source_url = sh.get("source_url")
+            filing_date = sh.get("filing_date")
+            raw_pct = sh.get("ownership_percentage") or sh.get("ownership_pct") or 0.0
+            try:
+                ownership_pct = float(raw_pct)
+            except (TypeError, ValueError):
+                ownership_pct = 0.0
+
+            is_corporate = any(
+                kw in sh_type for kw in ("company", "corporate", "organisation", "organization", "entity")
             )
-            if search_resp.status_code != 200:
-                logger.warning(
-                    "Open Ownership search returned %s for %s",
-                    search_resp.status_code,
-                    entity_name,
+
+            if is_corporate:
+                ent_id = _make_id("entity", name)
+                if ent_id not in seen_entity_ids:
+                    entities.append(
+                        {
+                            "statementID": ent_id,
+                            "statementType": "entityStatement",
+                            "name": name,
+                            "entityType": "registeredEntity",
+                            "identifiers": (
+                                [{"id": source_url, "scheme": source}] if source_url else []
+                            ),
+                        }
+                    )
+                    seen_entity_ids.add(ent_id)
+                interests = [{"type": "shareholding"}]
+                if ownership_pct:
+                    interests = [{"type": "shareholding", "share": {"exact": ownership_pct}}]
+                ownership_stmts.append(
+                    {
+                        "statementID": _make_id("ocs", f"{name}:owns:{entity_name}"),
+                        "statementType": "ownershipOrControlStatement",
+                        "statementDate": filing_date,
+                        "subject": {"describedByEntityStatement": root_id},
+                        "interestedParty": {"describedByEntityStatement": ent_id},
+                        "interests": interests,
+                    }
                 )
-                return []
-
-            search_data = search_resp.json()
-            companies: List[Dict] = (
-                search_data
-                if isinstance(search_data, list)
-                else search_data.get("companies", []) or search_data.get("results", [])
-            )
-            if not companies:
-                return []
-
-            # Use the best-matching company (first result)
-            company = companies[0]
-            company_id: Optional[str] = (
-                company.get("_id")
-                or company.get("company_number")
-                or company.get("id")
-            )
-            if not company_id:
-                logger.warning("No company ID found in Open Ownership search result")
-                return []
-
-            # Step 2 — fetch BODS network statements
-            network_resp = requests.get(
-                OPEN_OWNERSHIP_NETWORK_URL.format(company_id=company_id),
-                timeout=15,
-            )
-            if network_resp.status_code != 200:
-                logger.warning(
-                    "Open Ownership network endpoint returned %s for company %s",
-                    network_resp.status_code,
-                    company_id,
+            else:
+                person_id = _make_id("person", name)
+                nationality = sh.get("nationality") or sh.get("jurisdiction")
+                if person_id not in seen_person_ids:
+                    persons.append(
+                        {
+                            "statementID": person_id,
+                            "statementType": "personStatement",
+                            "names": [{"fullName": name, "type": "individual"}],
+                            "nationalities": (
+                                [{"code": nationality}] if nationality else []
+                            ),
+                            "personType": "knownPerson",
+                            "identifiers": (
+                                [{"id": source_url, "scheme": source}] if source_url else []
+                            ),
+                        }
+                    )
+                    seen_person_ids.add(person_id)
+                interests = [{"type": "shareholding"}]
+                if ownership_pct:
+                    interests = [{"type": "shareholding", "share": {"exact": ownership_pct}}]
+                ownership_stmts.append(
+                    {
+                        "statementID": _make_id("ocs", f"{name}:owns:{entity_name}"),
+                        "statementType": "ownershipOrControlStatement",
+                        "statementDate": filing_date,
+                        "subject": {"describedByEntityStatement": root_id},
+                        "interestedParty": {"describedByPersonStatement": person_id},
+                        "interests": interests,
+                    }
                 )
-                return []
 
-            network_data = network_resp.json()
-            statements: List[Dict] = (
-                network_data
-                if isinstance(network_data, list)
-                else network_data.get("data", []) or network_data.get("statements", [])
+        # --- Directors (control via directorship, no share %) ---
+        for dr in (directors or []):
+            name = (dr.get("name") or "").strip()
+            if not name:
+                continue
+            source = dr.get("source", "unknown")
+            source_url = dr.get("source_url")
+            filing_date = dr.get("filing_date")
+            nationality = dr.get("nationality")
+            person_id = _make_id("person", name)
+            if person_id not in seen_person_ids:
+                persons.append(
+                    {
+                        "statementID": person_id,
+                        "statementType": "personStatement",
+                        "names": [{"fullName": name, "type": "individual"}],
+                        "nationalities": (
+                            [{"code": nationality}] if nationality else []
+                        ),
+                        "personType": "knownPerson",
+                        "identifiers": (
+                            [{"id": source_url, "scheme": source}] if source_url else []
+                        ),
+                    }
+                )
+                seen_person_ids.add(person_id)
+            # Only add directorship statement if not already a shareholder of same entity
+            ocs_id = _make_id("ocs", f"{name}:directs:{entity_name}")
+            existing_ids = {s["statementID"] for s in ownership_stmts}
+            if ocs_id not in existing_ids:
+                ownership_stmts.append(
+                    {
+                        "statementID": ocs_id,
+                        "statementType": "ownershipOrControlStatement",
+                        "statementDate": filing_date,
+                        "subject": {"describedByEntityStatement": root_id},
+                        "interestedParty": {"describedByPersonStatement": person_id},
+                        "interests": [{"type": "controlViaDirectorship"}],
+                    }
+                )
+
+        # --- Subsidiaries (root entity owns subsidiaries — reversed direction) ---
+        for sub in (subsidiaries or []):
+            name = (sub.get("name") or "").strip()
+            if not name:
+                continue
+            jurisdiction = sub.get("jurisdiction")
+            raw_pct = sub.get("ownership_pct") or sub.get("ownership_percentage")
+            sub_id = _make_id("entity", name)
+            if sub_id not in seen_entity_ids:
+                entry: Dict[str, Any] = {
+                    "statementID": sub_id,
+                    "statementType": "entityStatement",
+                    "name": name,
+                    "entityType": "registeredEntity",
+                    "identifiers": [],
+                }
+                if jurisdiction:
+                    entry["incorporationCountryCode"] = jurisdiction
+                entities.append(entry)
+                seen_entity_ids.add(sub_id)
+            interests: List[Dict[str, Any]] = [{"type": "shareholding"}]
+            if raw_pct is not None:
+                try:
+                    interests = [{"type": "shareholding", "share": {"exact": float(raw_pct)}}]
+                except (TypeError, ValueError):
+                    pass
+            # subject = subsidiary; interestedParty = root (root controls subsidiary)
+            ownership_stmts.append(
+                {
+                    "statementID": _make_id("ocs", f"{entity_name}:owns:{name}"),
+                    "statementType": "ownershipOrControlStatement",
+                    "subject": {"describedByEntityStatement": sub_id},
+                    "interestedParty": {"describedByEntityStatement": root_id},
+                    "interests": interests,
+                }
             )
-            if not statements:
-                return []
 
-            # Step 3 — index statements by type
-            person_map: Dict[str, Dict] = {}
-            entity_map: Dict[str, Dict] = {}
-            ownership_list: List[Dict] = []
-
-            for stmt in statements:
-                stmt_type = stmt.get("statementType", "")
-                stmt_id = stmt.get("statementID") or stmt.get("id", "")
-                if stmt_type == "personStatement":
-                    person_map[stmt_id] = stmt
-                elif stmt_type == "entityStatement":
-                    entity_map[stmt_id] = stmt
-                elif stmt_type == "ownershipOrControlStatement":
-                    ownership_list.append(stmt)
-
-            if not ownership_list:
-                return []
-
-            # Step 4 — find the root entity statement for the searched company.
-            # The root entity is the one whose name best matches entity_name, or
-            # the first entityStatement if there is only one.
-            root_id: Optional[str] = None
-            entity_name_lower = entity_name.lower()
-            for eid, estmt in entity_map.items():
-                if entity_name_lower in (estmt.get("name") or "").lower():
-                    root_id = eid
-                    break
-            if root_id is None and entity_map:
-                root_id = next(iter(entity_map))
-
-            if root_id is None:
-                return []
-
-            # Step 5 — recursive UBO traversal starting from root entity
-            return _trace_ubo(
-                root_id,
-                entity_map,
-                person_map,
-                ownership_list,
-                path=[],
-                seen={root_id},
-            )
-
-        except Exception as exc:
-            logger.warning(
-                "Open Ownership BODS search failed for %s: %s", entity_name, exc
-            )
-            return []
+        return {
+            "entities": entities,
+            "persons": persons,
+            "ownershipOrControlStatements": ownership_stmts,
+        }
 
     # ------------------------------------------------------------------
-    # Combined
+    # Combined entry point
     # ------------------------------------------------------------------
 
-    def get_beneficial_owners(self, entity_name: str) -> List[Dict[str, Any]]:
-        """Combine and deduplicate beneficial owners from all sources.
+    def get_beneficial_owners(
+        self,
+        entity_name: str,
+        shareholders: Optional[List[Dict[str, Any]]] = None,
+        directors: Optional[List[Dict[str, Any]]] = None,
+        subsidiaries: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Build BODS output and derive the flat beneficial-owner list.
 
         Args:
             entity_name: Entity to trace.
+            shareholders: Shareholder dicts from Companies House PSC / SEC EDGAR.
+            directors: Director dicts from Companies House Officers / SEC EDGAR.
+            subsidiaries: Subsidiary dicts from OpenCorporates / SEC EDGAR.
 
         Returns:
-            Deduplicated list of owner dicts.
+            Dict with:
+            - ``bods``: Full BODS JSON (entities, persons, ownershipOrControlStatements).
+            - ``owners``: Flat list of BeneficialOwner-compatible dicts.
         """
-        aleph = self.search_occrp_aleph(entity_name)
-        open_own = self.search_open_ownership(entity_name)
+        bods = self.build_bods_from_collected_data(
+            entity_name=entity_name,
+            shareholders=shareholders or [],
+            directors=directors or [],
+            subsidiaries=subsidiaries or [],
+        )
 
-        combined = aleph + open_own
-        seen: set[str] = set()
-        deduped: List[Dict[str, Any]] = []
-        for item in combined:
-            key = item.get("name", "").lower().strip()
-            if key and key not in seen:
-                seen.add(key)
-                deduped.append(item)
+        # Index BODS statements for traversal
+        entity_map: Dict[str, Dict] = {
+            s["statementID"]: s for s in bods["entities"]
+        }
+        person_map: Dict[str, Dict] = {
+            s["statementID"]: s for s in bods["persons"]
+        }
 
-        return deduped
+        # Build source lookup maps for the traversal
+        source_map: Dict[str, str] = {}
+        source_url_map: Dict[str, Optional[str]] = {}
+        for stmt in bods["persons"]:
+            sid = stmt["statementID"]
+            idents = stmt.get("identifiers") or []
+            source_map[sid] = idents[0]["scheme"] if idents else "unknown"
+            source_url_map[sid] = idents[0].get("id") if idents else None
+
+        # Find root entity ID
+        root_id = _make_id("entity", entity_name)
+
+        # Derive flat owner list via recursive UBO traversal
+        owners = _trace_ubo(
+            entity_id=root_id,
+            entity_map=entity_map,
+            person_map=person_map,
+            ownership_list=bods["ownershipOrControlStatements"],
+            path=[],
+            seen={root_id},
+            source_map=source_map,
+            source_url_map=source_url_map,
+        )
+
+        # Enrich with OCCRP Aleph (supplementary, dedup by name)
+        aleph_owners = self.search_occrp_aleph(entity_name)
+        seen_names: set = {(o.get("name") or "").lower().strip() for o in owners}
+        for ao in aleph_owners:
+            key = (ao.get("name") or "").lower().strip()
+            if key and key not in seen_names:
+                seen_names.add(key)
+                owners.append(ao)
+
+        return {"bods": bods, "owners": owners}

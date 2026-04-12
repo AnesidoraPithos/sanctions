@@ -268,6 +268,44 @@ export interface BeneficialOwner {
   entity_type?: "person" | "entity";
   /** Intermediary entity names between the target company and this owner */
   via?: string[];
+  /** BODS interest type, e.g. "shareholding" or "controlViaDirectorship" */
+  interest_type?: string;
+}
+
+export interface BodsEntityStatement {
+  statementID: string;
+  statementType: "entityStatement";
+  name: string;
+  entityType?: string;
+  identifiers?: Array<{ id?: string; scheme?: string }>;
+  incorporationCountryCode?: string;
+}
+
+export interface BodsPersonStatement {
+  statementID: string;
+  statementType: "personStatement";
+  names: Array<{ fullName: string; type?: string }>;
+  nationalities?: Array<{ code: string }>;
+  personType?: string;
+  identifiers?: Array<{ id?: string; scheme?: string }>;
+}
+
+export interface BodsOwnershipStatement {
+  statementID: string;
+  statementType: "ownershipOrControlStatement";
+  statementDate?: string;
+  subject: { describedByEntityStatement: string };
+  interestedParty: {
+    describedByPersonStatement?: string;
+    describedByEntityStatement?: string;
+  };
+  interests: Array<{ type: string; share?: { exact?: number; minimum?: number } }>;
+}
+
+export interface BodsData {
+  entities: BodsEntityStatement[];
+  persons: BodsPersonStatement[];
+  ownershipOrControlStatements: BodsOwnershipStatement[];
 }
 
 export interface AdvancedOsintData {
@@ -314,6 +352,7 @@ export interface SearchResponse {
   director_pivots?: DirectorPivot[];
   infrastructure?: InfrastructureHit[];
   beneficial_owners?: BeneficialOwner[];
+  bods_data?: BodsData;
   advanced_osint?: AdvancedOsintData;
 }
 
@@ -348,6 +387,7 @@ export interface ResultsResponse {
   director_pivots?: DirectorPivot[];
   infrastructure?: InfrastructureHit[];
   beneficial_owners?: BeneficialOwner[];
+  bods_data?: BodsData;
   advanced_osint?: AdvancedOsintData;
   // Bookmark fields
   is_saved?: boolean;

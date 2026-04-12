@@ -98,6 +98,7 @@ async def get_results(
             director_pivots=results.get('director_pivots', []) or None,
             infrastructure=results.get('infrastructure', []) or None,
             beneficial_owners=results.get('beneficial_owners', []) or None,
+            bods_data=results.get('bods_data') or None,
             advanced_osint=results.get('advanced_osint') or None,
             # Bookmark fields
             is_saved=results.get('is_saved', False),

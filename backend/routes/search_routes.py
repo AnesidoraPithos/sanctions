@@ -901,13 +901,19 @@ def search_deep_tier(request: SearchRequest):
 
         # --- STEP 13: Beneficial ownership (Phase 4) ---
         beneficial_owners: list = []
+        bods_data: dict = {}
         if request.include_beneficial_ownership:
             _progress("Tracing beneficial ownership...", 95)
             try:
                 from services.beneficial_ownership_service import BeneficialOwnershipService
-                beneficial_owners = BeneficialOwnershipService().get_beneficial_owners(
-                    request.entity_name
+                _bo_result = BeneficialOwnershipService().get_beneficial_owners(
+                    entity_name=request.entity_name,
+                    shareholders=shareholders,
+                    directors=directors,
+                    subsidiaries=subsidiaries,
                 )
+                beneficial_owners = _bo_result.get("owners", [])
+                bods_data = _bo_result.get("bods", {})
                 logger.info(f"[{search_id}] Beneficial owners: {len(beneficial_owners)} found")
             except Exception as _exc:
                 logger.warning(f"[{search_id}] Beneficial ownership tracing failed: {_exc}")
@@ -1002,6 +1008,7 @@ def search_deep_tier(request: SearchRequest):
             "director_pivots": director_pivots,
             "infrastructure": infrastructure,
             "beneficial_owners": beneficial_owners,
+            "bods_data": bods_data,
             "advanced_osint": advanced_osint_data,
             "aleph_hits": aleph_hits,
         }
@@ -1047,6 +1054,7 @@ def search_deep_tier(request: SearchRequest):
             director_pivots=director_pivots,
             infrastructure=infrastructure,
             beneficial_owners=beneficial_owners,
+            bods_data=bods_data if bods_data else None,
             advanced_osint=advanced_osint_data,
             aleph_hits=aleph_hits,
             warnings=warnings,
