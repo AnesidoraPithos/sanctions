@@ -10,6 +10,9 @@ from typing import List, Dict, Any, Optional
 from services.research_agent import SanctionsResearchAgent
 from config import settings
 
+# Sentinel returned by the LLM when no parent company was found in the extract_parent prompt
+_PLACEHOLDER_PARENT = "parent_company_name"
+
 
 class ResearchService:
     """
@@ -64,7 +67,7 @@ class ResearchService:
             "total_hits": len(official_hits) + len(general_hits)
         }
 
-    def generate_intelligence_report(self, entity_name: str) -> str:
+    def generate_intelligence_report(self, entity_name: str, sanctions_hits=None) -> str:
         """
         Generate LLM-powered intelligence report
 
@@ -78,11 +81,12 @@ class ResearchService:
 
         Args:
             entity_name: Name of entity to analyze
+            sanctions_hits: Optional list of sanctions hit dicts to inject as ground-truth evidence
 
         Returns:
             Markdown-formatted intelligence report
         """
-        return self.agent.generate_intelligence_report(entity_name)
+        return self.agent.generate_intelligence_report(entity_name, sanctions_hits=sanctions_hits)
 
     def extract_parent_from_report(self, entity_name: str, report_text: str) -> Dict[str, Any] | None:
         """
@@ -127,12 +131,18 @@ Report:
             parts = [p.strip() for p in content.split("|")]
             if len(parts) < 3:
                 return None
+            parent_name = parts[0]
+            parent_lower = parent_name.lower()
+            if parent_lower == _PLACEHOLDER_PARENT or parent_lower == entity_name.lower():
+                return None
+            raw = parts[2].lower() if len(parts) > 2 else ""
+            confidence = raw if raw in ("high", "medium", "low") else "medium"
             source_note = parts[3] if len(parts) > 3 else "intelligence_report"
             reference_url = source_note if source_note.startswith("http") else None
             return {
-                "name": parts[0],
+                "name": parent_name,
                 "relationship": "parent",
-                "confidence": parts[2].lower() if len(parts) > 2 else "medium",
+                "confidence": confidence,
                 "source": "intelligence_report" if not reference_url else source_note,
                 "reference_url": reference_url
             }

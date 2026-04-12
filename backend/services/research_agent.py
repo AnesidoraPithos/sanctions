@@ -290,20 +290,51 @@ class SanctionsResearchAgent:
         
         return "\n".join(aggregated_context) if aggregated_context else "No external information found."
 
-    def generate_intelligence_report(self, entity_name):
+    def generate_intelligence_report(self, entity_name, sanctions_hits=None):
         """Generates the detailed Markdown report."""
         search_queries = [
-            f"{entity_name} US sanctions investigation lawsuit",
-            f"{entity_name} lobbying activity US congress",
-            f"{entity_name} official press release in recent years",
-            f"{entity_name} major business partners collaborations",
-            f"{entity_name} analysis reports by law firms and consultancies"
+            # .gov sites give direct legal authority (treasury, justice, state) with low SEO noise
+            f'{entity_name} (sanction OR indictment OR penalty OR violation) site:gov',
+            # Financial crimes often surface in news before government filings
+            f'{entity_name} (fraud OR "money laundering" OR corruption OR bribery)',
+            # Major wire services carry national security and export control reporting not always in .gov
+            f'{entity_name} ("national security" OR "export control") site:reuters.com OR site:bloomberg.com OR site:wsj.com',
+            # Catch civil disputes and ongoing investigations not yet reflected in .gov sources
+            f'{entity_name} (lawsuit OR litigation OR investigation OR "civil dispute")',
+            # Political activity creates second-order risk vectors separate from direct legal exposure
+            f'{entity_name} (lobbying OR PAC OR "political contribution" OR "government contract")',
+            # Supply chain partners can inherit and transmit sanctions exposure
+            f'{entity_name} ("joint venture" OR supplier OR "strategic partnership")',
         ]
         
-        evidence_text = self._search_web(search_queries)
+        sanctions_evidence = ""
+        if sanctions_hits:
+            lines = ["=== VERIFIED SANCTIONS HITS (Ground Truth) ==="]
+            for hit in sanctions_hits:
+                score = hit.get("combined_score", 0)
+                quality = hit.get("match_quality", "")
+                name = hit.get("name", "")
+                source_list = hit.get("list", "Unknown List")
+                link = hit.get("link", "")
+                address = hit.get("address", "")
+                remark = hit.get("remark", "")
+
+                parts = [f"- MATCH: {name} | List: {source_list} | Score: {score:.1f}/100 | Quality: {quality}"]
+                if address:
+                    parts.append(f"| Address: {address}")
+                if remark:
+                    parts.append(f"| Remarks: {remark}")
+                if link:
+                    parts.append(f"| Source URL: {link}")
+                lines.append(" ".join(parts))
+            lines.append("=== END VERIFIED SANCTIONS HITS ===")
+            sanctions_evidence = "\n".join(lines) + "\n\n"
+
+        web_evidence = self._search_web(search_queries)
+        evidence_text = sanctions_evidence + web_evidence
 
         prompt = f"""
-You are a Senior Intelligence Analyst. Produce a formal, COMPREHENSIVE "Due Diligence Intelligence Report" on the entity: "{entity_name}".
+You are a strictly objective Intelligence Extraction Agent. Produce a formal, fact-based "Due Diligence Data Extraction Report" on the entity: "{entity_name}".
 
 Use the following retrieved information as your ONLY source of evidence:
 {evidence_text}
@@ -311,133 +342,76 @@ Use the following retrieved information as your ONLY source of evidence:
 ---
 REPORT REQUIREMENTS:
 
-1. **Tone**: Professional, objective, formal, and analytical.
+1. **Tone & Constraints**: STRICTLY FACTUAL, objective, and neutral.
+   - DO NOT provide opinions, judgements, or risk assessments.
+   - DO NOT analyze implications or explain the "so what?".
+   - State only verifiable facts found in the evidence.
 
-2. **Length & Detail**: This must be a COMPREHENSIVE report, not a brief summary.
-   - Each section should contain MULTIPLE PARAGRAPHS with in-depth analysis
-   - Aim for 2-4 paragraphs per major section
-   - Provide context, implications, and nuanced analysis
-   - Total report should be 800-1200 words minimum
+2. **Structure** (with detailed requirements for each section):
 
-3. **Structure** (with detailed requirements for each section):
+   **1. Risk Indicator Extraction**
+   - **CRITICAL REQUIREMENT:** You must map the evidence to the following indicators.
+   - For each bullet point, output ONLY "Yes" or "No".
+   - If "Yes", you MUST append a numbered citation in brackets (e.g., Yes [1], Yes [2]). DO NOT use full URLs inline.
+   - If "No", do not append anything else. Do not explain why.
+   - If the context is ambiguous or does not explicitly confirm the indicator, default to "No".
 
-   **Executive Summary** (2-3 paragraphs)
-   - **CRITICAL REQUIREMENT:** Start with explicit risk classification using this scoring rubric:
+     **Regulatory & Legal Indicators**
+     - Active sanctions listings: [Yes [x] / No]
+     - Criminal investigations/charges: [Yes [x] / No]
+     - Civil enforcement actions: [Yes [x] / No]
+     - Regulatory violations/fines: [Yes [x] / No]
+     - Pending investigations: [Yes [x] / No]
+     - Past resolved issues (>3 years): [Yes [x] / No]
 
-     **Risk Assessment Framework - Calculate total score (0-100):**
+     **Media Signal Strength**
+     - Official government sources (treasury.gov, justice.gov, state.gov): [Yes [x] / No]
+     - Major credible news (Reuters, Bloomberg, WSJ, AP): [Yes [x] / No]
+     - General media/blogs: [Yes [x] / No]
 
-     1. **Regulatory & Legal Indicators (0-50 points)** — take the HIGHEST applicable item only (not additive):
-        - Active sanctions listings: 50 points
-        - Criminal investigations/charges: 40 points
-        - Civil enforcement actions: 30 points
-        - Regulatory violations/fines: 25 points
-        - Pending investigations: 15 points
-        - Past resolved issues (>3 years): 5 points
+     **Severity Factors**
+     - National security concerns: [Yes [x] / No]
+     - Financial crimes (money laundering, fraud): [Yes [x] / No]
+     - Export control violations: [Yes [x] / No]
+     - Corruption/bribery: [Yes [x] / No]
+     - Environmental/labor violations: [Yes [x] / No]
+     - Civil disputes: [Yes [x] / No]
 
-     2. **Media Signal Strength (0-20 points)** — ADDITIVE up to category max of 20, count each qualifying source:
-        - Official government sources (treasury.gov, justice.gov, state.gov): 10 points each (max 20)
-        - Major credible news (Reuters, Bloomberg, WSJ, AP): 3 points each (max 15)
-        - General media/blogs: 1 point each (max 5)
+     **Temporal Relevance**
+     - Issues within last 6 months: [Yes [x] / No]
+     - Issues within last 1 year: [Yes [x] / No]
+     - Issues within last 3 years: [Yes [x] / No]
+     - Older than 3 years: [Yes [x] / No]
 
-     3. **Severity Factors (0-30 points)** — take the HIGHEST applicable item only (not additive):
-        - National security concerns: 30 points
-        - Financial crimes (money laundering, fraud): 15 points
-        - Export control violations: 15 points
-        - Corruption/bribery: 12 points
-        - Environmental/labor violations: 8 points
-        - Civil disputes: 5 points
+   **2. Regulatory & Legal Status**
+   - Provide a purely factual summary of any investigations, lawsuits, sanctions, or regulatory actions (US focus).
+   - Include specific dates, jurisdictions, and monetary fines if mentioned.
 
-     4. **Temporal Relevance (0-10 points)** — take the HIGHEST applicable item only (not additive):
-        - Issues within last 6 months: 10 points
-        - Issues within last 1 year: 8 points
-        - Issues within last 3 years: 5 points
-        - Older than 3 years: 2 points
+   **3. Political Activity**
+   - Factually describe known lobbying efforts, political contributions, or government contracts.
 
-     **Risk Level Thresholds:**
-     - **Low (0-35 points)**: Limited concerns, minor historical issues, sparse media coverage
-     - **Medium (36-65 points)**: Moderate regulatory concerns, ongoing investigations, notable media attention
-     - **High (66-100 points)**: Active sanctions/enforcement, serious violations, extensive official documentation
-     NOTE: If the raw sum of all 4 categories exceeds 100, cap the displayed score at 100.
+   **4. Recent Developments (ENTITY SPECIFIC ONLY)**
+   - Summarize major news or announcements from the last 2 years chronologically.
+   - **CRITICAL:** Do NOT include general industry news, country-level policy changes, or macro-economic events. EVERY bullet point in this section MUST explicitly involve actions taken by or against "{entity_name}". If there is no specific news about the entity, state "There is no recent information available specifically regarding {entity_name}."
 
-     **Required Output Format:**
-     Line 1: "Risk Level: [High/Medium/Low] (Score: XX/100)"
-     Line 2: "Scoring Breakdown: [Category]: [Highest item] (+pts) | [Category]: [Highest item] (+pts) | ... | RAW: XX → SCORE: XX"
+   **5. Collaborations & Business Relationships**
+   - Identify known partners, suppliers, customers, or joint ventures.
 
-     Rules:
-     - For each category, state the single highest-scoring item that applies and its point value in (+pts) notation
-     - If multiple items apply in a category, note the top one and mention others in brackets, e.g. "Active sanctions (+50) [criminal charges also present]"
-     - For Media Signal Strength, list each source type that contributed and its subtotal since it is additive, e.g. "2 Reuters (+6) + 1 gov source (+10) = 16"
-     - Omit a category entirely if no items in it apply (score = 0)
-     - RAW is the arithmetic sum of all category scores before capping; SCORE is min(RAW, 100)
-     - Always end the breakdown line with "| RAW: XX → SCORE: XX"
+3. **Citations & Formatting**: 
+   - Use numbered inline citations [1], [2] for ALL factual claims in sections 1-5. 
+   - NEVER output full URLs in the body text.
+   - Only use `###` (H3) or `**` (Bold) for subheadings. Do not use `####` (H4).
 
-     Example (score capped at 100):
-     "Risk Level: High (Score: 100/100)
-     Scoring Breakdown: Regulatory & Legal: Active sanctions (+50) [criminal charges also present] | Severity: National security (+30) | Media: 1 gov source (+10) = 10 | Temporal: Last 6 months (+10) | RAW: 100 → SCORE: 100"
+4. **MANDATORY: References Section**
+   - At the very END of the report, you MUST include a "### References" section.
+   - List ALL unique sources cited in the report as a numbered list matching your inline citations (e.g., [1], [2]).
+   - Provide the full URL next to the corresponding number.
+   - Use APA 7th edition formatting if possible.
 
-     Example (score not capped):
-     "Risk Level: High (Score: 69/100)
-     Scoring Breakdown: Regulatory & Legal: Civil enforcement actions (+30) | Severity: Financial crimes (+15) | Media: 2 Reuters (+6) + 1 gov source (+10) = 16 | Temporal: Last 1 year (+8) | RAW: 69 → SCORE: 69"
-
-   - Follow with 2-3 paragraphs explaining:
-     * Summary of most significant findings
-     * Nature and severity of key risk factors
-     * Overall assessment and business implications
-
-   **Regulatory & Legal Status** (2-4 paragraphs)
-   - Detail any investigations, lawsuits, sanctions, or regulatory actions (US focus)
-   - Discuss the nature, severity, and current status of legal issues
-   - Analyze implications for business operations and compliance
-   - Include historical context if relevant
-
-   **Political Activity** (2-3 paragraphs)
-   - Describe lobbying efforts, political contributions, or legislative scrutiny
-   - Identify key political relationships and affiliations
-   - Analyze potential political risks or controversies
-   - Discuss government contracts or political influence
-
-   **Recent Developments** (2-3 paragraphs)
-   - Summarize major news, press releases, or announcements from the last 2 years
-   - Highlight strategic changes, leadership changes, or significant events
-   - Analyze how recent developments impact risk profile
-   - Include both positive and negative developments
-
-   **Collaborations & Business Relationships** (2-3 paragraphs)
-   - Identify known partners, suppliers, customers, or joint ventures
-   - Assess second-order risks from business relationships
-   - Evaluate supply chain exposure and dependency risks
-   - Discuss any controversial or high-risk partnerships
-
-4. **Citations**: You MUST cite the source URL for EVERY factual claim using inline citations in this format: [Source: example.com]
-   - Place citations immediately after each claim
-   - Be specific about which source supports which claim
-   - Every paragraph should have at least one citation
-
-5. **MANDATORY: References Section**
-   - At the very END of the report, you MUST include a "## References" section
-   - List ALL unique source URLs cited in the report as a numbered APA-style list
-   - Use APA 7th edition web citation format for each entry:
-     * With known author: Author, A. A. (Year, Month Day). Title of article. *Website Name*. URL
-     * Without known author: Title of article. (Year, Month Day). *Website Name*. URL
-     * When date is unknown, use (n.d.) in place of the year
-     * Infer the website name from the domain (e.g. treasury.gov → U.S. Department of the Treasury)
-     * Use title-case for article titles
-   - Example: U.S. Department of Justice. (2024, March 15). *Entity X added to sanctions list*. justice.gov. https://www.justice.gov/...
-   - This section is REQUIRED even if you have inline citations
-
-6. **Writing Quality**:
-   - Use clear, professional language
-   - Provide analysis, not just facts - explain "so what?"
-   - Connect findings to risk implications
-   - Be thorough but avoid unnecessary repetition
-
-7. **Output Format**:
-   - Start directly with "# Due Diligence Intelligence Report: {entity_name}"
-   - Use Markdown formatting (##, ###, **, bullets)
-   - No preambles or meta-commentary
-   - End with the References section
-
-REMEMBER: This is a COMPREHENSIVE intelligence report, not a brief summary. Provide detailed analysis with multiple paragraphs per section and ALWAYS include a References section at the end.
+5. **Output Format**:
+   - Start directly with "## Due Diligence Data Extraction Report: {entity_name}"
+   - Use Markdown formatting (##, ###, **, bullets).
+   - End with the References section.
 """
 
         try:
